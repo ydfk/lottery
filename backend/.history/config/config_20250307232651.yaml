@@ -1,0 +1,19 @@
+oneapi:
+  base_url: "https://api.oneapi.com/v1"  # 需要替换为实际的OneAPI地址
+  api_key: ""  # 需要填写实际的API密钥
+  allowed_models:
+    - "gpt-4"
+    - "gpt-3.5-turbo"
+    - "claude-2.1"
+  timeout: 30s
+  max_retries: 3
+
+database:
+  path: "./data/lottery.db"
+
+server:
+  port: 3000
+
+jwt:
+  secret: "your-jwt-secret-key"  # 生产环境应使用环境变量
+  expiration: 86400  # token有效期24小时（秒）

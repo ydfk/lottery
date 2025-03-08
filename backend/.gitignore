@@ -1,0 +1,29 @@
+# 配置文件
+/config/config.yaml
+
+# 数据库文件
+/data/
+
+# 编译输出
+/bin/
+/build/
+
+# 依赖目录
+/vendor/
+
+# 日志文件
+*.log
+
+# IDE配置
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+
+# 环境变量文件
+.env
+.env.local
