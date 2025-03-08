@@ -1,6 +1,3 @@
-# 配置文件
-/config/config.yaml
-
 # 数据库文件
 /data/
 
@@ -27,3 +24,4 @@ Thumbs.db
 # 环境变量文件
 .env
 .env.local
+.history
