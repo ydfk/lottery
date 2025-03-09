@@ -61,8 +61,8 @@ func main() {
 	}))
 
 	// 认证路由（不需要JWT）
-	app.Post("/api/auth/register", handlers.Register)
-	app.Post("/api/auth/login", handlers.Login)
+	//app.Post("/auth/register", handlers.Register)
+	app.Post("/auth/login", handlers.Login)
 
 	// JWT 中间件
 	jwtMiddleware := jwtware.New(jwtware.Config{

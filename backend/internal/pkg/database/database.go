@@ -11,6 +11,7 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+	_ "modernc.org/sqlite"
 )
 
 var DB *gorm.DB
@@ -23,8 +24,11 @@ func Init() error {
 		return fmt.Errorf("创建数据库目录失败: %v", err)
 	}
 
-	// 初始化数据库连接
-	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
+	// 初始化数据库连接 - 使用modernc纯Go SQLite驱动
+	db, err := gorm.Open(sqlite.Dialector{
+		DriverName: "sqlite",
+		DSN:        dbPath,
+	}, &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Info),
 	})
 	if err != nil {
@@ -36,6 +40,16 @@ func Init() error {
 	// 自动迁移数据库表
 	if err := autoMigrate(); err != nil {
 		return fmt.Errorf("数据库迁移失败: %v", err)
+	}
+
+	// 初始化用户数据
+	if err := initUsers(); err != nil {
+		return fmt.Errorf("初始化用户数据失败: %v", err)
+	}
+
+	// 初始化彩票类型数据
+	if err := initLotteryTypes(); err != nil {
+		return fmt.Errorf("初始化彩票类型数据失败: %v", err)
 	}
 
 	return nil
@@ -58,6 +72,87 @@ func autoMigrate() error {
 		&models.AuditLog{},
 		&models.Recommendation{},
 	)
+}
+
+// initUsers 初始化用户数据
+func initUsers() error {
+	// 如果没有配置用户，则跳过
+	if len(config.Current.Users) == 0 {
+		return nil
+	}
+
+	for _, userConfig := range config.Current.Users {
+		// 检查用户是否已存在
+		var count int64
+		DB.Model(&models.User{}).Where("username = ?", userConfig.Username).Count(&count)
+		if count > 0 {
+			// 用户已存在，跳过
+			continue
+		}
+
+		// 创建新用户
+		user := models.User{
+			Username: userConfig.Username,
+			Password: userConfig.Password,
+		}
+
+		// 密码哈希处理
+		if err := user.HashPassword(); err != nil {
+			return err
+		}
+
+		// 保存用户
+		if err := DB.Create(&user).Error; err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// initLotteryTypes 初始化彩票类型数据
+func initLotteryTypes() error {
+	// 如果没有配置彩票类型，则跳过
+	if len(config.Current.LotteryTypes) == 0 {
+		return nil
+	}
+
+	for _, typeConfig := range config.Current.LotteryTypes {
+		// 检查彩票类型是否已存在
+		var count int64
+		DB.Model(&models.LotteryType{}).Where("name = ?", typeConfig.Name).Count(&count)
+		if count > 0 {
+			// 彩票类型已存在，则更新
+			var lotteryType models.LotteryType
+			if err := DB.Where("name = ?", typeConfig.Name).First(&lotteryType).Error; err != nil {
+				return err
+			}
+
+			lotteryType.ScheduleCron = typeConfig.ScheduleCron
+			lotteryType.ModelName = typeConfig.ModelName
+			lotteryType.IsActive = typeConfig.IsActive
+
+			if err := DB.Save(&lotteryType).Error; err != nil {
+				return err
+			}
+			continue
+		}
+
+		// 创建新彩票类型
+		lotteryType := models.LotteryType{
+			Name:         typeConfig.Name,
+			ScheduleCron: typeConfig.ScheduleCron,
+			ModelName:    typeConfig.ModelName,
+			IsActive:     typeConfig.IsActive,
+		}
+
+		// 保存彩票类型
+		if err := DB.Create(&lotteryType).Error; err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // CreateAuditLog 创建审计日志

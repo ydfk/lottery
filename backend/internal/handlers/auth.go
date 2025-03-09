@@ -69,10 +69,21 @@ func Register(c *fiber.Ctx) error {
 // Login 用户登录
 func Login(c *fiber.Ctx) error {
 	var req AuthRequest
+
+	// 尝试从请求体解析数据
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "无效的请求数据",
-		})
+		// 如果请求体解析失败，尝试从查询参数获取
+		username := c.Query("username")
+		password := c.Query("password")
+
+		if username == "" || password == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "无效的请求数据",
+			})
+		}
+
+		req.Username = username
+		req.Password = password
 	}
 
 	// 查找用户
