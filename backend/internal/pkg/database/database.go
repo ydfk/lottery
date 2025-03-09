@@ -118,16 +118,17 @@ func initLotteryTypes() error {
 	}
 
 	for _, typeConfig := range config.Current.LotteryTypes {
-		// 检查彩票类型是否已存在
+		// 检查彩票类型是否已存在（使用 code 字段）
 		var count int64
-		DB.Model(&models.LotteryType{}).Where("name = ?", typeConfig.Name).Count(&count)
+		DB.Model(&models.LotteryType{}).Where("code = ?", typeConfig.Code).Count(&count)
 		if count > 0 {
 			// 彩票类型已存在，则更新
 			var lotteryType models.LotteryType
-			if err := DB.Where("name = ?", typeConfig.Name).First(&lotteryType).Error; err != nil {
+			if err := DB.Where("code = ?", typeConfig.Code).First(&lotteryType).Error; err != nil {
 				return err
 			}
 
+			lotteryType.Name = typeConfig.Name
 			lotteryType.ScheduleCron = typeConfig.ScheduleCron
 			lotteryType.ModelName = typeConfig.ModelName
 			lotteryType.IsActive = typeConfig.IsActive
@@ -140,6 +141,7 @@ func initLotteryTypes() error {
 
 		// 创建新彩票类型
 		lotteryType := models.LotteryType{
+			Code:         typeConfig.Code,
 			Name:         typeConfig.Name,
 			ScheduleCron: typeConfig.ScheduleCron,
 			ModelName:    typeConfig.ModelName,

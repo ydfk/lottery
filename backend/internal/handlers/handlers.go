@@ -15,10 +15,11 @@ import (
 )
 
 type LotteryTypeRequest struct {
-	Name         string `json:"name"`
-	ScheduleCron string `json:"schedule_cron"`
-	ModelName    string `json:"model_name"`
-	IsActive     bool   `json:"is_active"`
+	Code         string `json:"code"`          // 彩票代码，如 fc_ssq, tc_dlt
+	Name         string `json:"name"`          // 显示名称，如 双色球, 大乐透
+	ScheduleCron string `json:"schedule_cron"` // cron表达式
+	ModelName    string `json:"model_name"`    // AI模型名称
+	IsActive     bool   `json:"is_active"`     // 是否启用
 }
 
 // getUserIDFromContext 从JWT上下文中获取用户ID
@@ -42,6 +43,13 @@ func CreateLotteryType(c *fiber.Ctx) error {
 	}
 	logger.Info("收到创建彩票类型请求: %+v", req)
 
+	// 验证code格式
+	if req.Code == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "彩票代码不能为空",
+		})
+	}
+
 	// 验证cron表达式
 	if err := scheduler.ValidateCron(req.ScheduleCron); err != nil {
 		logger.Error("无效的cron表达式[%s]: %v", req.ScheduleCron, err)
@@ -51,6 +59,7 @@ func CreateLotteryType(c *fiber.Ctx) error {
 	}
 
 	lotteryType := models.LotteryType{
+		Code:         req.Code,
 		Name:         req.Name,
 		ScheduleCron: req.ScheduleCron,
 		ModelName:    req.ModelName,
@@ -72,7 +81,7 @@ func CreateLotteryType(c *fiber.Ctx) error {
 		})
 	}
 
-	logger.Info("成功创建彩票类型[ID:%d, 名称:%s]", lotteryType.ID, lotteryType.Name)
+	logger.Info("成功创建彩票类型[ID:%d, Code:%s]", lotteryType.ID, lotteryType.Code)
 	return c.Status(fiber.StatusCreated).JSON(lotteryType)
 }
 
@@ -108,6 +117,7 @@ func UpdateLotteryType(c *fiber.Ctx) error {
 
 	err = database.WithAudit(userID, "UPDATE", "lottery_types", uint(id), func() error {
 		return database.DB.Model(&models.LotteryType{}).Where("id = ?", id).Updates(map[string]interface{}{
+			"code":          req.Code,
 			"name":          req.Name,
 			"schedule_cron": req.ScheduleCron,
 			"model_name":    req.ModelName,
@@ -152,10 +162,10 @@ func GetRecommendations(c *fiber.Ctx) error {
 	query := database.DB.Order("created_at DESC")
 
 	// 处理查询参数
-	if lotteryType := c.Query("lottery_type"); lotteryType != "" {
-		logger.Info("按彩票类型[%s]筛选...", lotteryType)
+	if lotteryCode := c.Query("code"); lotteryCode != "" {
+		logger.Info("按彩票代码[%s]筛选...", lotteryCode)
 		query = query.Joins("JOIN lottery_types ON recommendations.lottery_type_id = lottery_types.id").
-			Where("lottery_types.name = ?", lotteryType)
+			Where("lottery_types.code = ?", lotteryCode)
 	}
 
 	if dateStr := c.Query("date"); dateStr != "" {
@@ -267,7 +277,7 @@ func GenerateLotteryNumbers(c *fiber.Ctx) error {
 			"error": "彩票类型不存在",
 		})
 	}
-	logger.Info("找到彩票类型: %s", lotteryType.Name)
+	logger.Info("找到彩票类型: %s (Code: %s)", lotteryType.Name, lotteryType.Code)
 
 	if AIClient == nil {
 		logger.Error("错误：AI客户端未初始化")
@@ -277,10 +287,10 @@ func GenerateLotteryNumbers(c *fiber.Ctx) error {
 	}
 
 	ctx := context.Background()
-	logger.Info("开始调用AI生成%s号码...", lotteryType.Name)
+	logger.Info("开始调用AI生成%s号码...", lotteryType.Code)
 
-	// 生成号码
-	numbers, err := AIClient.GenerateLotteryNumbers(ctx, lotteryType.Name, lotteryType.ModelName)
+	// 使用code生成号码
+	numbers, err := AIClient.GenerateLotteryNumbers(ctx, lotteryType.Code, lotteryType.ModelName)
 	if err != nil {
 		logger.Error("生成号码失败: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{

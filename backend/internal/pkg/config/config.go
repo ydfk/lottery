@@ -46,6 +46,7 @@ type UserConfig struct {
 
 // LotteryTypeConfig 彩票类型配置
 type LotteryTypeConfig struct {
+	Code         string `mapstructure:"code"`
 	Name         string `mapstructure:"name"`
 	ScheduleCron string `mapstructure:"schedule_cron"`
 	ModelName    string `mapstructure:"model_name"`

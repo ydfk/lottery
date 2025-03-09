@@ -56,7 +56,7 @@ func validateNumberRange(numbers string, lotteryType string) bool {
 		return false
 	}
 
-	if lotteryType == "双色球" {
+	if lotteryType == "fc_ssq" {
 		// 验证红球范围(01-33)
 		redBalls := strings.Split(parts[0], ",")
 		if len(redBalls) != 6 {
@@ -73,7 +73,7 @@ func validateNumberRange(numbers string, lotteryType string) bool {
 		if err != nil || blueBall < 1 || blueBall > 16 {
 			return false
 		}
-	} else if lotteryType == "大乐透" {
+	} else if lotteryType == "tc_dlt" {
 		// 验证前区范围(01-35)
 		frontArea := strings.Split(parts[0], ",")
 		if len(frontArea) != 5 {
@@ -143,8 +143,8 @@ func (c *Client) GenerateLotteryNumbers(ctx context.Context, lotteryType string,
 
 1. 必须使用这个格式输出：<NUMBER>你生成的号码</NUMBER>
 2. 严格按照下面的格式规范生成号码：
-   - 双色球：6个红球(01-33)+1个蓝球(01-16)，格式如 01,05,13,22,29,33+07
-   - 大乐透：5个前区(01-35)+2个后区(01-12)，格式如 03,05,18,27,34+08,11
+   - fc_ssq：6个红球(01-33)+1个蓝球(01-16)，格式如 01,05,13,22,29,33+07
+   - tc_dlt：5个前区(01-35)+2个后区(01-12)，格式如 03,05,18,27,34+08,11
 3. 所有数字必须按从小到大排序
 4. 所有数字必须补零，保持两位数格式
 5. 除了<NUMBER>标签内的内容外，不要输出任何其他文字
@@ -197,11 +197,11 @@ func (c *Client) GenerateLotteryNumbers(ctx context.Context, lotteryType string,
 
 				// 先验证格式
 				var formatValid bool
-				if lotteryType == "双色球" {
+				if lotteryType == "fc_ssq" {
 					ssbPattern := `^(\d{2},){5}\d{2}\+\d{2}$`
 					ssbRe := regexp.MustCompile(ssbPattern)
 					formatValid = ssbRe.MatchString(extractedNumber)
-				} else if lotteryType == "大乐透" {
+				} else if lotteryType == "tc_dlt" {
 					dltPattern := `^(\d{2},){4}\d{2}\+\d{2},\d{2}$`
 					dltRe := regexp.MustCompile(dltPattern)
 					formatValid = dltRe.MatchString(extractedNumber)

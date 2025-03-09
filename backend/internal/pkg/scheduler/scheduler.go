@@ -87,21 +87,21 @@ func (s *Scheduler) Stop() {
 
 // addLotteryTask 添加彩票号码生成任务
 func (s *Scheduler) addLotteryTask(lt models.LotteryType) error {
-	logger.Info("正在添加彩票类型[%s]的号码生成任务，Cron表达式：%s", lt.Name, lt.ScheduleCron)
+	logger.Info("正在添加彩票类型[%s]的号码生成任务，Cron表达式：%s", lt.Code, lt.ScheduleCron)
 	entryID, err := s.cron.AddFunc(lt.ScheduleCron, func() {
 		ctx := context.Background()
-		logger.Info("开始执行彩票类型[%s]的号码生成任务...", lt.Name)
+		logger.Info("开始执行彩票类型[%s]的号码生成任务...", lt.Code)
 
-		// 生成号码
-		numbers, err := s.aiClient.GenerateLotteryNumbers(ctx, lt.Name, lt.ModelName)
+		// 使用code生成号码
+		numbers, err := s.aiClient.GenerateLotteryNumbers(ctx, lt.Code, lt.ModelName)
 		if err != nil {
-			logger.Error("生成%s号码失败: %v", lt.Name, err)
+			logger.Error("生成%s号码失败: %v", lt.Code, err)
 			return
 		}
-		logger.Info("成功生成%s号码: %s", lt.Name, numbers)
+		logger.Info("成功生成%s号码: %s", lt.Code, numbers)
 
 		// 计算开奖时间（这里需要根据具体彩种规则计算）
-		drawTime := s.calculateNextDrawTime(lt.Name)
+		drawTime := s.calculateNextDrawTime(lt.Code)
 		logger.Info("计算得到下次开奖时间: %v", drawTime)
 
 		// 保存推荐记录
@@ -113,19 +113,19 @@ func (s *Scheduler) addLotteryTask(lt models.LotteryType) error {
 		}
 
 		if err := database.DB.Create(&recommendation).Error; err != nil {
-			logger.Error("保存%s推荐号码失败: %v", lt.Name, err)
+			logger.Error("保存%s推荐号码失败: %v", lt.Code, err)
 		} else {
-			logger.Info("成功保存%s推荐号码，ID：%d", lt.Name, recommendation.ID)
+			logger.Info("成功保存%s推荐号码，ID：%d", lt.Code, recommendation.ID)
 		}
 	})
 
 	if err != nil {
-		logger.Error("添加彩票类型[%s]的任务失败: %v", lt.Name, err)
+		logger.Error("添加彩票类型[%s]的任务失败: %v", lt.Code, err)
 		return err
 	}
 
 	s.entries[lt.ID] = entryID
-	logger.Info("成功添加彩票类型[%s]的任务", lt.Name)
+	logger.Info("成功添加彩票类型[%s]的任务", lt.Code)
 	return nil
 }
 
@@ -169,9 +169,9 @@ func (s *Scheduler) ReloadTask(lt models.LotteryType) error {
 }
 
 // calculateNextDrawTime 计算下次开奖时间
-func (s *Scheduler) calculateNextDrawTime(lotteryType string) time.Time {
-	// TODO: 根据不同彩种的开奖规则计算下次开奖时间
-	// 这里使用简单的示例实现
+func (s *Scheduler) calculateNextDrawTime(lotteryCode string) time.Time {
+	// 这里可以根据不同彩种的开奖规则计算具体时间
+	// 暂时简单返回24小时后
 	return time.Now().Add(24 * time.Hour)
 }
 
