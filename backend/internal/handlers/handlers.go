@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"lottery-backend/internal/models"
 	"lottery-backend/internal/pkg/database"
+	"lottery-backend/internal/pkg/draw"
 	"lottery-backend/internal/pkg/logger"
 	"lottery-backend/internal/pkg/scheduler"
 	"strconv"
@@ -180,6 +181,11 @@ func GetRecommendations(c *fiber.Ctx) error {
 		query = query.Where("DATE(created_at) = DATE(?)", date)
 	}
 
+	if drawNumber := c.Query("draw_number"); drawNumber != "" {
+		logger.Info("按期号[%s]筛选...", drawNumber)
+		query = query.Where("draw_number = ?", drawNumber)
+	}
+
 	if err := query.Find(&recommendations).Error; err != nil {
 		logger.Error("获取推荐记录失败: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -299,16 +305,23 @@ func GenerateLotteryNumbers(c *fiber.Ctx) error {
 	}
 	logger.Info("成功生成号码: %s", numbers)
 
-	// 计算开奖时间
-	drawTime := time.Now().Add(24 * time.Hour)
-	logger.Info("设置开奖时间为: %v", drawTime)
+	// 获取开奖信息（日期和期号）
+	drawInfo, err := draw.GetLotteryDrawInfo(lotteryType.Code, lotteryType.ScheduleCron)
+	if err != nil {
+		logger.Error("获取开奖信息失败: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("获取开奖信息失败: %v", err),
+		})
+	}
+	logger.Info("获取到开奖信息: 日期=%v, 期号=%s", drawInfo.CurrentDrawDate, drawInfo.CurrentDrawNum)
 
 	// 保存推荐记录
 	recommendation := models.Recommendation{
 		LotteryTypeID: lotteryType.ID,
 		Numbers:       numbers,
 		ModelName:     lotteryType.ModelName,
-		DrawTime:      drawTime,
+		DrawTime:      drawInfo.CurrentDrawDate,
+		DrawNumber:    drawInfo.CurrentDrawNum,
 	}
 
 	userID := getUserIDFromContext(c)
@@ -325,7 +338,7 @@ func GenerateLotteryNumbers(c *fiber.Ctx) error {
 		})
 	}
 
-	logger.Info("成功保存手动生成的推荐号码[ID:%d]", recommendation.ID)
+	logger.Info("成功保存手动生成的推荐号码[ID:%d, 期号:%s]", recommendation.ID, recommendation.DrawNumber)
 	return c.Status(fiber.StatusCreated).JSON(recommendation)
 }
 

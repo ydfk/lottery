@@ -6,6 +6,7 @@ import (
 	"lottery-backend/internal/models"
 	"lottery-backend/internal/pkg/ai"
 	"lottery-backend/internal/pkg/database"
+	"lottery-backend/internal/pkg/draw"
 	"lottery-backend/internal/pkg/logger"
 	"sync"
 	"time"
@@ -100,22 +101,27 @@ func (s *Scheduler) addLotteryTask(lt models.LotteryType) error {
 		}
 		logger.Info("成功生成%s号码: %s", lt.Code, numbers)
 
-		// 计算开奖时间（这里需要根据具体彩种规则计算）
-		drawTime := s.calculateNextDrawTime(lt.Code)
-		logger.Info("计算得到下次开奖时间: %v", drawTime)
+// 获取开奖信息（日期和期号）
+drawInfo, err := draw.GetLotteryDrawInfo(lt.Code, lt.ScheduleCron, lt.APIEndpoint)
+		if err != nil {
+			logger.Error("获取%s开奖信息失败: %v", lt.Code, err)
+			return
+		}
+		logger.Info("计算得到%s开奖信息: 日期=%v, 期号=%s", lt.Code, drawInfo.CurrentDrawDate, drawInfo.CurrentDrawNum)
 
 		// 保存推荐记录
 		recommendation := models.Recommendation{
 			LotteryTypeID: lt.ID,
 			Numbers:       numbers,
 			ModelName:     lt.ModelName,
-			DrawTime:      drawTime,
+			DrawTime:      drawInfo.CurrentDrawDate,
+			DrawNumber:    drawInfo.CurrentDrawNum,
 		}
 
 		if err := database.DB.Create(&recommendation).Error; err != nil {
 			logger.Error("保存%s推荐号码失败: %v", lt.Code, err)
 		} else {
-			logger.Info("成功保存%s推荐号码，ID：%d", lt.Code, recommendation.ID)
+			logger.Info("成功保存%s推荐号码，ID：%d, 期号：%s", lt.Code, recommendation.ID, recommendation.DrawNumber)
 		}
 	})
 
@@ -168,7 +174,7 @@ func (s *Scheduler) ReloadTask(lt models.LotteryType) error {
 	return nil
 }
 
-// calculateNextDrawTime 计算下次开奖时间
+// calculateNextDrawTime 计算下次开奖时间（已弃用，使用draw包代替）
 func (s *Scheduler) calculateNextDrawTime(lotteryCode string) time.Time {
 	// 这里可以根据不同彩种的开奖规则计算具体时间
 	// 暂时简单返回24小时后
