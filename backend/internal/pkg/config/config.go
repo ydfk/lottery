@@ -7,7 +7,7 @@ import (
 )
 
 type Config struct {
-	AI           AIConfig            `mapstructure:"oneapi"`
+	AI           AIConfig            `mapstructure:"ai"`
 	Database     DatabaseConfig      `mapstructure:"database"`
 	Server       ServerConfig        `mapstructure:"server"`
 	JWT          JWTConfig           `mapstructure:"jwt"`
@@ -21,10 +21,12 @@ type JWTConfig struct {
 }
 
 type AIConfig struct {
-	BaseURL    string        `mapstructure:"base_url"`
-	APIKey     string        `mapstructure:"api_key"`
-	Timeout    time.Duration `mapstructure:"timeout"`
-	MaxRetries int           `mapstructure:"max_retries"`
+	BaseURL      string        `mapstructure:"base_url"`
+	APIKey       string        `mapstructure:"api_key"`
+	Timeout      time.Duration `mapstructure:"timeout"`
+	MaxRetries   int           `mapstructure:"max_retries"`
+	UseProxy     bool          `mapstructure:"use_proxy"`     // 是否使用代理
+	ProxyAddress string        `mapstructure:"proxy_address"` // 代理服务器地址
 }
 
 type DatabaseConfig struct {

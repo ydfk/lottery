@@ -3,6 +3,8 @@ ai:
   api_key: "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"  # 需要填写实际的API密钥
   timeout: 30s
   max_retries: 3
+  use_proxy: true      # 是否启用代理
+  proxy_address: "http://127.0.0.1:8888"  # Fiddler 代理地址
 
 database:
   path: "./data/lottery.db"

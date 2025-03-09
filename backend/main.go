@@ -2,12 +2,11 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/gofiber/fiber/v2/middleware/logger"
+	fiberLogger "github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	jwtware "github.com/gofiber/jwt/v3"
 
@@ -15,27 +14,36 @@ import (
 	"lottery-backend/internal/pkg/ai"
 	"lottery-backend/internal/pkg/config"
 	"lottery-backend/internal/pkg/database"
+	"lottery-backend/internal/pkg/logger"
 	"lottery-backend/internal/pkg/scheduler"
 )
 
 func main() {
+	// 初始化日志系统
+	if err := logger.Init("logs"); err != nil {
+		panic(err)
+	}
+
 	// 初始化配置
 	if err := config.Init(); err != nil {
-		log.Fatalf("加载配置失败: %v", err)
+		logger.Fatal("加载配置失败: %v", err)
 	}
 
 	// 初始化数据库
 	if err := database.Init(); err != nil {
-		log.Fatalf("初始化数据库失败: %v", err)
+		logger.Fatal("初始化数据库失败: %v", err)
 	}
 
 	// 创建AI客户端
 	aiClient := ai.NewClient()
 
+	// 将AI客户端传递给handlers包，使其可以在处理程序中使用
+	handlers.SetAIClient(aiClient)
+
 	// 创建并启动调度器
 	scheduler := scheduler.NewScheduler(aiClient)
 	if err := scheduler.Start(); err != nil {
-		log.Fatalf("启动调度器失败: %v", err)
+		logger.Fatal("启动调度器失败: %v", err)
 	}
 	defer scheduler.Stop()
 
@@ -55,7 +63,7 @@ func main() {
 	// 中间件
 	app.Use(recover.New())
 	app.Use(cors.New())
-	app.Use(logger.New(logger.Config{
+	app.Use(fiberLogger.New(fiberLogger.Config{
 		Format: "${time} ${ip} ${status} ${latency} ${method} ${path}\n",
 		Output: os.Stdout,
 	}))
@@ -86,9 +94,15 @@ func main() {
 	// 审计日志
 	api.Get("/audit-logs", handlers.GetAuditLogs)
 
+	// 添加新接口：手动触发生成彩票号码推荐
+	api.Post("/lottery-types/:typeId/generate", handlers.GenerateLotteryNumbers)
+
+	// 添加新接口：手动触发爬取彩票开奖结果
+	api.Post("/lottery-results/crawl", handlers.CrawlLotteryResults)
+
 	// 启动服务器
 	port := fmt.Sprintf(":%d", config.Current.Server.Port)
 	if err := app.Listen(port); err != nil {
-		log.Fatalf("启动服务器失败: %v", err)
+		logger.Fatal("启动服务器失败: %v", err)
 	}
 }
