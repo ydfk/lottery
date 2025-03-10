@@ -295,6 +295,16 @@ func GenerateLotteryNumbers(c *fiber.Ctx) error {
 	ctx := context.Background()
 	logger.Info("开始调用AI生成%s号码...", lotteryType.Code)
 
+	// 获取开奖信息（日期和期号）
+	drawInfo, err := draw.GetLotteryDrawInfo(lotteryType.Code, lotteryType.ScheduleCron, lotteryType.APIEndpoint)
+	if err != nil {
+		logger.Error("获取开奖信息失败: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("获取开奖信息失败: %v", err),
+		})
+	}
+	logger.Info("获取到开奖信息: 日期=%v, 期号=%s", drawInfo.CurrentDrawDate, drawInfo.CurrentDrawNum)
+
 	// 使用code生成号码
 	numbers, err := AIClient.GenerateLotteryNumbers(ctx, lotteryType.Code, lotteryType.ModelName)
 	if err != nil {
@@ -304,16 +314,6 @@ func GenerateLotteryNumbers(c *fiber.Ctx) error {
 		})
 	}
 	logger.Info("成功生成号码: %s", numbers)
-
-	// 获取开奖信息（日期和期号）
-	drawInfo, err := draw.GetLotteryDrawInfo(lotteryType.Code, lotteryType.ScheduleCron)
-	if err != nil {
-		logger.Error("获取开奖信息失败: %v", err)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": fmt.Sprintf("获取开奖信息失败: %v", err),
-		})
-	}
-	logger.Info("获取到开奖信息: 日期=%v, 期号=%s", drawInfo.CurrentDrawDate, drawInfo.CurrentDrawNum)
 
 	// 保存推荐记录
 	recommendation := models.Recommendation{

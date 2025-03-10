@@ -9,7 +9,6 @@ import (
 	"lottery-backend/internal/pkg/draw"
 	"lottery-backend/internal/pkg/logger"
 	"sync"
-	"time"
 
 	"github.com/robfig/cron/v3"
 )
@@ -93,6 +92,14 @@ func (s *Scheduler) addLotteryTask(lt models.LotteryType) error {
 		ctx := context.Background()
 		logger.Info("开始执行彩票类型[%s]的号码生成任务...", lt.Code)
 
+		// 获取开奖信息（日期和期号）
+		drawInfo, err := draw.GetLotteryDrawInfo(lt.Code, lt.ScheduleCron, lt.APIEndpoint)
+		if err != nil {
+			logger.Error("获取%s开奖信息失败: %v", lt.Code, err)
+			return
+		}
+		logger.Info("获取到%s开奖信息: 日期=%v, 期号=%s", lt.Code, drawInfo.CurrentDrawDate, drawInfo.CurrentDrawNum)
+
 		// 使用code生成号码
 		numbers, err := s.aiClient.GenerateLotteryNumbers(ctx, lt.Code, lt.ModelName)
 		if err != nil {
@@ -100,14 +107,6 @@ func (s *Scheduler) addLotteryTask(lt models.LotteryType) error {
 			return
 		}
 		logger.Info("成功生成%s号码: %s", lt.Code, numbers)
-
-// 获取开奖信息（日期和期号）
-drawInfo, err := draw.GetLotteryDrawInfo(lt.Code, lt.ScheduleCron, lt.APIEndpoint)
-		if err != nil {
-			logger.Error("获取%s开奖信息失败: %v", lt.Code, err)
-			return
-		}
-		logger.Info("计算得到%s开奖信息: 日期=%v, 期号=%s", lt.Code, drawInfo.CurrentDrawDate, drawInfo.CurrentDrawNum)
 
 		// 保存推荐记录
 		recommendation := models.Recommendation{
@@ -172,13 +171,6 @@ func (s *Scheduler) ReloadTask(lt models.LotteryType) error {
 
 	logger.Info("彩票类型[%s]处于非活跃状态，跳过添加任务", lt.Name)
 	return nil
-}
-
-// calculateNextDrawTime 计算下次开奖时间（已弃用，使用draw包代替）
-func (s *Scheduler) calculateNextDrawTime(lotteryCode string) time.Time {
-	// 这里可以根据不同彩种的开奖规则计算具体时间
-	// 暂时简单返回24小时后
-	return time.Now().Add(24 * time.Hour)
 }
 
 // ValidateCron 验证cron表达式
