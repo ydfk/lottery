@@ -14,6 +14,7 @@ type Config struct {
 	JWT          JWTConfig           `mapstructure:"jwt"`
 	Users        []UserConfig        `mapstructure:"users"`
 	LotteryTypes []LotteryTypeConfig `mapstructure:"lottery_types"`
+	Scheduler    SchedulerConfig     `mapstructure:"scheduler"`
 }
 
 type JWTConfig struct {
@@ -59,6 +60,11 @@ type LotteryTypeConfig struct {
 	IsActive     bool   `mapstructure:"is_active"`
 	APIEndpoint  string `mapstructure:"api_endpoint"` // 原有API端点
 	CaipiaoID    int    `mapstructure:"caipiao_id"`   // 极速API的彩票ID
+}
+
+// SchedulerConfig 调度器配置
+type SchedulerConfig struct {
+	ResultFetchCron string `mapstructure:"result_fetch_cron"` // 开奖结果爬取的cron表达式
 }
 
 var Current Config

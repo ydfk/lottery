@@ -32,15 +32,16 @@ type JisuAPIResponse struct {
 	Status int    `json:"status"`
 	Msg    string `json:"msg"`
 	Result struct {
-		CaipiaoID   int     `json:"caipiaoid"`   // 彩票ID
-		Issueno     string  `json:"issueno"`     // 期号
-		Number      string  `json:"number"`      // 开奖号码
-		ReferNumber string  `json:"refernumber"` // 特殊号码
-		OpenDate    string  `json:"opendate"`    // 开奖日期
-		Deadline    string  `json:"deadline"`    // 截止日期
-		SaleAmount  float64 `json:"saleamount"`  // 销售额
-		TotalMoney  string  `json:"totalmoney"`  // 奖池金额
-		Prize       []Prize `json:"prize"`       // 奖项信息
+		CaipiaoID        int     `json:"caipiaoid"`        // 彩票ID
+		Issueno          string  `json:"issueno"`          // 期号
+		Number           string  `json:"number"`           // 开奖号码
+		ReferNumber      string  `json:"refernumber"`      // 特殊号码
+		OpenDate         string  `json:"opendate"`         // 开奖日期
+		OfficialOpenDate string  `json:"officialopendate"` // 官方开奖日期
+		Deadline         string  `json:"deadline"`         // 截止日期
+		SaleAmount       float64 `json:"saleamount"`       // 销售额
+		TotalMoney       string  `json:"totalmoney"`       // 奖池金额
+		Prize            []Prize `json:"prize"`            // 奖项信息
 	} `json:"result"`
 }
 
@@ -323,21 +324,88 @@ func FetchLatestDrawResult(lotteryType *models.LotteryType) (*models.DrawResult,
 
 	// 构造开奖结果
 	drawResult := &models.DrawResult{
-		LotteryTypeID:  lotteryType.ID,
-		CaipiaoID:      lotteryType.CaipiaoID,
-		DrawNumber:     apiResp.Result.Issueno,
-		MainNumbers:    apiResp.Result.Number,
-		SpecialNumbers: apiResp.Result.ReferNumber,
-		DrawDate:       drawDate,
-		SaleAmount:     apiResp.Result.SaleAmount,
-		PoolAmount:     poolAmount,
-		PrizeInfo:      models.JSON(prizeJSON),
+		LotteryTypeID:    lotteryType.ID,
+		CaipiaoID:        lotteryType.CaipiaoID,
+		DrawNumber:       apiResp.Result.Issueno,
+		MainNumbers:      apiResp.Result.Number,
+		SpecialNumbers:   apiResp.Result.ReferNumber,
+		DrawDate:         drawDate,
+		SaleAmount:       apiResp.Result.SaleAmount,
+		PoolAmount:       poolAmount,
+		OfficialOpenDate: apiResp.Result.OfficialOpenDate,
+		Deadline:         apiResp.Result.Deadline,
+		PrizeInfo:        models.JSON(prizeJSON),
 	}
+
+	// 处理奖项信息
+	processPrizeInfo(drawResult, apiResp.Result.Prize)
 
 	logger.Info("成功获取彩票[%s]期号[%s]开奖结果: %s+%s",
 		lotteryType.Name, drawResult.DrawNumber, drawResult.MainNumbers, drawResult.SpecialNumbers)
 
 	return drawResult, nil
+}
+
+// processPrizeInfo 处理奖项信息
+func processPrizeInfo(drawResult *models.DrawResult, prizes []Prize) {
+	for _, prize := range prizes {
+		prizeName := prize.PrizeName
+		bonus := prize.SingleBonus
+		num := prize.Num
+
+		switch {
+		case strings.Contains(prizeName, "一等奖") && !strings.Contains(prizeName, "追加"):
+			drawResult.FirstPrize = bonus
+			drawResult.FirstPrizeNum = num
+		case strings.Contains(prizeName, "二等奖") && !strings.Contains(prizeName, "追加"):
+			drawResult.SecondPrize = bonus
+			drawResult.SecondPrizeNum = num
+		case strings.Contains(prizeName, "三等奖") && !strings.Contains(prizeName, "追加"):
+			drawResult.ThirdPrize = bonus
+			drawResult.ThirdPrizeNum = num
+		case strings.Contains(prizeName, "四等奖") && !strings.Contains(prizeName, "追加"):
+			drawResult.FourthPrize = bonus
+			drawResult.FourthPrizeNum = num
+		case strings.Contains(prizeName, "五等奖") && !strings.Contains(prizeName, "追加"):
+			drawResult.FifthPrize = bonus
+			drawResult.FifthPrizeNum = num
+		case strings.Contains(prizeName, "六等奖") && !strings.Contains(prizeName, "追加"):
+			drawResult.SixthPrize = bonus
+			drawResult.SixthPrizeNum = num
+		case strings.Contains(prizeName, "七等奖") && !strings.Contains(prizeName, "追加"):
+			drawResult.SeventhPrize = bonus
+			drawResult.SeventhPrizeNum = num
+		case strings.Contains(prizeName, "八等奖") && !strings.Contains(prizeName, "追加"):
+			drawResult.EighthPrize = bonus
+			drawResult.EighthPrizeNum = num
+		case strings.Contains(prizeName, "九等奖") && !strings.Contains(prizeName, "追加"):
+			drawResult.NinthPrize = bonus
+			drawResult.NinthPrizeNum = num
+
+		// 处理追加奖项
+		case strings.Contains(prizeName, "一等奖") && strings.Contains(prizeName, "追加"):
+			drawResult.FirstPrizeAdd = bonus
+			drawResult.FirstPrizeAddNum = num
+		case strings.Contains(prizeName, "二等奖") && strings.Contains(prizeName, "追加"):
+			drawResult.SecondPrizeAdd = bonus
+			drawResult.SecondPrizeAddNum = num
+		case strings.Contains(prizeName, "三等奖") && strings.Contains(prizeName, "追加"):
+			drawResult.ThirdPrizeAdd = bonus
+			drawResult.ThirdPrizeAddNum = num
+		case strings.Contains(prizeName, "四等奖") && strings.Contains(prizeName, "追加"):
+			drawResult.FourthPrizeAdd = bonus
+			drawResult.FourthPrizeAddNum = num
+		case strings.Contains(prizeName, "五等奖") && strings.Contains(prizeName, "追加"):
+			drawResult.FifthPrizeAdd = bonus
+			drawResult.FifthPrizeAddNum = num
+		case strings.Contains(prizeName, "六等奖") && strings.Contains(prizeName, "追加"):
+			drawResult.SixthPrizeAdd = bonus
+			drawResult.SixthPrizeAddNum = num
+		case strings.Contains(prizeName, "七等奖") && strings.Contains(prizeName, "追加"):
+			drawResult.SeventhPrizeAdd = bonus
+			drawResult.SeventhPrizeAddNum = num
+		}
+	}
 }
 
 // ProcessDrawResult 处理开奖结果，包括保存结果和分析中奖情况
@@ -405,12 +473,46 @@ func saveDrawResult(drawResult *models.DrawResult) error {
 			drawResult.LotteryTypeID,
 			drawResult.DrawNumber,
 		).Updates(map[string]interface{}{
-			"main_numbers":    drawResult.MainNumbers,
-			"special_numbers": drawResult.SpecialNumbers,
-			"draw_date":       drawResult.DrawDate,
-			"sale_amount":     drawResult.SaleAmount,
-			"pool_amount":     drawResult.PoolAmount,
-			"prize_info":      drawResult.PrizeInfo,
+			"main_numbers":          drawResult.MainNumbers,
+			"special_numbers":       drawResult.SpecialNumbers,
+			"draw_date":             drawResult.DrawDate,
+			"sale_amount":           drawResult.SaleAmount,
+			"pool_amount":           drawResult.PoolAmount,
+			"prize_info":            drawResult.PrizeInfo,
+			"official_open_date":    drawResult.OfficialOpenDate,
+			"deadline":              drawResult.Deadline,
+			"first_prize":           drawResult.FirstPrize,
+			"first_prize_num":       drawResult.FirstPrizeNum,
+			"second_prize":          drawResult.SecondPrize,
+			"second_prize_num":      drawResult.SecondPrizeNum,
+			"third_prize":           drawResult.ThirdPrize,
+			"third_prize_num":       drawResult.ThirdPrizeNum,
+			"fourth_prize":          drawResult.FourthPrize,
+			"fourth_prize_num":      drawResult.FourthPrizeNum,
+			"fifth_prize":           drawResult.FifthPrize,
+			"fifth_prize_num":       drawResult.FifthPrizeNum,
+			"sixth_prize":           drawResult.SixthPrize,
+			"sixth_prize_num":       drawResult.SixthPrizeNum,
+			"seventh_prize":         drawResult.SeventhPrize,
+			"seventh_prize_num":     drawResult.SeventhPrizeNum,
+			"eighth_prize":          drawResult.EighthPrize,
+			"eighth_prize_num":      drawResult.EighthPrizeNum,
+			"ninth_prize":           drawResult.NinthPrize,
+			"ninth_prize_num":       drawResult.NinthPrizeNum,
+			"first_prize_add":       drawResult.FirstPrizeAdd,
+			"first_prize_add_num":   drawResult.FirstPrizeAddNum,
+			"second_prize_add":      drawResult.SecondPrizeAdd,
+			"second_prize_add_num":  drawResult.SecondPrizeAddNum,
+			"third_prize_add":       drawResult.ThirdPrizeAdd,
+			"third_prize_add_num":   drawResult.ThirdPrizeAddNum,
+			"fourth_prize_add":      drawResult.FourthPrizeAdd,
+			"fourth_prize_add_num":  drawResult.FourthPrizeAddNum,
+			"fifth_prize_add":       drawResult.FifthPrizeAdd,
+			"fifth_prize_add_num":   drawResult.FifthPrizeAddNum,
+			"sixth_prize_add":       drawResult.SixthPrizeAdd,
+			"sixth_prize_add_num":   drawResult.SixthPrizeAddNum,
+			"seventh_prize_add":     drawResult.SeventhPrizeAdd,
+			"seventh_prize_add_num": drawResult.SeventhPrizeAddNum,
 		}).Error
 	}
 

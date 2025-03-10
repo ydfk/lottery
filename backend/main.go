@@ -40,7 +40,7 @@ func main() {
 	// 将AI客户端传递给handlers包，使其可以在处理程序中使用
 	handlers.SetAIClient(aiClient)
 
-	// 创建并启动调度器
+	//创建并启动调度器
 	scheduler := scheduler.NewScheduler(aiClient)
 	if err := scheduler.Start(); err != nil {
 		logger.Fatal("启动调度器失败: %v", err)

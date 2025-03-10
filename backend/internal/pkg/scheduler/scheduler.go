@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"lottery-backend/internal/models"
 	"lottery-backend/internal/pkg/ai"
+	"lottery-backend/internal/pkg/config"
 	"lottery-backend/internal/pkg/database"
 	"lottery-backend/internal/pkg/draw"
 	"lottery-backend/internal/pkg/logger"
@@ -150,8 +151,18 @@ func (s *Scheduler) addDrawResultFetchTask() error {
 	logger.Info("正在添加开奖结果爬取任务...")
 	taskKey := "fetch_all_results"
 
-	// 每天21:00执行开奖结果爬取
-	entryID, err := s.cron.AddFunc("0 0 21 * * *", func() {
+	// 从配置文件中读取开奖结果爬取时间的cron表达式
+	resultFetchCron := config.Current.Scheduler.ResultFetchCron
+	logger.Info("从配置文件读取到开奖结果爬取时间配置: %s", resultFetchCron)
+
+	// 检查是否有配置，如果没有则使用默认值
+	if resultFetchCron == "" {
+		resultFetchCron = "0 22 * * *" // 如果没有配置，默认为每天21:00
+		logger.Info("未配置开奖结果爬取时间，使用默认值: %s", resultFetchCron)
+	}
+
+	// 每天按配置时间执行开奖结果爬取
+	entryID, err := s.cron.AddFunc(resultFetchCron, func() {
 		logger.Info("开始执行每日开奖结果爬取任务...")
 
 		// 爬取所有活跃彩票类型的最新开奖结果
@@ -169,7 +180,7 @@ func (s *Scheduler) addDrawResultFetchTask() error {
 	}
 
 	s.entries[taskKey] = entryID
-	logger.Info("成功添加每日开奖结果爬取任务")
+	logger.Info("成功添加每日开奖结果爬取任务，执行时间: %s", resultFetchCron)
 	return nil
 }
 

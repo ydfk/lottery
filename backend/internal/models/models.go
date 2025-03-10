@@ -85,11 +85,53 @@ type DrawResult struct {
 	MainNumbers    string    `gorm:"size:100"` // 主号码
 	SpecialNumbers string    `gorm:"size:50"`  // 特殊号码（如蓝球）
 	DrawDate       time.Time // 开奖日期
-	SaleAmount     float64   // 销售额
-	PoolAmount     float64   // 奖池金额
-	PrizeInfo      JSON      // 奖金信息，JSON格式
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	SaleAmount     float64   `gorm:"default:0"` // 销售额
+	PoolAmount     float64   `gorm:"default:0"` // 奖池金额
+
+	// 奖项信息 - 普通奖项
+	FirstPrize      float64 `gorm:"default:0"` // 一等奖金额
+	FirstPrizeNum   int     `gorm:"default:0"` // 一等奖中奖注数
+	SecondPrize     float64 `gorm:"default:0"` // 二等奖金额
+	SecondPrizeNum  int     `gorm:"default:0"` // 二等奖中奖注数
+	ThirdPrize      float64 `gorm:"default:0"` // 三等奖金额
+	ThirdPrizeNum   int     `gorm:"default:0"` // 三等奖中奖注数
+	FourthPrize     float64 `gorm:"default:0"` // 四等奖金额
+	FourthPrizeNum  int     `gorm:"default:0"` // 四等奖中奖注数
+	FifthPrize      float64 `gorm:"default:0"` // 五等奖金额
+	FifthPrizeNum   int     `gorm:"default:0"` // 五等奖中奖注数
+	SixthPrize      float64 `gorm:"default:0"` // 六等奖金额
+	SixthPrizeNum   int     `gorm:"default:0"` // 六等奖中奖注数
+	SeventhPrize    float64 `gorm:"default:0"` // 七等奖金额(大乐透特有)
+	SeventhPrizeNum int     `gorm:"default:0"` // 七等奖中奖注数
+	EighthPrize     float64 `gorm:"default:0"` // 八等奖金额(大乐透特有)
+	EighthPrizeNum  int     `gorm:"default:0"` // 八等奖中奖注数
+	NinthPrize      float64 `gorm:"default:0"` // 九等奖金额(大乐透特有)
+	NinthPrizeNum   int     `gorm:"default:0"` // 九等奖中奖注数
+
+	// 追加奖项(大乐透特有)
+	FirstPrizeAdd      float64 `gorm:"default:0"` // 一等奖追加金额
+	FirstPrizeAddNum   int     `gorm:"default:0"` // 一等奖追加中奖注数
+	SecondPrizeAdd     float64 `gorm:"default:0"` // 二等奖追加金额
+	SecondPrizeAddNum  int     `gorm:"default:0"` // 二等奖追加中奖注数
+	ThirdPrizeAdd      float64 `gorm:"default:0"` // 三等奖追加金额
+	ThirdPrizeAddNum   int     `gorm:"default:0"` // 三等奖追加中奖注数
+	FourthPrizeAdd     float64 `gorm:"default:0"` // 四等奖追加金额
+	FourthPrizeAddNum  int     `gorm:"default:0"` // 四等奖追加中奖注数
+	FifthPrizeAdd      float64 `gorm:"default:0"` // 五等奖追加金额
+	FifthPrizeAddNum   int     `gorm:"default:0"` // 五等奖追加中奖注数
+	SixthPrizeAdd      float64 `gorm:"default:0"` // 六等奖追加金额
+	SixthPrizeAddNum   int     `gorm:"default:0"` // 六等奖追加中奖注数
+	SeventhPrizeAdd    float64 `gorm:"default:0"` // 七等奖追加金额
+	SeventhPrizeAddNum int     `gorm:"default:0"` // 七等奖追加中奖注数
+
+	// 其他信息
+	OfficialOpenDate string `gorm:"size:20"` // 官方开奖日期
+	Deadline         string `gorm:"size:20"` // 兑奖截止日期
+
+	// 保存完整奖项信息(原始JSON)
+	PrizeInfo JSON // 奖金信息，JSON格式，包含完整的奖项信息
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // JSON 自定义JSON类型
