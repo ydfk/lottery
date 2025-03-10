@@ -105,7 +105,7 @@ func (s *Scheduler) addLotteryGenerationTask(lt models.LotteryType) error {
 		logger.Info("开始执行彩票类型[%s]的号码生成任务...", lt.Code)
 
 		// 获取开奖信息（日期和期号）
-		drawInfo, err := draw.GetLotteryDrawInfo(lt.Code, lt.ScheduleCron, lt.APIEndpoint)
+		drawInfo, err := draw.GetLotteryDrawInfo(lt.Code, lt.ScheduleCron)
 		if err != nil {
 			logger.Error("获取%s开奖信息失败: %v", lt.Code, err)
 			return
@@ -254,7 +254,7 @@ func (s *Scheduler) ManualGenerateLotteryNumbers(lotteryTypeID uint) (string, er
 	defer cancel()
 
 	// 获取开奖信息（日期和期号）
-	drawInfo, err := draw.GetLotteryDrawInfo(lotteryType.Code, lotteryType.ScheduleCron, lotteryType.APIEndpoint)
+	drawInfo, err := draw.GetLotteryDrawInfo(lotteryType.Code, lotteryType.ScheduleCron)
 	if err != nil {
 		return "", fmt.Errorf("获取开奖信息失败: %v", err)
 	}

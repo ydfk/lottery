@@ -296,7 +296,7 @@ func GenerateLotteryNumbers(c *fiber.Ctx) error {
 	logger.Info("开始调用AI生成%s号码...", lotteryType.Code)
 
 	// 获取开奖信息（日期和期号）
-	drawInfo, err := draw.GetLotteryDrawInfo(lotteryType.Code, lotteryType.ScheduleCron, lotteryType.APIEndpoint)
+	drawInfo, err := draw.GetLotteryDrawInfo(lotteryType.Code, lotteryType.ScheduleCron)
 	if err != nil {
 		logger.Error("获取开奖信息失败: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{

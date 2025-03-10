@@ -41,7 +41,6 @@ type LotteryType struct {
 	ScheduleCron string `gorm:"size:20"`             // cron表达式
 	ModelName    string `gorm:"size:100"`            // 对应AI模型
 	IsActive     bool   `gorm:"default:true"`        // 是否启用
-	APIEndpoint  string `gorm:"size:500"`            // API查询地址
 	CaipiaoID    int    `gorm:"default:0"`           // 极速API的彩票ID
 	CreatedAt    time.Time
 	UpdatedAt    time.Time

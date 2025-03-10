@@ -13,12 +13,12 @@
 
 ## 技术栈
 
-- Go 1.21+
-- Fiber (Web框架)
-- GORM (ORM库)
-- SQLite (数据库)
-- JWT (认证)
-- OneAPI (AI接口)
+- Go 1.24+
+- Fiber v2.52+ (Web框架)
+- GORM v1.25+ (ORM库)
+- SQLite3 (数据库)
+- JWT v4 (认证)
+- DeepSeek Chat (AI接口)
 
 ## 项目结构
 
@@ -45,50 +45,51 @@ backend/
 项目使用`config/config.yaml`文件进行配置：
 
 ```yaml
-oneapi:
-  base_url: "https://api.oneapi.com/v1"  # OneAPI服务地址
-  api_key: ""                           # 你的API密钥
-  allowed_models:                       # 允许使用的模型
-    - "gpt-4"
-    - "gpt-3.5-turbo"
-    - "claude-2.1"
-  timeout: 30s                          # 请求超时时间
-  max_retries: 3                        # 最大重试次数
+ai:
+  base_url: "https://api.deepseek.com/v1"  # AI服务地址
+  api_key: ""                              # 你的API密钥
+  allowed_models:                          # 允许使用的模型
+    - "deepseek/deepseek-chat:free"
+  use_proxy: false                         # 是否使用代理
+  proxy_address: ""                        # 代理服务器地址
+  timeout: 30s                             # 请求超时时间
+  max_retries: 3                          # 最大重试次数
 
 database:
-  path: "./data/lottery.db"             # 数据库文件路径
+  path: "./data/lottery.db"               # 数据库文件路径
 
 server:
-  port: 3000                            # 服务端口
+  port: 3000                              # 服务端口
+  admin_key: ""                           # 管理员API密钥
 
 jwt:
-  secret: "your-jwt-secret-key"         # JWT密钥
-  expiration: 86400                     # Token过期时间(秒)
+  secret: "your-jwt-secret-key"           # JWT密钥
+  expiration: 86400                       # Token过期时间(秒)
 
 # 初始用户配置
 users:
-  - username: "admin"                   # 管理员用户
-    password: "admin123"
-  - username: "user"                    # 普通用户
-    password: "user123"
+  - username: "admin"                     # 管理员用户
+    password: "123456"
+
+# 调度器配置
+scheduler:
+  result_fetch_cron: "0 21 * * *"        # 每天21:00爬取开奖结果
 
 # 彩票类型配置
 lottery_types:
-  - name: "双色球"
-    schedule_cron: "0 0 20 * * 2,4,7"   # 每周二、四、日20:00
-    model_name: "gpt-4"
+  - code: "fc_ssq"                       # 福彩双色球
+    name: "双色球"
+    schedule_cron: "0 0 20 * 2,4,0"      # 每周二、四、日20:00
+    model_name: "deepseek/deepseek-chat:free"
     is_active: true
-  - name: "大乐透"
-    schedule_cron: "0 0 20 * * 1,3,6"   # 每周一、三、六20:00
-    model_name: "gpt-4"
-    is_active: true
+    api_endpoint: ""                      # 开奖查询接口
 ```
 
 ## 如何编译
 
 ### 前提条件
 
-- 安装Go 1.21或更高版本
+- 安装Go 1.24或更高版本
 - 设置好GOPATH和GOROOT环境变量
 
 ### 编译步骤
@@ -234,11 +235,15 @@ dlv debug --headless --listen=:2345 --api-version=2 --accept-multiclient
 
 ### 主要接口
 
-- `POST /api/auth/login` - 用户登录
+- `POST /auth/login` - 用户登录
 - `GET /api/lottery-types` - 获取彩票类型列表
+- `POST /api/lottery-types` - 创建彩票类型（需管理员权限）
+- `PUT /api/lottery-types/:id` - 更新彩票类型（需管理员权限）
 - `GET /api/recommendations` - 获取推荐列表
 - `PUT /api/recommendations/:id/purchase` - 更新购买状态
 - `GET /api/audit-logs` - 获取审计日志
+- `POST /api/lottery-types/:typeId/generate` - 手动触发生成彩票号码推荐
+- `POST /api/lottery-results/crawl` - 手动触发爬取彩票开奖结果
 
 ## 开发说明
 
@@ -249,5 +254,7 @@ dlv debug --headless --listen=:2345 --api-version=2 --accept-multiclient
 ## 注意事项
 
 - 默认配置中的密钥和密码仅用于开发环境，生产环境请务必更改
-- OneAPI需要有效的API密钥才能使用AI功能
+- 开发环境建议使用DeepSeek Chat免费模型进行测试
 - 系统会在启动时自动创建配置文件中定义的用户和彩票类型
+- 请确保配置文件中的cron表达式与实际开奖时间相匹配
+- 建议在生产环境中通过环境变量覆盖敏感配置项

@@ -54,7 +54,7 @@ type Prize struct {
 }
 
 // GetLotteryDrawInfo 获取彩票开奖信息（下一期的信息）
-func GetLotteryDrawInfo(lotteryCode string, scheduleCron string, apiEndpoint string) (*LotteryDrawInfo, error) {
+func GetLotteryDrawInfo(lotteryCode string, scheduleCron string) (*LotteryDrawInfo, error) {
 	logger.Info("开始获取彩票[%s]开奖信息...", lotteryCode)
 
 	// 1. 获取最新一期的开奖结果
