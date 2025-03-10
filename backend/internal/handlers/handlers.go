@@ -317,11 +317,11 @@ func GenerateLotteryNumbers(c *fiber.Ctx) error {
 
 	// 保存推荐记录
 	recommendation := models.Recommendation{
-		LotteryTypeID: lotteryType.ID,
-		Numbers:       numbers,
-		ModelName:     lotteryType.ModelName,
-		DrawTime:      drawInfo.CurrentDrawDate,
-		DrawNumber:    drawInfo.CurrentDrawNum,
+		LotteryTypeID:    lotteryType.ID,
+		Numbers:          numbers,
+		ModelName:        lotteryType.ModelName,
+		ExpectedDrawTime: drawInfo.NextDrawDate,
+		DrawNumber:       drawInfo.NextDrawNum,
 	}
 
 	userID := getUserIDFromContext(c)

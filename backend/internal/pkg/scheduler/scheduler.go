@@ -122,11 +122,11 @@ func (s *Scheduler) addLotteryGenerationTask(lt models.LotteryType) error {
 
 		// 保存推荐记录
 		recommendation := models.Recommendation{
-			LotteryTypeID: lt.ID,
-			Numbers:       numbers,
-			ModelName:     lt.ModelName,
-			DrawTime:      drawInfo.NextDrawDate,
-			DrawNumber:    drawInfo.NextDrawNum,
+			LotteryTypeID:    lt.ID,
+			Numbers:          numbers,
+			ModelName:        lt.ModelName,
+			ExpectedDrawTime: drawInfo.NextDrawDate, // 使用预计开奖时间
+			DrawNumber:       drawInfo.NextDrawNum,
 		}
 
 		if err := database.DB.Create(&recommendation).Error; err != nil {
@@ -267,11 +267,11 @@ func (s *Scheduler) ManualGenerateLotteryNumbers(lotteryTypeID uint) (string, er
 
 	// 保存推荐记录
 	recommendation := models.Recommendation{
-		LotteryTypeID: lotteryType.ID,
-		Numbers:       numbers,
-		ModelName:     lotteryType.ModelName,
-		DrawTime:      drawInfo.NextDrawDate,
-		DrawNumber:    drawInfo.NextDrawNum,
+		LotteryTypeID:    lotteryType.ID,
+		Numbers:          numbers,
+		ModelName:        lotteryType.ModelName,
+		ExpectedDrawTime: drawInfo.NextDrawDate,
+		DrawNumber:       drawInfo.NextDrawNum,
 	}
 
 	if err := database.DB.Create(&recommendation).Error; err != nil {

@@ -3,7 +3,7 @@ ai:
   api_key: "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"  # 需要填写实际的API密钥
   timeout: 30s
   max_retries: 3
-  use_proxy: true      # 是否启用代理
+  use_proxy: false      # 是否启用代理
   proxy_address: "http://127.0.0.1:8888"  # Fiddler 代理地址
 
 # 彩票API配置
@@ -35,14 +35,14 @@ lottery_types:
   - code: "fc_ssq"     # 福彩双色球
     name: "双色球"
     schedule_cron: "0 0 20 * 2,4,0" # 每周二、四、日20:00
-    model_name: "deepseek/deepseek-r1:free"
+    model_name: "deepseek/deepseek-chat:free"
     is_active: true
     api_endpoint: "" # 待添加福彩双色球开奖查询接口
     caipiao_id: 11   # 极速API的彩票ID
   - code: "tc_dlt"     # 体彩大乐透
     name: "大乐透"
     schedule_cron: "0 0 20 * 1,3,6" # 每周一、三、六20:00
-    model_name: "deepseek/deepseek-r1:free"
+    model_name: "deepseek/deepseek-chat:free"
     is_active: true
     api_endpoint: "https://webapi.sporttery.cn/gateway/lottery/getHistoryPageListV1.qry?gameNo=85&provinceId=0&pageSize=1&isVerify=1&pageNo=1"
     caipiao_id: 14   # 极速API的彩票ID

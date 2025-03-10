@@ -62,18 +62,19 @@ type AuditLog struct {
 
 // Recommendation 推荐记录
 type Recommendation struct {
-	ID            uint      `gorm:"primaryKey"`
-	LotteryTypeID uint      // 关联彩票类型
-	Numbers       string    `gorm:"size:100"` // 推荐号码
-	ModelName     string    `gorm:"size:100"` // 使用的模型
-	DrawTime      time.Time // 开奖时间
-	DrawNumber    string    `gorm:"size:20"`       // 期数，例如：23001、23002
-	IsPurchased   bool      `gorm:"default:false"` // 是否已购买
-	DrawResult    string    `gorm:"size:100"`      // 开奖结果
-	WinStatus     string    `gorm:"size:50"`       // 中奖状态
-	WinAmount     float64   // 中奖金额
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	ID               uint       `gorm:"primaryKey"`
+	LotteryTypeID    uint       // 关联彩票类型
+	Numbers          string     `gorm:"size:100"` // 推荐号码
+	ModelName        string     `gorm:"size:100"` // 使用的模型
+	DrawTime         *time.Time // 实际开奖时间，创建推荐时可能未知
+	ExpectedDrawTime time.Time  // 预计开奖时间
+	DrawNumber       string     `gorm:"size:20"`       // 目标期数，下一期的期数，例如：23001、23002
+	IsPurchased      bool       `gorm:"default:false"` // 是否已购买
+	DrawResult       string     `gorm:"size:100"`      // 开奖结果
+	WinStatus        string     `gorm:"size:50"`       // 中奖状态
+	WinAmount        float64    // 中奖金额
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 // DrawResult 彩票开奖结果

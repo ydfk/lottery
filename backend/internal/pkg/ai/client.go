@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"lottery-backend/internal/pkg/config"
 	"lottery-backend/internal/pkg/logger"
@@ -45,6 +46,24 @@ func NewClient() *Client {
 	return &Client{
 		client: client,
 		config: cfg,
+	}
+}
+
+// logRequest 记录请求参数
+func (c *Client) logRequest(req interface{}) {
+	if reqBytes, err := json.MarshalIndent(req, "", "  "); err == nil {
+		logger.Debug("API请求参数: %s", string(reqBytes))
+	} else {
+		logger.Error("序列化请求参数失败: %v", err)
+	}
+}
+
+// logResponse 记录响应结果
+func (c *Client) logResponse(resp interface{}) {
+	if respBytes, err := json.MarshalIndent(resp, "", "  "); err == nil {
+		logger.Debug("API响应结果: %s", string(respBytes))
+	} else {
+		logger.Error("序列化响应结果失败: %v", err)
 	}
 }
 
@@ -169,6 +188,9 @@ func (c *Client) GenerateLotteryNumbers(ctx context.Context, lotteryType string,
 		Stream:      false,
 	}
 
+	// 记录请求参数
+	c.logRequest(req)
+
 	// 设置超时
 	ctx, cancel := context.WithTimeout(ctx, c.config.Timeout)
 	defer cancel()
@@ -183,6 +205,9 @@ func (c *Client) GenerateLotteryNumbers(ctx context.Context, lotteryType string,
 		duration := time.Since(start)
 
 		if err == nil && len(resp.Choices) > 0 {
+			// 记录完整的响应结果
+			c.logResponse(resp)
+
 			result := resp.Choices[0].Message.Content
 			logger.Info("AI原始返回: %s", result)
 
@@ -229,6 +254,10 @@ func (c *Client) GenerateLotteryNumbers(ctx context.Context, lotteryType string,
 		} else {
 			lastErr = err
 			logger.Error("API调用失败（第%d次）：%v，耗时：%v", i+1, err, duration)
+			if err != nil {
+				// 记录错误详情
+				logger.Debug("API错误详情: %+v", err)
+			}
 		}
 
 		retryDelay := time.Second * time.Duration(i+1)
