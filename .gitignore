@@ -26,3 +26,5 @@ Thumbs.db
 .env.local
 .history
 *.exe
+config.yaml
+node_modules
