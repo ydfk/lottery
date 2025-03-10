@@ -351,7 +351,11 @@ func CrawlLotteryResults(c *fiber.Ctx) error {
 	// 记录操作日志
 	err := database.WithAudit(userID, "MANUAL_CRAWL", "lottery_results", 0, func() error {
 		logger.Info("开始爬取开奖结果...")
-		// TODO: 实现实际的爬取逻辑
+		// 调用爬取函数
+		if err := draw.FetchAllActiveLotteryDrawResults(); err != nil {
+			logger.Error("爬取开奖结果失败: %v", err)
+			return err
+		}
 		return nil
 	})
 
@@ -365,7 +369,7 @@ func CrawlLotteryResults(c *fiber.Ctx) error {
 	logger.Info("成功触发开奖结果爬取")
 	return c.JSON(fiber.Map{
 		"success": true,
-		"message": "已开始爬取开奖结果",
+		"message": "已成功爬取开奖结果并分析中奖情况",
 	})
 }
 

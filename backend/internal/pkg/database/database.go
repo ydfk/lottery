@@ -71,6 +71,7 @@ func autoMigrate() error {
 		&models.LotteryType{},
 		&models.AuditLog{},
 		&models.Recommendation{},
+		&models.DrawResult{}, // 添加新的开奖结果表
 	)
 }
 
@@ -132,6 +133,8 @@ func initLotteryTypes() error {
 			lotteryType.ScheduleCron = typeConfig.ScheduleCron
 			lotteryType.ModelName = typeConfig.ModelName
 			lotteryType.IsActive = typeConfig.IsActive
+			lotteryType.APIEndpoint = typeConfig.APIEndpoint
+			lotteryType.CaipiaoID = typeConfig.CaipiaoID // 添加彩票ID
 
 			if err := DB.Save(&lotteryType).Error; err != nil {
 				return err
@@ -146,6 +149,8 @@ func initLotteryTypes() error {
 			ScheduleCron: typeConfig.ScheduleCron,
 			ModelName:    typeConfig.ModelName,
 			IsActive:     typeConfig.IsActive,
+			APIEndpoint:  typeConfig.APIEndpoint,
+			CaipiaoID:    typeConfig.CaipiaoID, // 添加彩票ID
 		}
 
 		// 保存彩票类型

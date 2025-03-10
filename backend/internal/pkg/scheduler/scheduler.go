@@ -9,6 +9,7 @@ import (
 	"lottery-backend/internal/pkg/draw"
 	"lottery-backend/internal/pkg/logger"
 	"sync"
+	"time"
 
 	"github.com/robfig/cron/v3"
 )
@@ -16,13 +17,19 @@ import (
 type Scheduler struct {
 	mu       sync.Mutex
 	cron     *cron.Cron
-	entries  map[uint]cron.EntryID
+	entries  map[string]cron.EntryID // 使用taskType+ID作为key
 	aiClient *ai.Client
 }
 
+const (
+	TaskTypeGenerate = "generate" // 推荐号码生成任务
+	TaskTypeFetch    = "fetch"    // 开奖结果爬取任务
+	TaskTypeAnalyze  = "analyze"  // 中奖分析任务
+)
+
 func NewScheduler(aiClient *ai.Client) *Scheduler {
 	return &Scheduler{
-		entries:  make(map[uint]cron.EntryID),
+		entries:  make(map[string]cron.EntryID),
 		aiClient: aiClient,
 	}
 }
@@ -39,7 +46,7 @@ func (s *Scheduler) Start() error {
 	}
 
 	s.cron = cron.New()
-	s.entries = make(map[uint]cron.EntryID)
+	s.entries = make(map[string]cron.EntryID)
 
 	// 加载所有活跃的彩票类型
 	logger.Info("加载活跃彩票类型...")
@@ -50,21 +57,23 @@ func (s *Scheduler) Start() error {
 	}
 	logger.Info("找到%d个活跃彩票类型", len(types))
 
-	// 为每个彩票类型创建生成任务
+	// 为每个彩票类型创建任务
 	for _, t := range types {
 		logger.Info("正在为彩票类型[%s]添加任务...", t.Name)
-		if err := s.addLotteryTask(t); err != nil {
-			logger.Error("添加任务失败[%s]: %v", t.Name, err)
-			return fmt.Errorf("添加任务失败[%s]: %v", t.Name, err)
+
+		// 添加号码推荐任务
+		if err := s.addLotteryGenerationTask(t); err != nil {
+			logger.Error("添加号码推荐任务失败[%s]: %v", t.Name, err)
+			return fmt.Errorf("添加号码推荐任务失败[%s]: %v", t.Name, err)
 		}
-		logger.Info("成功添加彩票类型[%s]的任务", t.Name)
+		logger.Info("成功添加彩票类型[%s]的号码推荐任务", t.Name)
 	}
 
-	// 添加开奖结果爬取任务
+	// 添加每日开奖结果爬取任务（所有彩票类型共用一个任务）
 	logger.Info("添加开奖结果爬取任务...")
-	if err := s.addDrawResultTask(); err != nil {
-		logger.Error("添加开奖结果任务失败: %v", err)
-		return fmt.Errorf("添加开奖结果任务失败: %v", err)
+	if err := s.addDrawResultFetchTask(); err != nil {
+		logger.Error("添加开奖结果爬取任务失败: %v", err)
+		return fmt.Errorf("添加开奖结果爬取任务失败: %v", err)
 	}
 	logger.Info("成功添加开奖结果爬取任务")
 
@@ -85,9 +94,11 @@ func (s *Scheduler) Stop() {
 	}
 }
 
-// addLotteryTask 添加彩票号码生成任务
-func (s *Scheduler) addLotteryTask(lt models.LotteryType) error {
+// addLotteryGenerationTask 添加彩票号码生成任务
+func (s *Scheduler) addLotteryGenerationTask(lt models.LotteryType) error {
 	logger.Info("正在添加彩票类型[%s]的号码生成任务，Cron表达式：%s", lt.Code, lt.ScheduleCron)
+	taskKey := fmt.Sprintf("%s_%d", TaskTypeGenerate, lt.ID)
+
 	entryID, err := s.cron.AddFunc(lt.ScheduleCron, func() {
 		ctx := context.Background()
 		logger.Info("开始执行彩票类型[%s]的号码生成任务...", lt.Code)
@@ -98,9 +109,9 @@ func (s *Scheduler) addLotteryTask(lt models.LotteryType) error {
 			logger.Error("获取%s开奖信息失败: %v", lt.Code, err)
 			return
 		}
-		logger.Info("获取到%s开奖信息: 日期=%v, 期号=%s", lt.Code, drawInfo.CurrentDrawDate, drawInfo.CurrentDrawNum)
+		logger.Info("获取到%s下一期信息: 日期=%v, 期号=%s", lt.Code, drawInfo.NextDrawDate, drawInfo.NextDrawNum)
 
-		// 使用code生成号码
+		// 使用AI客户端生成号码
 		numbers, err := s.aiClient.GenerateLotteryNumbers(ctx, lt.Code, lt.ModelName)
 		if err != nil {
 			logger.Error("生成%s号码失败: %v", lt.Code, err)
@@ -113,8 +124,8 @@ func (s *Scheduler) addLotteryTask(lt models.LotteryType) error {
 			LotteryTypeID: lt.ID,
 			Numbers:       numbers,
 			ModelName:     lt.ModelName,
-			DrawTime:      drawInfo.CurrentDrawDate,
-			DrawNumber:    drawInfo.CurrentDrawNum,
+			DrawTime:      drawInfo.NextDrawDate,
+			DrawNumber:    drawInfo.NextDrawNum,
 		}
 
 		if err := database.DB.Create(&recommendation).Error; err != nil {
@@ -125,28 +136,40 @@ func (s *Scheduler) addLotteryTask(lt models.LotteryType) error {
 	})
 
 	if err != nil {
-		logger.Error("添加彩票类型[%s]的任务失败: %v", lt.Code, err)
+		logger.Error("添加彩票类型[%s]的号码生成任务失败: %v", lt.Code, err)
 		return err
 	}
 
-	s.entries[lt.ID] = entryID
-	logger.Info("成功添加彩票类型[%s]的任务", lt.Code)
+	s.entries[taskKey] = entryID
+	logger.Info("成功添加彩票类型[%s]的号码生成任务", lt.Code)
 	return nil
 }
 
-// addDrawResultTask 添加开奖结果爬取任务
-func (s *Scheduler) addDrawResultTask() error {
+// addDrawResultFetchTask 添加开奖结果爬取任务
+func (s *Scheduler) addDrawResultFetchTask() error {
 	logger.Info("正在添加开奖结果爬取任务...")
-	// 每天22:00执行开奖结果爬取
-	_, err := s.cron.AddFunc("0 22 * * *", func() {
-		logger.Info("开始执行开奖结果爬取任务...")
-		// TODO: 实现开奖结果爬取逻辑
+	taskKey := "fetch_all_results"
+
+	// 每天21:00执行开奖结果爬取
+	entryID, err := s.cron.AddFunc("0 0 21 * * *", func() {
+		logger.Info("开始执行每日开奖结果爬取任务...")
+
+		// 爬取所有活跃彩票类型的最新开奖结果
+		if err := draw.FetchAllActiveLotteryDrawResults(); err != nil {
+			logger.Error("爬取开奖结果失败: %v", err)
+			return
+		}
+
+		logger.Info("每日开奖结果爬取任务执行完成")
 	})
+
 	if err != nil {
 		logger.Error("添加开奖结果爬取任务失败: %v", err)
 		return err
 	}
-	logger.Info("成功添加开奖结果爬取任务")
+
+	s.entries[taskKey] = entryID
+	logger.Info("成功添加每日开奖结果爬取任务")
 	return nil
 }
 
@@ -156,21 +179,96 @@ func (s *Scheduler) ReloadTask(lt models.LotteryType) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// 如果存在旧任务，先移除
-	if oldEntryID, exists := s.entries[lt.ID]; exists {
-		logger.Info("移除彩票类型[%s]的旧任务...", lt.Name)
+	// 生成任务键
+	genTaskKey := fmt.Sprintf("%s_%d", TaskTypeGenerate, lt.ID)
+
+	// 如果存在旧的号码生成任务，先移除
+	if oldEntryID, exists := s.entries[genTaskKey]; exists {
+		logger.Info("移除彩票类型[%s]的旧号码生成任务...", lt.Name)
 		s.cron.Remove(oldEntryID)
-		delete(s.entries, lt.ID)
+		delete(s.entries, genTaskKey)
 	}
 
 	// 如果彩票类型处于活跃状态，添加新任务
 	if lt.IsActive {
 		logger.Info("彩票类型[%s]处于活跃状态，添加新任务...", lt.Name)
-		return s.addLotteryTask(lt)
+		return s.addLotteryGenerationTask(lt)
 	}
 
 	logger.Info("彩票类型[%s]处于非活跃状态，跳过添加任务", lt.Name)
 	return nil
+}
+
+// ManualFetchLotteryResult 手动触发特定彩票类型的开奖结果爬取
+func (s *Scheduler) ManualFetchLotteryResult(lotteryTypeID uint) error {
+	logger.Info("手动触发彩票类型[ID:%d]的开奖结果爬取...", lotteryTypeID)
+
+	// 查询彩票类型
+	var lotteryType models.LotteryType
+	if err := database.DB.First(&lotteryType, lotteryTypeID).Error; err != nil {
+		return fmt.Errorf("彩票类型不存在: %v", err)
+	}
+
+	// 检查是否配置了彩票ID
+	if lotteryType.CaipiaoID <= 0 {
+		return fmt.Errorf("彩票类型[%s]未配置彩票ID", lotteryType.Name)
+	}
+
+	// 获取最新开奖结果
+	drawResult, err := draw.FetchLatestDrawResult(&lotteryType)
+	if err != nil {
+		return fmt.Errorf("获取彩票[%s]开奖结果失败: %v", lotteryType.Name, err)
+	}
+
+	// 处理开奖结果(保存结果并分析中奖情况)
+	if err := draw.ProcessDrawResult(drawResult); err != nil {
+		return fmt.Errorf("处理彩票[%s]开奖结果失败: %v", lotteryType.Name, err)
+	}
+
+	logger.Info("彩票类型[%s]手动开奖结果爬取完成", lotteryType.Name)
+	return nil
+}
+
+// ManualGenerateLotteryNumbers 手动触发彩票号码生成
+func (s *Scheduler) ManualGenerateLotteryNumbers(lotteryTypeID uint) (string, error) {
+	logger.Info("手动触发彩票类型[ID:%d]的号码生成...", lotteryTypeID)
+
+	// 查询彩票类型
+	var lotteryType models.LotteryType
+	if err := database.DB.First(&lotteryType, lotteryTypeID).Error; err != nil {
+		return "", fmt.Errorf("彩票类型不存在: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// 获取开奖信息（日期和期号）
+	drawInfo, err := draw.GetLotteryDrawInfo(lotteryType.Code, lotteryType.ScheduleCron, lotteryType.APIEndpoint)
+	if err != nil {
+		return "", fmt.Errorf("获取开奖信息失败: %v", err)
+	}
+
+	// 使用AI生成号码
+	numbers, err := s.aiClient.GenerateLotteryNumbers(ctx, lotteryType.Code, lotteryType.ModelName)
+	if err != nil {
+		return "", fmt.Errorf("生成号码失败: %v", err)
+	}
+
+	// 保存推荐记录
+	recommendation := models.Recommendation{
+		LotteryTypeID: lotteryType.ID,
+		Numbers:       numbers,
+		ModelName:     lotteryType.ModelName,
+		DrawTime:      drawInfo.NextDrawDate,
+		DrawNumber:    drawInfo.NextDrawNum,
+	}
+
+	if err := database.DB.Create(&recommendation).Error; err != nil {
+		return "", fmt.Errorf("保存推荐记录失败: %v", err)
+	}
+
+	logger.Info("手动生成彩票[%s]号码成功: %s, 期号: %s", lotteryType.Name, numbers, drawInfo.NextDrawNum)
+	return numbers, nil
 }
 
 // ValidateCron 验证cron表达式

@@ -8,6 +8,7 @@ import (
 
 type Config struct {
 	AI           AIConfig            `mapstructure:"ai"`
+	LotteryAPI   LotteryAPIConfig    `mapstructure:"lottery_api"`
 	Database     DatabaseConfig      `mapstructure:"database"`
 	Server       ServerConfig        `mapstructure:"server"`
 	JWT          JWTConfig           `mapstructure:"jwt"`
@@ -27,6 +28,11 @@ type AIConfig struct {
 	MaxRetries   int           `mapstructure:"max_retries"`
 	UseProxy     bool          `mapstructure:"use_proxy"`     // 是否使用代理
 	ProxyAddress string        `mapstructure:"proxy_address"` // 代理服务器地址
+}
+
+type LotteryAPIConfig struct {
+	BaseURL string `mapstructure:"base_url"`
+	AppKey  string `mapstructure:"app_key"`
 }
 
 type DatabaseConfig struct {
@@ -51,6 +57,8 @@ type LotteryTypeConfig struct {
 	ScheduleCron string `mapstructure:"schedule_cron"`
 	ModelName    string `mapstructure:"model_name"`
 	IsActive     bool   `mapstructure:"is_active"`
+	APIEndpoint  string `mapstructure:"api_endpoint"` // 原有API端点
+	CaipiaoID    int    `mapstructure:"caipiao_id"`   // 极速API的彩票ID
 }
 
 var Current Config
