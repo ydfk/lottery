@@ -1,0 +1,275 @@
+openapi: 3.0.0
+info:
+  title: 彩票智能推荐系统 API
+  description: 彩票智能推荐系统的REST API文档
+  version: 1.0.0
+servers:
+  - url: http://localhost:3000
+    description: 开发环境服务器
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          description: 用户名
+        password:
+          type: string
+          description: 密码
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: JWT token
+    LotteryType:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        code:
+          type: string
+          description: 彩票类型代码
+        name:
+          type: string
+          description: 彩票类型名称
+        scheduleCron:
+          type: string
+          description: 开奖时间cron表达式
+        modelName:
+          type: string
+          description: 使用的AI模型名称
+        isActive:
+          type: boolean
+          description: 是否激活
+        apiEndpoint:
+          type: string
+          description: 开奖结果查询API
+    Recommendation:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        lotteryTypeId:
+          type: integer
+          format: int64
+        numbers:
+          type: string
+          description: 推荐号码
+        isPurchased:
+          type: boolean
+          description: 是否已购买
+        createdAt:
+          type: string
+          format: date-time
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        userId:
+          type: integer
+          format: int64
+        action:
+          type: string
+        details:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+paths:
+  /auth/login:
+    post:
+      summary: 用户登录
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: 登录失败
+
+  /api/lottery-types:
+    get:
+      summary: 获取彩票类型列表
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 成功返回彩票类型列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LotteryType'
+    post:
+      summary: 创建彩票类型
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LotteryType'
+      responses:
+        '201':
+          description: 创建成功
+        '403':
+          description: 无权限
+
+  /api/lottery-types/{id}:
+    put:
+      summary: 更新彩票类型
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LotteryType'
+      responses:
+        '200':
+          description: 更新成功
+        '403':
+          description: 无权限
+        '404':
+          description: 未找到指定彩票类型
+
+  /api/recommendations:
+    get:
+      summary: 获取推荐列表
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: 成功返回推荐列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Recommendation'
+
+  /api/recommendations/{id}/purchase:
+    put:
+      summary: 更新购买状态
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                isPurchased:
+                  type: boolean
+      responses:
+        '200':
+          description: 更新成功
+        '404':
+          description: 未找到指定推荐
+
+  /api/audit-logs:
+    get:
+      summary: 获取审计日志
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: 成功返回审计日志
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditLog'
+
+  /api/lottery-types/{typeId}/generate:
+    post:
+      summary: 手动触发生成彩票号码推荐
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: typeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 成功触发生成
+        '403':
+          description: 无权限
+        '404':
+          description: 未找到指定彩票类型
+
+  /api/lottery-results/crawl:
+    post:
+      summary: 手动触发爬取彩票开奖结果
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 成功触发爬取
+        '403':
+          description: 无权限
