@@ -10,13 +10,13 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     server: {
       port: Number(env.VITE_PORT),
-      // proxy: {
-      //   '/api': {
-      //     target: env.VITE_PROXY_HOST, // 替换为你的实际 API 服务器地址
-      //     changeOrigin: true,
-      //     rewrite: (path) => path.replace(/^\/api/, '')
-      //   }
-      // }
+      proxy: {
+        '/api': {
+          target: env.VITE_PROXY_HOST, // 替换为你的实际 API 服务器地址
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api/, '')
+        }
+      }
     }
   }
 });

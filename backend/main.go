@@ -68,17 +68,21 @@ func main() {
 		Output: os.Stdout,
 	}))
 
-	// 认证路由（不需要JWT）
-	//app.Post("/auth/register", handlers.Register)
-	app.Post("/auth/login", handlers.Login)
-
-	// JWT 中间件
-	jwtMiddleware := jwtware.New(jwtware.Config{
-		SigningKey: []byte(config.Current.JWT.Secret),
-	})
-
 	// API路由（需要JWT认证）
-	api := app.Group("/api", jwtMiddleware)
+	api := app.Group("/api")
+
+	// 认证路由（不需要JWT）
+	//api.Post("/register", handlers.Register)
+	api.Post("/login", handlers.Login)
+
+	// JWT 中间件（白名单Filter也可以保留，用于额外判断，但此时/login不会经过此中间件）
+	api.Use(jwtware.New(jwtware.Config{
+		SigningKey: []byte(config.Current.JWT.Secret),
+		Filter: func(c *fiber.Ctx) bool {
+			// 如果请求的是 /api/login 则跳过JWT验证
+			return c.Path() == "/api/login"
+		},
+	}))
 
 	// 获取彩票类型列表
 	api.Get("/lottery-types", handlers.ListLotteryTypes)

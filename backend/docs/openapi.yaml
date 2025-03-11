@@ -92,7 +92,7 @@ components:
           format: date-time
 
 paths:
-  /auth/login:
+  /api/login:
     post:
       summary: 用户登录
       requestBody:

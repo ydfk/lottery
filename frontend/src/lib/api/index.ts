@@ -1,29 +1,39 @@
 import { createAlova } from 'alova';
-import { createServerTokenAuthentication } from 'alova/client';
 import ReactHook from 'alova/react';
 import adapterFetch from 'alova/fetch';
-import { mockAdapter } from './mock/index';
 
-const { onAuthRequired, onResponseRefreshToken } = createServerTokenAuthentication({
-  async login(response,) {
-    const data = await response.clone().json();
-    localStorage.setItem('token', data.token);
-  },
-  assignToken: method => {
-    method.config.headers.Authorization = localStorage.getItem('token');
-  },
-  logout() {
-    localStorage.removeItem('token');
-  }
-});
-
-const useMock = import.meta.env.VITE_USE_MOCK === 'true';
-console.log("🚀 ~ useMock:", useMock)
-
+// Create alova instance
 export const alovaInstance = createAlova({
-  baseURL: '/api',
+  baseURL: "/api",
   statesHook: ReactHook,
-  requestAdapter: useMock ? mockAdapter : adapterFetch(),
-  beforeRequest: onAuthRequired(),
-  responded: onResponseRefreshToken() 
+  requestAdapter: adapterFetch(),
+  beforeRequest: ({config}) => {
+    // Get token from localStorage
+    const token = localStorage.getItem('auth_token');
+    
+    // If token exists, add it to the authorization header
+    if (token) {
+      config.headers = {
+        ...config.headers,
+        Authorization: `Bearer ${token}`,
+      };
+    }
+  },
+  responded: {
+    // Handle common response
+    onSuccess: async (response) => {
+      if (!response.ok) {
+        // If response status is not ok, throw error
+        const error = await response.json();
+        return Promise.reject(error);
+      }
+      return response.json();
+    },
+    onError: (error) => {
+      console.error('Request error:', error);
+      return Promise.reject(error);
+    },
+},
 });
+
+export default alovaInstance;

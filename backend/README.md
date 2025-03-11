@@ -82,7 +82,6 @@ lottery_types:
     schedule_cron: "0 0 20 * 2,4,0"      # 每周二、四、日20:00
     model_name: "deepseek/deepseek-chat:free"
     is_active: true
-    api_endpoint: ""                      # 开奖查询接口
 ```
 
 ## 如何编译
@@ -235,7 +234,7 @@ dlv debug --headless --listen=:2345 --api-version=2 --accept-multiclient
 
 ### 主要接口
 
-- `POST /auth/login` - 用户登录
+- `POST /api/login` - 用户登录
 - `GET /api/lottery-types` - 获取彩票类型列表
 - `POST /api/lottery-types` - 创建彩票类型（需管理员权限）
 - `PUT /api/lottery-types/:id` - 更新彩票类型（需管理员权限）

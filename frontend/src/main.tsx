@@ -10,22 +10,29 @@ import { createRoot } from "react-dom/client";
 import { RouterProvider, createBrowserRouter } from "react-router-dom";
 import "./styles/globals.css";
 import App from "./App";
-import Unauthorized from "./components/error/unauthorized";
+import { Unauthorized } from "./components/error/unauthorized";
+import LoginPage from "./pages/login";
+import HomePage from "./pages/home";
 
 // 创建路由
 const router = createBrowserRouter([
   {
     path: "/",
     element: <App />,
-  },
-  {
-    path: "/401",
-    element: <Unauthorized />,
-  },
-  {
-    path: "/auth/login",
-    // 暂时重定向到首页，因为还没有实现登录页面
-    element: <App />,
+    children: [
+      {
+        path: "/",
+        element: <HomePage />,
+      },
+      {
+        path: "/login",
+        element: <LoginPage />,
+      },
+      {
+        path: "/unauthorized",
+        element: <Unauthorized />,
+      }
+    ]
   }
 ]);
 
