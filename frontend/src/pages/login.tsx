@@ -11,7 +11,7 @@ import { useEffect } from 'react';
 export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const { login, isAuthenticated, isLoading, error, clearError } = useAuthStore();
+  const { login, isAuthenticated, isLoading, error } = useAuthStore();
   const navigate = useNavigate();
 
   // Redirect if already authenticated

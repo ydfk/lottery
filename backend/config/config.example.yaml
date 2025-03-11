@@ -28,7 +28,7 @@ users:
 
 # 任务调度配置
 scheduler:
-  result_fetch_cron: "0 21 * * *"  # 每天21:00爬取开奖结果
+  result_fetch_cron: "0 22 * * *"  # 每天21:00爬取开奖结果
 
 # 初始化彩票类型配置
 lottery_types:
