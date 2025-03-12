@@ -316,10 +316,18 @@ func FetchLatestDrawResult(lotteryType *models.LotteryType) (*models.DrawResult,
 	poolAmount, _ := strconv.ParseFloat(strings.TrimSuffix(apiResp.Result.TotalMoney, ".00"), 64)
 
 	// 将奖项信息转换为JSON
-	prizeJSON, err := json.Marshal(apiResp.Result.Prize)
-	if err != nil {
-		logger.Error("将奖项信息转换为JSON失败: %v", err)
-		// 失败不影响整体流程，继续处理
+	var prizeJSON []byte
+	// 处理prize字段可能为空的情况
+	if apiResp.Result.Prize != nil && len(apiResp.Result.Prize) > 0 {
+		prizeJSON, err = json.Marshal(apiResp.Result.Prize)
+		if err != nil {
+			logger.Error("将奖项信息转换为JSON失败: %v", err)
+			// 失败不影响整体流程，继续处理
+			prizeJSON = []byte("[]") // 使用空数组作为默认值
+		}
+	} else {
+		logger.Warn("彩票[%s]期号[%s]的奖项信息为空", lotteryType.Name, apiResp.Result.Issueno)
+		prizeJSON = []byte("[]") // 使用空数组作为默认值
 	}
 
 	// 构造开奖结果
@@ -338,7 +346,9 @@ func FetchLatestDrawResult(lotteryType *models.LotteryType) (*models.DrawResult,
 	}
 
 	// 处理奖项信息
-	processPrizeInfo(drawResult, apiResp.Result.Prize)
+	if apiResp.Result.Prize != nil && len(apiResp.Result.Prize) > 0 {
+		processPrizeInfo(drawResult, apiResp.Result.Prize)
+	}
 
 	logger.Info("成功获取彩票[%s]期号[%s]开奖结果: %s+%s",
 		lotteryType.Name, drawResult.DrawNumber, drawResult.MainNumbers, drawResult.SpecialNumbers)

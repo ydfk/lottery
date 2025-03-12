@@ -266,7 +266,7 @@ func GetAuditLogs(c *fiber.Ctx) error {
 
 // GenerateLotteryNumbers 手动触发生成彩票号码推荐
 func GenerateLotteryNumbers(c *fiber.Ctx) error {
-	typeID, err := strconv.ParseUint(c.Params("typeId"), 10, 32)
+	typeID, err := strconv.ParseUint(c.Query("typeId"), 10, 32)
 	if err != nil {
 		logger.Error("无效的彩票类型ID: %v", err)
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{

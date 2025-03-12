@@ -99,10 +99,10 @@ func main() {
 	api.Get("/audit-logs", handlers.GetAuditLogs)
 
 	// 添加新接口：手动触发生成彩票号码推荐
-	api.Post("/lottery-types/:typeId/generate", handlers.GenerateLotteryNumbers)
+	api.Post("/lottery/generate", handlers.GenerateLotteryNumbers)
 
 	// 添加新接口：手动触发爬取彩票开奖结果
-	api.Post("/lottery-results/crawl", handlers.CrawlLotteryResults)
+	api.Post("/lottery/crawl", handlers.CrawlLotteryResults)
 
 	// 启动服务器
 	port := fmt.Sprintf(":%d", config.Current.Server.Port)
