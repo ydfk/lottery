@@ -64,7 +64,7 @@ func GetLotteryDrawInfo(lotteryCode string, scheduleCron string) (*LotteryDrawIn
 	}
 
 	// 从数据库查询最新一期开奖结果
-	latestDraw, err := getLatestDrawResult(lotteryType.ID)
+	latestDraw, err := getLatestDrawResult(lotteryType.Id)
 	if err != nil {
 		logger.Info("未找到彩票[%s]的历史开奖记录，可能是首次运行", lotteryCode)
 	}
@@ -256,7 +256,7 @@ func FetchLatestDrawResult(lotteryType *models.LotteryType) (*models.DrawResult,
 	apiURL := config.Current.LotteryAPI.BaseURL
 	params := url.Values{}
 	params.Add("appkey", config.Current.LotteryAPI.AppKey)
-	params.Add("caipiaoid", strconv.Itoa(lotteryType.CaipiaoID))
+	params.Add("caipiaoid", strconv.Itoa(lotteryType.CaipiaoId))
 
 	fullURL := fmt.Sprintf("%s?%s", apiURL, params.Encode())
 	logger.Info("请求URL: %s", fullURL)
@@ -332,8 +332,8 @@ func FetchLatestDrawResult(lotteryType *models.LotteryType) (*models.DrawResult,
 
 	// 构造开奖结果
 	drawResult := &models.DrawResult{
-		LotteryTypeID:    lotteryType.ID,
-		CaipiaoID:        lotteryType.CaipiaoID,
+		LotteryTypeID:    lotteryType.Id,
+		CaipiaoID:        lotteryType.CaipiaoId,
 		DrawNumber:       apiResp.Result.Issueno,
 		MainNumbers:      apiResp.Result.Number,
 		SpecialNumbers:   apiResp.Result.ReferNumber,
@@ -439,7 +439,7 @@ func ProcessDrawResult(drawResult *models.DrawResult) error {
 	for i, rec := range recommendations {
 		// 如果记录已经有中奖分析结果且状态不是"未知"，则跳过
 		if rec.DrawResult != "" && rec.WinStatus != "" && rec.WinStatus != "未知" {
-			logger.Info("推荐记录[ID:%d]已有中奖分析结果：%s，跳过分析", rec.ID, rec.WinStatus)
+			logger.Info("推荐记录[ID:%d]已有中奖分析结果：%s，跳过分析", rec.Id, rec.WinStatus)
 			continue
 		}
 
@@ -451,12 +451,12 @@ func ProcessDrawResult(drawResult *models.DrawResult) error {
 		rec.WinAmount = winAmount
 
 		if err := database.DB.Save(&rec).Error; err != nil {
-			logger.Error("更新推荐记录[ID:%d]中奖情况失败: %v", rec.ID, err)
+			logger.Error("更新推荐记录[ID:%d]中奖情况失败: %v", rec.Id, err)
 			continue
 		}
 
 		logger.Info("推荐记录[ID:%d](%d/%d)中奖分析完成: 状态=%s, 金额=%.2f",
-			rec.ID, i+1, len(recommendations), winStatus, winAmount)
+			rec.Id, i+1, len(recommendations), winStatus, winAmount)
 	}
 
 	logger.Info("彩票类型[ID:%d]期号[%s]的所有推荐记录中奖分析完成，共处理%d条记录",
@@ -681,7 +681,7 @@ func FetchAllActiveLotteryDrawResults() error {
 		logger.Info("开始处理彩票类型[%s]...", lt.Name)
 
 		// 只处理配置了彩票ID的类型
-		if lt.CaipiaoID <= 0 {
+		if lt.CaipiaoId <= 0 {
 			logger.Info("彩票类型[%s]未配置彩票ID，跳过处理", lt.Name)
 			continue
 		}

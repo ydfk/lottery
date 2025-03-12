@@ -15,6 +15,7 @@ import (
 	"lottery-backend/internal/pkg/config"
 	"lottery-backend/internal/pkg/database"
 	"lottery-backend/internal/pkg/logger"
+	"lottery-backend/internal/pkg/middleware"
 	"lottery-backend/internal/pkg/scheduler"
 )
 
@@ -67,6 +68,9 @@ func main() {
 		Format: "${time} ${ip} ${status} ${latency} ${method} ${path}\n",
 		Output: os.Stdout,
 	}))
+
+	// 添加小驼峰响应转换中间件
+	app.Use(middleware.CamelCaseResponse())
 
 	// API路由（需要JWT认证）
 	api := app.Group("/api")

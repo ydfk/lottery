@@ -133,7 +133,7 @@ func initLotteryTypes() error {
 			lotteryType.ScheduleCron = typeConfig.ScheduleCron
 			lotteryType.ModelName = typeConfig.ModelName
 			lotteryType.IsActive = typeConfig.IsActive
-			lotteryType.CaipiaoID = typeConfig.CaipiaoID // 添加彩票ID
+			lotteryType.CaipiaoId = typeConfig.CaipiaoID // 添加彩票ID
 
 			if err := DB.Save(&lotteryType).Error; err != nil {
 				return err
@@ -148,7 +148,7 @@ func initLotteryTypes() error {
 			ScheduleCron: typeConfig.ScheduleCron,
 			ModelName:    typeConfig.ModelName,
 			IsActive:     typeConfig.IsActive,
-			CaipiaoID:    typeConfig.CaipiaoID, // 添加彩票ID
+			CaipiaoId:    typeConfig.CaipiaoID, // 添加彩票ID
 		}
 
 		// 保存彩票类型

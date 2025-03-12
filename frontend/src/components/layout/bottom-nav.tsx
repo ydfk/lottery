@@ -1,16 +1,16 @@
 import { Home, LogOut, RefreshCcw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useAuthStore } from '../../store/auth-store';
-import { useLotteryStore } from '../../store/lottery-store';
+import { useAuthStore } from '@/store/auth-store';
+import { useLotteryData } from '../../hooks/use-lottery-data';
 import { cn } from '../../lib/utils';
 
 export function BottomNav() {
   const navigate = useNavigate();
   const { logout } = useAuthStore();
-  const { fetchRecommendations } = useLotteryStore();
+  const { refresh } = useLotteryData();
 
   const handleRefresh = () => {
-    fetchRecommendations(true);
+    refresh();
   };
 
   const handleLogout = () => {

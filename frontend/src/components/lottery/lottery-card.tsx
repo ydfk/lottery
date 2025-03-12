@@ -3,24 +3,25 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '../ui/card
 import { Badge } from '../ui/badge';
 import { Switch } from '../ui/switch';
 import { Label } from '../ui/label';
-import { useLotteryStore } from '../../store/lottery-store';
 import type { Recommendation } from '../../lib/api/methods/lottery';
 
 interface LotteryCardProps {
   recommendation: Recommendation;
+  lotteryTypeName: string; // 直接传入彩票类型名称
+  onPurchaseChange: (id: number, isPurchased: boolean) => Promise<boolean | void>; // 直接传入更新购买状态的函数
 }
 
-export function LotteryCard({ recommendation }: LotteryCardProps) {
-  const { updatePurchaseStatus, getLotteryTypeName } = useLotteryStore();
+export function LotteryCard({ 
+  recommendation,
+  lotteryTypeName,
+  onPurchaseChange
+}: LotteryCardProps) {
   const [isPurchasing, setIsPurchasing] = useState(false);
 
-  // 获取彩票类型名称
-  const lotteryTypeName = getLotteryTypeName(recommendation.lotteryTypeID);
-
-  // Check if the recommendation has been drawn
+  // 检查是否已开奖
   const isDrawn = !!recommendation.drawTime;
   
-  // Format the draw time for display
+  // 格式化开奖日期
   const formatDate = (dateString: string | null) => {
     if (!dateString) return '未开奖';
     return new Date(dateString).toLocaleString('zh-CN', {
@@ -32,19 +33,19 @@ export function LotteryCard({ recommendation }: LotteryCardProps) {
     });
   };
 
-  // Handle purchase status toggle
+  // 处理购买状态切换
   const handlePurchaseToggle = async (checked: boolean) => {
     setIsPurchasing(true);
     try {
-      await updatePurchaseStatus(recommendation.id, checked);
+      await onPurchaseChange(recommendation.id, checked);
     } finally {
       setIsPurchasing(false);
     }
   };
 
-  // Parse numbers for display (assuming format like "01,02,03,04,05,06+07")
+  // 解析号码显示（假设格式为 "01,02,03,04,05,06+07"）
   const renderNumbers = () => {
-    // Split into main numbers and special numbers if applicable
+    // 分割为主号码和特殊号码（如适用）
     const hasSpecial = recommendation.numbers.includes('+');
     
     if (hasSpecial) {
@@ -71,7 +72,7 @@ export function LotteryCard({ recommendation }: LotteryCardProps) {
       );
     }
     
-    // If no special format, just display all numbers
+    // 如果没有特殊格式，只显示所有号码
     return (
       <div className="flex flex-wrap gap-1 justify-center">
         {recommendation.numbers.split(',').map((num, index) => (

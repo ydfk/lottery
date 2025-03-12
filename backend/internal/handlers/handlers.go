@@ -82,7 +82,7 @@ func CreateLotteryType(c *fiber.Ctx) error {
 		})
 	}
 
-	logger.Info("成功创建彩票类型[ID:%d, Code:%s]", lotteryType.ID, lotteryType.Code)
+	logger.Info("成功创建彩票类型[ID:%d, Code:%s]", lotteryType.Id, lotteryType.Code)
 	return c.Status(fiber.StatusCreated).JSON(lotteryType)
 }
 
@@ -317,7 +317,7 @@ func GenerateLotteryNumbers(c *fiber.Ctx) error {
 
 	// 保存推荐记录
 	recommendation := models.Recommendation{
-		LotteryTypeID:    lotteryType.ID,
+		LotteryTypeID:    lotteryType.Id,
 		Numbers:          numbers,
 		ModelName:        lotteryType.ModelName,
 		ExpectedDrawTime: drawInfo.NextDrawDate,
@@ -338,7 +338,7 @@ func GenerateLotteryNumbers(c *fiber.Ctx) error {
 		})
 	}
 
-	logger.Info("成功保存手动生成的推荐号码[ID:%d, 期号:%s]", recommendation.ID, recommendation.DrawNumber)
+	logger.Info("成功保存手动生成的推荐号码[ID:%d, 期号:%s]", recommendation.Id, recommendation.DrawNumber)
 	return c.Status(fiber.StatusCreated).JSON(recommendation)
 }
 

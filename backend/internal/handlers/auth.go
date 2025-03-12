@@ -54,7 +54,7 @@ func Register(c *fiber.Ctx) error {
 	}
 
 	// 生成JWT
-	token, err := generateToken(user.ID)
+	token, err := generateToken(user.Id)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "生成token失败",
@@ -102,7 +102,7 @@ func Login(c *fiber.Ctx) error {
 	}
 
 	// 生成JWT
-	token, err := generateToken(user.ID)
+	token, err := generateToken(user.Id)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "生成token失败",

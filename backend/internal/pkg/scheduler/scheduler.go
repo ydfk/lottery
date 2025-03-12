@@ -98,7 +98,7 @@ func (s *Scheduler) Stop() {
 // addLotteryGenerationTask 添加彩票号码生成任务
 func (s *Scheduler) addLotteryGenerationTask(lt models.LotteryType) error {
 	logger.Info("正在添加彩票类型[%s]的号码生成任务，Cron表达式：%s", lt.Code, lt.ScheduleCron)
-	taskKey := fmt.Sprintf("%s_%d", TaskTypeGenerate, lt.ID)
+	taskKey := fmt.Sprintf("%s_%d", TaskTypeGenerate, lt.Id)
 
 	entryID, err := s.cron.AddFunc(lt.ScheduleCron, func() {
 		ctx := context.Background()
@@ -122,7 +122,7 @@ func (s *Scheduler) addLotteryGenerationTask(lt models.LotteryType) error {
 
 		// 保存推荐记录
 		recommendation := models.Recommendation{
-			LotteryTypeID:    lt.ID,
+			LotteryTypeID:    lt.Id,
 			Numbers:          numbers,
 			ModelName:        lt.ModelName,
 			ExpectedDrawTime: drawInfo.NextDrawDate, // 使用预计开奖时间
@@ -132,7 +132,7 @@ func (s *Scheduler) addLotteryGenerationTask(lt models.LotteryType) error {
 		if err := database.DB.Create(&recommendation).Error; err != nil {
 			logger.Error("保存%s推荐号码失败: %v", lt.Code, err)
 		} else {
-			logger.Info("成功保存%s推荐号码，ID：%d, 期号：%s", lt.Code, recommendation.ID, recommendation.DrawNumber)
+			logger.Info("成功保存%s推荐号码，ID：%d, 期号：%s", lt.Code, recommendation.Id, recommendation.DrawNumber)
 		}
 	})
 
@@ -185,7 +185,7 @@ func (s *Scheduler) ReloadTask(lt models.LotteryType) error {
 	defer s.mu.Unlock()
 
 	// 生成任务键
-	genTaskKey := fmt.Sprintf("%s_%d", TaskTypeGenerate, lt.ID)
+	genTaskKey := fmt.Sprintf("%s_%d", TaskTypeGenerate, lt.Id)
 
 	// 如果存在旧的号码生成任务，先移除
 	if oldEntryID, exists := s.entries[genTaskKey]; exists {
@@ -215,7 +215,7 @@ func (s *Scheduler) ManualFetchLotteryResult(lotteryTypeID uint) error {
 	}
 
 	// 检查是否配置了彩票ID
-	if lotteryType.CaipiaoID <= 0 {
+	if lotteryType.CaipiaoId <= 0 {
 		return fmt.Errorf("彩票类型[%s]未配置彩票ID", lotteryType.Name)
 	}
 
@@ -261,7 +261,7 @@ func (s *Scheduler) ManualGenerateLotteryNumbers(lotteryTypeID uint) (string, er
 
 	// 保存推荐记录
 	recommendation := models.Recommendation{
-		LotteryTypeID:    lotteryType.ID,
+		LotteryTypeID:    lotteryType.Id,
 		Numbers:          numbers,
 		ModelName:        lotteryType.ModelName,
 		ExpectedDrawTime: drawInfo.NextDrawDate,

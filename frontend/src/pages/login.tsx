@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
-import { useAuthStore } from '../store/auth-store';
+import { useAuthStore } from '@/store/auth-store';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { Label } from '../components/ui/label';
 import { Alert, AlertDescription } from '../components/ui/alert';
@@ -14,7 +14,7 @@ export default function LoginPage() {
   const { login, isAuthenticated, isLoading, error } = useAuthStore();
   const navigate = useNavigate();
 
-  // Redirect if already authenticated
+  // 如果已经认证，重定向到首页
   useEffect(() => {
     if (isAuthenticated) {
       navigate('/');
