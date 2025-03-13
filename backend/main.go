@@ -99,6 +99,9 @@ func main() {
 	api.Get("/recommendations", handlers.GetRecommendations)
 	api.Put("/recommendations/:id/purchase", handlers.UpdatePurchaseStatus)
 
+	// 开奖历史记录
+	api.Get("/draw-results", handlers.GetDrawResults)
+
 	// 审计日志
 	api.Get("/audit-logs", handlers.GetAuditLogs)
 

@@ -241,6 +241,7 @@ dlv debug --headless --listen=:2345 --api-version=2 --accept-multiclient
 - `GET /api/recommendations` - 获取推荐列表
 - `PUT /api/recommendations/:id/purchase` - 更新购买状态
 - `GET /api/audit-logs` - 获取审计日志
+- `GET /api/draw-results` - 获取历史开奖记录（支持分页和条件查询）
 - `POST /api/lottery-types/:typeId/generate` - 手动触发生成彩票号码推荐
 - `POST /api/lottery-results/crawl` - 手动触发爬取彩票开奖结果
 
