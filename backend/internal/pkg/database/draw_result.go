@@ -1,28 +1,19 @@
-package models
+package database
 
 import (
+	"lottery-backend/internal/models"
 	"time"
 
 	"gorm.io/gorm"
 )
 
-// DrawResultQuery 开奖结果查询参数
-type DrawResultQuery struct {
-	Page          int       // 页码，从1开始
-	PageSize      int       // 每页数量
-	LotteryTypeID uint      // 彩票类型ID
-	DrawNumber    string    // 期号
-	StartDate     time.Time // 开始日期
-	EndDate       time.Time // 结束日期
-}
-
 // GetDrawResults 分页查询开奖结果
-func GetDrawResults(db *gorm.DB, query *DrawResultQuery) ([]DrawResult, int64, error) {
-	var results []DrawResult
+func GetDrawResults(db *gorm.DB, query *models.DrawResultQuery) ([]models.DrawResult, int64, error) {
+	var results []models.DrawResult
 	var total int64
 
 	// 构建查询条件
-	q := db.Model(&DrawResult{})
+	q := db.Model(&models.DrawResult{})
 
 	// 应用过滤条件
 	if query.LotteryTypeID > 0 {

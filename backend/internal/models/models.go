@@ -154,3 +154,13 @@ func (j JSON) Value() (interface{}, error) {
 	}
 	return string(j), nil
 }
+
+// DrawResultQuery 开奖结果查询参数
+type DrawResultQuery struct {
+	Page          int       // 页码，从1开始
+	PageSize      int       // 每页数量
+	LotteryTypeID uint      // 彩票类型ID
+	DrawNumber    string    // 期号
+	StartDate     time.Time // 开始日期
+	EndDate       time.Time // 结束日期
+}

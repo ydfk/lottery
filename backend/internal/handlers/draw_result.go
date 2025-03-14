@@ -44,7 +44,7 @@ func GetDrawResults(c *fiber.Ctx) error {
 	}
 
 	// 查询数据
-	results, total, err := models.GetDrawResults(database.DB, query)
+	results, total, err := database.GetDrawResults(database.DB, query)
 	if err != nil {
 		logger.Error("查询开奖结果失败: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
