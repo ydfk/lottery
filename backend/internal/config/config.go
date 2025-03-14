@@ -15,6 +15,15 @@ type Config struct {
 	Users        []UserConfig        `mapstructure:"users"`
 	LotteryTypes []LotteryTypeConfig `mapstructure:"lottery_types"`
 	Scheduler    SchedulerConfig     `mapstructure:"scheduler"`
+
+	// 阿里云OSS配置
+	AliyunOSS struct {
+		Endpoint        string
+		AccessKeyID     string
+		AccessKeySecret string
+		BucketName      string
+		BucketDomain    string
+	}
 }
 
 type JWTConfig struct {

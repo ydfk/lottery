@@ -41,14 +41,13 @@ func api() {
 	// 添加小驼峰响应转换中间件
 	app.Use(middleware.CamelCaseResponse())
 
-	// API路由（需要JWT认证）
+	// 配置路由组
 	api := app.Group("/api")
 
-	// 认证路由（不需要JWT）
-	//api.Post("/register", handlers.Register)
+	// 认证相关路由
 	api.Post("/login", handlers.Login)
+	//api.Post("/refresh", handlers.RefreshToken)
 
-	// JWT 中间件（白名单Filter也可以保留，用于额外判断，但此时/login不会经过此中间件）
 	api.Use(jwtware.New(jwtware.Config{
 		SigningKey: []byte(config.Current.JWT.Secret),
 		Filter: func(c *fiber.Ctx) bool {
@@ -57,28 +56,28 @@ func api() {
 		},
 	}))
 
-	// 获取彩票类型列表
-	api.Get("/lottery-types", handlers.ListLotteryTypes)
-
-	// 创建和更新彩票类型
+	// 彩票类型管理
 	api.Post("/lottery-types", handlers.CreateLotteryType)
+	api.Get("/lottery-types", handlers.ListLotteryTypes)
 	api.Put("/lottery-types/:id", handlers.UpdateLotteryType)
 
-	// 推荐记录相关
+	// 推荐号码管理
 	api.Get("/recommendations", handlers.GetRecommendations)
-	api.Put("/recommendations/:id/purchase", handlers.UpdatePurchaseStatus)
+	api.Put("/recommendations/:id/purchase-status", handlers.UpdatePurchaseStatus)
+	api.Post("/generate", handlers.GenerateLotteryNumbers)
 
-	// 开奖历史记录
+	// 开奖结果管理
 	api.Get("/draw-results", handlers.GetDrawResults)
-
-	// 审计日志
-	api.Get("/audit-logs", handlers.GetAuditLogs)
-
+	api.Post("/lottery/crawl", handlers.CrawlLotteryResults)
 	// 添加新接口：手动触发生成彩票号码推荐
 	api.Post("/lottery/generate", handlers.GenerateLotteryNumbers)
 
-	// 添加新接口：手动触发爬取彩票开奖结果
-	api.Post("/lottery/crawl", handlers.CrawlLotteryResults)
+	// 购买记录管理
+	api.Post("/lottery-purchases", handlers.CreateLotteryPurchase)
+	api.Get("/lottery-purchases", handlers.GetLotteryPurchases)
+	api.Get("/lottery-purchases/:id", handlers.GetLotteryPurchase)
+	api.Put("/lottery-purchases/:id", handlers.UpdateLotteryPurchase)
+	api.Delete("/lottery-purchases/:id", handlers.DeleteLotteryPurchase)
 
 	// 启动服务器
 	port := fmt.Sprintf(":%d", config.Current.Server.Port)

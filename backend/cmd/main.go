@@ -7,6 +7,7 @@ import (
 	"lottery-backend/internal/pkg/database"
 	"lottery-backend/internal/pkg/logger"
 	"lottery-backend/internal/pkg/scheduler"
+	"lottery-backend/internal/pkg/storage"
 )
 
 func main() {
@@ -23,6 +24,11 @@ func main() {
 	// 初始化数据库
 	if err := database.Init(); err != nil {
 		logger.Fatal("初始化数据库失败: %v", err)
+	}
+
+	// 初始化OSS客户端
+	if err := storage.InitOSS(); err != nil {
+		logger.Fatal("初始化OSS客户端失败: %v", err)
 	}
 
 	// 创建AI客户端

@@ -1,4 +1,4 @@
-import {alovaInstance} from '../index';
+import { alovaInstance } from "../index";
 
 interface LoginRequest {
   username: string;
@@ -11,10 +11,14 @@ interface LoginResponse {
 
 // Login API method
 export const login = (data: LoginRequest) => {
-  return alovaInstance.Post<LoginResponse>('/login', data);
+  const method = alovaInstance.Post<LoginResponse>("/login", data);
+  method.meta = {
+    authRole: "login",
+  };
+  return method;
 };
 
 // Logout function (client-side only)
 export const logout = (): void => {
-  localStorage.removeItem('auth_token');
+  localStorage.removeItem("auth_token");
 };

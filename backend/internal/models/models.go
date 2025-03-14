@@ -134,6 +134,23 @@ type DrawResult struct {
 	UpdatedAt time.Time
 }
 
+// LotteryPurchase 彩票购买记录
+type LotteryPurchase struct {
+	Id               uint      `gorm:"primaryKey"`
+	LotteryTypeID    uint      // 关联彩票类型
+	RecommendationID uint      // 关联推荐记录
+	DrawNumber       string    `gorm:"size:20"`  // 期号
+	Numbers          string    `gorm:"size:100"` // 购买的号码
+	ImageUrl         string    `gorm:"size:255"` // 彩票图片URL
+	PurchaseTime     time.Time // 购买时间
+	PurchaseAmount   float64   // 购买金额
+	IsWin            bool      `gorm:"default:false"` // 是否中奖
+	WinStatus        string    `gorm:"size:50"`       // 中奖状态
+	WinAmount        float64   `gorm:"default:0"`     // 中奖金额
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
 // JSON 自定义JSON类型
 type JSON json.RawMessage
 

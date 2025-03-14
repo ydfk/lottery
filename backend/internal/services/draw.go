@@ -458,8 +458,46 @@ func ProcessDrawResult(drawResult *models.DrawResult) error {
 			rec.Id, i+1, len(recommendations), winStatus, winAmount)
 	}
 
-	logger.Info("彩票类型[ID:%d]期号[%s]的所有推荐记录中奖分析完成，共处理%d条记录",
-		drawResult.LotteryTypeID, drawResult.DrawNumber, len(recommendations))
+	// 4. 查找该期号对应的所有购买记录
+	var purchases []models.LotteryPurchase
+	if err := database.DB.Where("lottery_type_id = ? AND draw_number = ?",
+		drawResult.LotteryTypeID, drawResult.DrawNumber).Find(&purchases).Error; err != nil {
+		return fmt.Errorf("查询购买记录失败: %v", err)
+	}
+
+	// 5. 分析每条购买记录的中奖情况
+	logger.Info("开始分析彩票类型[ID:%d]期号[%s]的购买记录中奖情况，共%d条记录",
+		drawResult.LotteryTypeID, drawResult.DrawNumber, len(purchases))
+
+	for i, purchase := range purchases {
+		// 如果记录已经有中奖分析结果且状态不是"未知"，则跳过
+		if purchase.WinStatus != "" && purchase.WinStatus != "未知" {
+			logger.Info("购买记录[ID:%d]已有中奖分析结果：%s，跳过分析", purchase.Id, purchase.WinStatus)
+			continue
+		}
+
+		// 使用相同的分析函数分析中奖情况
+		winStatus, winAmount := analyzeWinResult(&models.Recommendation{
+			Numbers:       purchase.Numbers,
+			LotteryTypeID: purchase.LotteryTypeID,
+		}, drawResult)
+
+		// 更新购买记录的中奖情况
+		purchase.IsWin = winAmount > 0
+		purchase.WinStatus = winStatus
+		purchase.WinAmount = winAmount
+
+		if err := database.DB.Save(&purchase).Error; err != nil {
+			logger.Error("更新购买记录[ID:%d]中奖情况失败: %v", purchase.Id, err)
+			continue
+		}
+
+		logger.Info("购买记录[ID:%d](%d/%d)中奖分析完成: 状态=%s, 金额=%.2f",
+			purchase.Id, i+1, len(purchases), winStatus, winAmount)
+	}
+
+	logger.Info("彩票类型[ID:%d]期号[%s]的所有记录中奖分析完成，推荐记录%d条，购买记录%d条",
+		drawResult.LotteryTypeID, drawResult.DrawNumber, len(recommendations), len(purchases))
 
 	return nil
 }
