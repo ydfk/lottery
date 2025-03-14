@@ -3,12 +3,12 @@ package scheduler
 import (
 	"context"
 	"fmt"
+	"lottery-backend/internal/config"
 	"lottery-backend/internal/models"
 	"lottery-backend/internal/pkg/ai"
-	"lottery-backend/internal/pkg/config"
 	"lottery-backend/internal/pkg/database"
-	"lottery-backend/internal/pkg/draw"
 	"lottery-backend/internal/pkg/logger"
+	"lottery-backend/internal/services"
 	"sync"
 	"time"
 
@@ -105,7 +105,7 @@ func (s *Scheduler) addLotteryGenerationTask(lt models.LotteryType) error {
 		logger.Info("开始执行彩票类型[%s]的号码生成任务...", lt.Code)
 
 		// 获取开奖信息（日期和期号）
-		drawInfo, err := draw.GetLotteryDrawInfo(lt.Code, lt.ScheduleCron)
+		drawInfo, err := services.GetLotteryDrawInfo(lt.Code, lt.ScheduleCron)
 		if err != nil {
 			logger.Error("获取%s开奖信息失败: %v", lt.Code, err)
 			return
@@ -160,7 +160,7 @@ func (s *Scheduler) addDrawResultFetchTask() error {
 		logger.Info("开始执行定时开奖结果爬取任务")
 
 		// 爬取所有活跃彩票类型的最新开奖结果
-		if err := draw.FetchAllActiveLotteryDrawResults(); err != nil {
+		if err := services.FetchAllActiveLotteryDrawResults(); err != nil {
 			logger.Error("爬取开奖结果失败: %v", err)
 			return
 		}
@@ -220,13 +220,13 @@ func (s *Scheduler) ManualFetchLotteryResult(lotteryTypeID uint) error {
 	}
 
 	// 获取最新开奖结果
-	drawResult, err := draw.FetchLatestDrawResult(&lotteryType)
+	drawResult, err := services.FetchLatestDrawResult(&lotteryType)
 	if err != nil {
 		return fmt.Errorf("获取彩票[%s]开奖结果失败: %v", lotteryType.Name, err)
 	}
 
 	// 处理开奖结果(保存结果并分析中奖情况)
-	if err := draw.ProcessDrawResult(drawResult); err != nil {
+	if err := services.ProcessDrawResult(drawResult); err != nil {
 		return fmt.Errorf("处理彩票[%s]开奖结果失败: %v", lotteryType.Name, err)
 	}
 
@@ -248,7 +248,7 @@ func (s *Scheduler) ManualGenerateLotteryNumbers(lotteryTypeID uint) (string, er
 	defer cancel()
 
 	// 获取开奖信息（日期和期号）
-	drawInfo, err := draw.GetLotteryDrawInfo(lotteryType.Code, lotteryType.ScheduleCron)
+	drawInfo, err := services.GetLotteryDrawInfo(lotteryType.Code, lotteryType.ScheduleCron)
 	if err != nil {
 		return "", fmt.Errorf("获取开奖信息失败: %v", err)
 	}

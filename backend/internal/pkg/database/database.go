@@ -2,7 +2,7 @@ package database
 
 import (
 	"fmt"
-	"lottery-backend/internal/pkg/config"
+	"lottery-backend/internal/config"
 	"os"
 	"path/filepath"
 

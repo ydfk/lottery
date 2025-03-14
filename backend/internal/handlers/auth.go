@@ -3,8 +3,8 @@ package handlers
 import (
 	"time"
 
+	"lottery-backend/internal/config"
 	"lottery-backend/internal/models"
-	"lottery-backend/internal/pkg/config"
 	"lottery-backend/internal/pkg/database"
 
 	"github.com/gofiber/fiber/v2"

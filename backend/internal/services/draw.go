@@ -1,12 +1,11 @@
-// filepath: d:\1.Development\4.gitea\lottery\backend\internal\pkg\draw\draw.go
-package draw
+package services
 
 import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"lottery-backend/internal/config"
 	"lottery-backend/internal/models"
-	"lottery-backend/internal/pkg/config"
 	"lottery-backend/internal/pkg/database"
 	"lottery-backend/internal/pkg/logger"
 	"net/http"

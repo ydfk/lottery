@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"lottery-backend/internal/models"
 	"lottery-backend/internal/pkg/database"
-	"lottery-backend/internal/pkg/draw"
 	"lottery-backend/internal/pkg/logger"
+	"lottery-backend/internal/services"
 	"math"
 	"time"
 
@@ -74,7 +74,7 @@ func CrawlLotteryResults(c *fiber.Ctx) error {
 	err := database.WithAudit(userID, "MANUAL_CRAWL", "lottery_results", 0, func() error {
 		logger.Info("开始爬取开奖结果...")
 		// 调用爬取函数
-		if err := draw.FetchAllActiveLotteryDrawResults(); err != nil {
+		if err := services.FetchAllActiveLotteryDrawResults(); err != nil {
 			logger.Error("爬取开奖结果失败: %v", err)
 			return err
 		}

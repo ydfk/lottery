@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"lottery-backend/internal/pkg/config"
+	"lottery-backend/internal/config"
 	"lottery-backend/internal/pkg/logger"
 	"net/http"
 	"net/url"

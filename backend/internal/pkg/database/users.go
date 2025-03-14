@@ -1,8 +1,8 @@
 package database
 
 import (
+	"lottery-backend/internal/config"
 	"lottery-backend/internal/models"
-	"lottery-backend/internal/pkg/config"
 )
 
 // initUsers 初始化用户数据

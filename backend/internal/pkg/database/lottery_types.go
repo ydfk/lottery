@@ -1,8 +1,8 @@
 package database
 
 import (
+	"lottery-backend/internal/config"
 	"lottery-backend/internal/models"
-	"lottery-backend/internal/pkg/config"
 )
 
 // initLotteryTypes 初始化彩票类型数据
