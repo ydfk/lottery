@@ -35,16 +35,17 @@ func (u *User) CheckPassword(password string) bool {
 
 // LotteryType 彩票类型配置
 type LotteryType struct {
-	Id           uint   `gorm:"primaryKey"`
-	Code         string `gorm:"size:20;uniqueIndex"` // 彩票代码，如 fc_ssq, tc_dlt
-	Name         string `gorm:"size:50"`             // 彩票名称，如 双色球, 大乐透
-	ScheduleCron string `gorm:"size:20"`             // cron表达式
-	ModelName    string `gorm:"size:100"`            // 对应AI模型
-	IsActive     bool   `gorm:"default:true"`        // 是否启用
-	CaipiaoId    int    `gorm:"default:0"`           // 极速API的彩票ID
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	DeletedAt    gorm.DeletedAt `gorm:"index"`
+	Id                  uint   `gorm:"primaryKey"`
+	Code                string `gorm:"size:20;uniqueIndex"` // 彩票代码，如 fc_ssq, tc_dlt
+	Name                string `gorm:"size:50"`             // 彩票名称，如 双色球, 大乐透
+	ScheduleCron        string `gorm:"size:20"`             // cron表达式
+	ModelName           string `gorm:"size:100"`            // 对应AI模型
+	IsActive            bool   `gorm:"default:true"`        // 是否启用
+	CaipiaoId           int    `gorm:"default:0"`           // 极速API的彩票ID
+	RecommendationCount int    `gorm:"default:1"`           // 每次推荐生成的号码组数
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	DeletedAt           gorm.DeletedAt `gorm:"index"`
 }
 
 // AuditLog 操作审计日志

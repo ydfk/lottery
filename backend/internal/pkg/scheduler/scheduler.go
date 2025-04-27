@@ -112,27 +112,62 @@ func (s *Scheduler) addLotteryGenerationTask(lt models.LotteryType) error {
 		}
 		logger.Info("获取到%s下一期信息: 日期=%v, 期号=%s", lt.Code, drawInfo.NextDrawDate, drawInfo.NextDrawNum)
 
-		// 使用AI客户端生成号码
-		numbers, err := s.aiClient.GenerateLotteryNumbers(ctx, lt.Code, lt.ModelName)
-		if err != nil {
-			logger.Error("生成%s号码失败: %v", lt.Code, err)
-			return
+		// 确定要生成的号码组数
+		count := lt.RecommendationCount
+		if count <= 0 {
+			count = 1 // 默认至少生成一组
 		}
-		logger.Info("成功生成%s号码: %s", lt.Code, numbers)
+		logger.Info("将为彩票类型[%s]生成%d组号码...", lt.Code, count)
 
-		// 保存推荐记录
-		recommendation := models.Recommendation{
-			LotteryTypeID:    lt.Id,
-			Numbers:          numbers,
-			ModelName:        lt.ModelName,
-			ExpectedDrawTime: drawInfo.NextDrawDate, // 使用预计开奖时间
-			DrawNumber:       drawInfo.NextDrawNum,
-		}
+		if count > 1 {
+			// 使用AI客户端生成多组号码
+			numbersList, err := s.aiClient.GenerateMultipleLotteryNumbers(ctx, lt.Code, lt.ModelName, count)
+			if err != nil {
+				logger.Error("生成%s多组号码失败: %v", lt.Code, err)
+				return
+			}
+			logger.Info("成功为%s生成%d组号码", lt.Code, len(numbersList))
 
-		if err := database.DB.Create(&recommendation).Error; err != nil {
-			logger.Error("保存%s推荐号码失败: %v", lt.Code, err)
+			// 逐个保存每组号码
+			for i, numbers := range numbersList {
+				recommendation := models.Recommendation{
+					LotteryTypeID:    lt.Id,
+					Numbers:          numbers,
+					ModelName:        lt.ModelName,
+					ExpectedDrawTime: drawInfo.NextDrawDate,
+					DrawNumber:       drawInfo.NextDrawNum,
+				}
+
+				if err := database.DB.Create(&recommendation).Error; err != nil {
+					logger.Error("保存%s推荐号码(第%d组)失败: %v", lt.Code, i+1, err)
+				} else {
+					logger.Info("成功保存%s推荐号码(第%d组)，ID：%d, 号码：%s",
+						lt.Code, i+1, recommendation.Id, numbers)
+				}
+			}
 		} else {
-			logger.Info("成功保存%s推荐号码，ID：%d, 期号：%s", lt.Code, recommendation.Id, recommendation.DrawNumber)
+			// 只生成一组号码
+			numbers, err := s.aiClient.GenerateLotteryNumbers(ctx, lt.Code, lt.ModelName)
+			if err != nil {
+				logger.Error("生成%s号码失败: %v", lt.Code, err)
+				return
+			}
+			logger.Info("成功生成%s号码: %s", lt.Code, numbers)
+
+			// 保存推荐记录
+			recommendation := models.Recommendation{
+				LotteryTypeID:    lt.Id,
+				Numbers:          numbers,
+				ModelName:        lt.ModelName,
+				ExpectedDrawTime: drawInfo.NextDrawDate,
+				DrawNumber:       drawInfo.NextDrawNum,
+			}
+
+			if err := database.DB.Create(&recommendation).Error; err != nil {
+				logger.Error("保存%s推荐号码失败: %v", lt.Code, err)
+			} else {
+				logger.Info("成功保存%s推荐号码，ID：%d, 期号：%s", lt.Code, recommendation.Id, recommendation.DrawNumber)
+			}
 		}
 	})
 
@@ -235,45 +270,86 @@ func (s *Scheduler) ManualFetchLotteryResult(lotteryTypeID uint) error {
 }
 
 // ManualGenerateLotteryNumbers 手动触发彩票号码生成
-func (s *Scheduler) ManualGenerateLotteryNumbers(lotteryTypeID uint) (string, error) {
+func (s *Scheduler) ManualGenerateLotteryNumbers(lotteryTypeID uint) ([]string, error) {
 	logger.Info("手动触发彩票类型[ID:%d]的号码生成...", lotteryTypeID)
 
 	// 查询彩票类型
 	var lotteryType models.LotteryType
 	if err := database.DB.First(&lotteryType, lotteryTypeID).Error; err != nil {
-		return "", fmt.Errorf("彩票类型不存在: %v", err)
+		return nil, fmt.Errorf("彩票类型不存在: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	// 获取开奖信息（日期和期号）
 	drawInfo, err := services.GetLotteryDrawInfo(lotteryType.Code, lotteryType.ScheduleCron)
 	if err != nil {
-		return "", fmt.Errorf("获取开奖信息失败: %v", err)
+		return nil, fmt.Errorf("获取开奖信息失败: %v", err)
 	}
 
-	// 使用AI生成号码
-	numbers, err := s.aiClient.GenerateLotteryNumbers(ctx, lotteryType.Code, lotteryType.ModelName)
-	if err != nil {
-		return "", fmt.Errorf("生成号码失败: %v", err)
+	// 确定要生成的号码组数
+	count := lotteryType.RecommendationCount
+	if count <= 0 {
+		count = 1 // 默认至少生成一组
+	}
+	logger.Info("将为彩票类型[%s]生成%d组号码...", lotteryType.Code, count)
+
+	// 保存所有生成的号码
+	var allNumbers []string
+
+	if count > 1 {
+		// 使用AI客户端生成多组号码
+		numbersList, err := s.aiClient.GenerateMultipleLotteryNumbers(ctx, lotteryType.Code, lotteryType.ModelName, count)
+		if err != nil {
+			return nil, fmt.Errorf("生成多组号码失败: %v", err)
+		}
+		logger.Info("成功为%s生成%d组号码", lotteryType.Code, len(numbersList))
+
+		// 逐个保存每组号码
+		for i, numbers := range numbersList {
+			recommendation := models.Recommendation{
+				LotteryTypeID:    lotteryType.Id,
+				Numbers:          numbers,
+				ModelName:        lotteryType.ModelName,
+				ExpectedDrawTime: drawInfo.NextDrawDate,
+				DrawNumber:       drawInfo.NextDrawNum,
+			}
+
+			if err := database.DB.Create(&recommendation).Error; err != nil {
+				logger.Error("保存%s推荐号码(第%d组)失败: %v", lotteryType.Code, i+1, err)
+			} else {
+				logger.Info("成功保存%s推荐号码(第%d组)，ID：%d, 号码：%s",
+					lotteryType.Code, i+1, recommendation.Id, numbers)
+				allNumbers = append(allNumbers, numbers)
+			}
+		}
+	} else {
+		// 只生成一组号码
+		numbers, err := s.aiClient.GenerateLotteryNumbers(ctx, lotteryType.Code, lotteryType.ModelName)
+		if err != nil {
+			return nil, fmt.Errorf("生成号码失败: %v", err)
+		}
+		logger.Info("成功生成%s号码: %s", lotteryType.Code, numbers)
+
+		// 保存推荐记录
+		recommendation := models.Recommendation{
+			LotteryTypeID:    lotteryType.Id,
+			Numbers:          numbers,
+			ModelName:        lotteryType.ModelName,
+			ExpectedDrawTime: drawInfo.NextDrawDate,
+			DrawNumber:       drawInfo.NextDrawNum,
+		}
+
+		if err := database.DB.Create(&recommendation).Error; err != nil {
+			return nil, fmt.Errorf("保存推荐记录失败: %v", err)
+		}
+
+		allNumbers = append(allNumbers, numbers)
+		logger.Info("手动生成彩票[%s]号码成功: %s, 期号: %s", lotteryType.Name, numbers, drawInfo.NextDrawNum)
 	}
 
-	// 保存推荐记录
-	recommendation := models.Recommendation{
-		LotteryTypeID:    lotteryType.Id,
-		Numbers:          numbers,
-		ModelName:        lotteryType.ModelName,
-		ExpectedDrawTime: drawInfo.NextDrawDate,
-		DrawNumber:       drawInfo.NextDrawNum,
-	}
-
-	if err := database.DB.Create(&recommendation).Error; err != nil {
-		return "", fmt.Errorf("保存推荐记录失败: %v", err)
-	}
-
-	logger.Info("手动生成彩票[%s]号码成功: %s, 期号: %s", lotteryType.Name, numbers, drawInfo.NextDrawNum)
-	return numbers, nil
+	return allNumbers, nil
 }
 
 // ValidateCron 验证cron表达式

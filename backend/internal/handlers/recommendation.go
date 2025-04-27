@@ -140,39 +140,96 @@ func GenerateLotteryNumbers(c *fiber.Ctx) error {
 	}
 	logger.Info("获取到开奖信息: 日期=%v, 期号=%s", drawInfo.CurrentDrawDate, drawInfo.CurrentDrawNum)
 
-	// 使用code生成号码
-	numbers, err := AIClient.GenerateLotteryNumbers(ctx, lotteryType.Code, lotteryType.ModelName)
-	if err != nil {
-		logger.Error("生成号码失败: %v", err)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": fmt.Sprintf("生成号码失败: %v", err),
-		})
-	}
-	logger.Info("成功生成号码: %s", numbers)
-
-	// 保存推荐记录
-	recommendation := models.Recommendation{
-		LotteryTypeID:    lotteryType.Id,
-		Numbers:          numbers,
-		ModelName:        lotteryType.ModelName,
-		ExpectedDrawTime: drawInfo.NextDrawDate,
-		DrawNumber:       drawInfo.NextDrawNum,
-	}
-
 	userID := getUserIDFromContext(c)
-	logger.Info("用户[%d]手动生成的号码，正在保存...", userID)
 
-	err = database.WithAudit(userID, "MANUAL_GENERATE", "recommendations", 0, func() error {
-		return database.DB.Create(&recommendation).Error
-	})
+	// 确定要生成的号码组数
+	count := lotteryType.RecommendationCount
+	if count <= 0 {
+		count = 1 // 默认至少生成一组
+	}
+	logger.Info("将为彩票类型[%s]生成%d组号码...", lotteryType.Code, count)
 
-	if err != nil {
-		logger.Error("保存推荐号码失败: %v", err)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": fmt.Sprintf("保存推荐号码失败: %v", err),
+	// 保存所有生成的推荐记录
+	var recommendations []models.Recommendation
+
+	// 调用 AI 客户端生成多组号码
+	if count > 1 {
+		// 使用新方法生成多组号码
+		numbersList, err := AIClient.GenerateMultipleLotteryNumbers(ctx, lotteryType.Code, lotteryType.ModelName, count)
+		if err != nil {
+			logger.Error("生成多组号码失败: %v", err)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": fmt.Sprintf("生成多组号码失败: %v", err),
+			})
+		}
+		logger.Info("成功生成%d组号码", len(numbersList))
+
+		// 逐个保存每组号码
+		for _, numbers := range numbersList {
+			recommendation := models.Recommendation{
+				LotteryTypeID:    lotteryType.Id,
+				Numbers:          numbers,
+				ModelName:        lotteryType.ModelName,
+				ExpectedDrawTime: drawInfo.NextDrawDate,
+				DrawNumber:       drawInfo.NextDrawNum,
+			}
+
+			err = database.WithAudit(userID, "MANUAL_GENERATE", "recommendations", 0, func() error {
+				return database.DB.Create(&recommendation).Error
+			})
+
+			if err != nil {
+				logger.Error("保存推荐号码失败: %v", err)
+				continue
+			}
+
+			recommendations = append(recommendations, recommendation)
+			logger.Info("成功保存推荐号码[ID:%d]: %s", recommendation.Id, numbers)
+		}
+	} else {
+		// 只生成一组号码
+		numbers, err := AIClient.GenerateLotteryNumbers(ctx, lotteryType.Code, lotteryType.ModelName)
+		if err != nil {
+			logger.Error("生成号码失败: %v", err)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": fmt.Sprintf("生成号码失败: %v", err),
+			})
+		}
+		logger.Info("成功生成号码: %s", numbers)
+
+		// 保存推荐记录
+		recommendation := models.Recommendation{
+			LotteryTypeID:    lotteryType.Id,
+			Numbers:          numbers,
+			ModelName:        lotteryType.ModelName,
+			ExpectedDrawTime: drawInfo.NextDrawDate,
+			DrawNumber:       drawInfo.NextDrawNum,
+		}
+
+		err = database.WithAudit(userID, "MANUAL_GENERATE", "recommendations", 0, func() error {
+			return database.DB.Create(&recommendation).Error
 		})
+
+		if err != nil {
+			logger.Error("保存推荐号码失败: %v", err)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": fmt.Sprintf("保存推荐号码失败: %v", err),
+			})
+		}
+
+		recommendations = append(recommendations, recommendation)
+		logger.Info("成功保存手动生成的推荐号码[ID:%d, 期号:%s]", recommendation.Id, recommendation.DrawNumber)
 	}
 
-	logger.Info("成功保存手动生成的推荐号码[ID:%d, 期号:%s]", recommendation.Id, recommendation.DrawNumber)
-	return c.Status(fiber.StatusCreated).JSON(recommendation)
+	if len(recommendations) == 0 {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "生成推荐号码失败",
+		})
+	} else if len(recommendations) == 1 {
+		// 为了保持向后兼容，如果只有一组，返回单个对象
+		return c.Status(fiber.StatusCreated).JSON(recommendations[0])
+	} else {
+		// 如果有多组，返回数组
+		return c.Status(fiber.StatusCreated).JSON(recommendations)
+	}
 }

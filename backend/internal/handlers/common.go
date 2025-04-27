@@ -10,11 +10,13 @@ import (
 // AIClient 接口定义
 var AIClient interface {
 	GenerateLotteryNumbers(ctx context.Context, lotteryType string, model string) (string, error)
+	GenerateMultipleLotteryNumbers(ctx context.Context, lotteryType string, model string, count int) ([]string, error)
 }
 
 // SetAIClient 设置AI客户端
 func SetAIClient(client interface {
 	GenerateLotteryNumbers(ctx context.Context, lotteryType string, model string) (string, error)
+	GenerateMultipleLotteryNumbers(ctx context.Context, lotteryType string, model string, count int) ([]string, error)
 }) {
 	AIClient = client
 }

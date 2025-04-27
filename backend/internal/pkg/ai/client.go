@@ -153,6 +153,148 @@ func validateNoDuplicates(numbers string) bool {
 	return true
 }
 
+// GenerateMultipleLotteryNumbers 生成多组彩票号码
+func (c *Client) GenerateMultipleLotteryNumbers(ctx context.Context, lotteryType string, model string, count int) ([]string, error) {
+	if count <= 0 {
+		count = 1 // 确保至少生成一组号码
+	}
+
+	logger.Info("开始为彩票类型[%s]生成%d组号码，使用模型：%s", lotteryType, count, model)
+
+	// 用于存储生成的所有号码
+	numbers := make([]string, 0, count)
+
+	// 如果只需要生成一组，直接调用单个生成方法
+	if count == 1 {
+		number, err := c.GenerateLotteryNumbers(ctx, lotteryType, model)
+		if err != nil {
+			return nil, err
+		}
+		return []string{number}, nil
+	}
+
+	// 使用批量生成模式，一次性请求多组号码
+	systemPrompt := fmt.Sprintf(`你是一个专业的彩票号码生成器。请严格按照以下要求生成%d组彩票号码：
+
+1. 必须使用这个格式输出每一组号码：<NUMBER>号码</NUMBER>
+2. 严格按照下面的格式规范生成号码：
+   - fc_ssq：6个红球(01-33)+1个蓝球(01-16)，格式如 01,05,13,22,29,33+07
+   - tc_dlt：5个前区(01-35)+2个后区(01-12)，格式如 03,05,18,27,34+08,11
+3. 所有数字必须按从小到大排序
+4. 所有数字必须补零，保持两位数格式
+5. 不要输出任何额外的解释文字，只需要输出用<NUMBER>标签包裹的号码
+6. 确保生成的每一组号码都是有效且符合规则的随机组合
+7. 一共必须生成%d组不同的号码`, count, count)
+
+	userPrompt := fmt.Sprintf("请生成%d组不同的%s彩票号码，每组号码必须用<NUMBER></NUMBER>标签包裹", count, lotteryType)
+
+	req := openai.ChatCompletionRequest{
+		Model: model,
+		Messages: []openai.ChatCompletionMessage{
+			{
+				Role:    "system",
+				Content: systemPrompt,
+			},
+			{
+				Role:    "user",
+				Content: userPrompt,
+			},
+		},
+		Temperature: 0.9, // 增加创造性，确保生成的号码组彼此不同
+		TopP:        1,
+		Stream:      false,
+	}
+
+	// 记录请求参数
+	c.logRequest(req)
+
+	// 设置超时
+	ctx, cancel := context.WithTimeout(ctx, c.config.Timeout*2) // 给批量生成多一点时间
+	defer cancel()
+
+	// 尝试获取批量号码
+	start := time.Now()
+	resp, err := c.client.CreateChatCompletion(ctx, req)
+	duration := time.Since(start)
+
+	if err == nil && len(resp.Choices) > 0 {
+		// 记录响应
+		c.logResponse(resp)
+
+		result := resp.Choices[0].Message.Content
+		logger.Info("AI批量生成原始返回 (耗时:%v): %s", duration, result)
+
+		// 提取所有<NUMBER>标签中的内容
+		numberPattern := `<NUMBER>(.*?)</NUMBER>`
+		re := regexp.MustCompile(numberPattern)
+		matches := re.FindAllStringSubmatch(result, -1)
+
+		// 验证并添加有效的号码
+		for _, match := range matches {
+			if len(match) >= 2 {
+				extractedNumber := strings.TrimSpace(match[1])
+
+				// 验证格式
+				var formatValid bool
+				if lotteryType == "fc_ssq" {
+					ssbPattern := `^(\d{2},){5}\d{2}\+\d{2}$`
+					ssbRe := regexp.MustCompile(ssbPattern)
+					formatValid = ssbRe.MatchString(extractedNumber)
+				} else if lotteryType == "tc_dlt" {
+					dltPattern := `^(\d{2},){4}\d{2}\+\d{2},\d{2}$`
+					dltRe := regexp.MustCompile(dltPattern)
+					formatValid = dltRe.MatchString(extractedNumber)
+				}
+
+				// 验证数值范围和重复性
+				if formatValid && validateNoDuplicates(extractedNumber) && validateNumberRange(extractedNumber, lotteryType) {
+					numbers = append(numbers, extractedNumber)
+					logger.Info("成功提取并验证号码组 %d/%d: %s", len(numbers), count, extractedNumber)
+				} else {
+					logger.Error("提取到的号码无效: %s", extractedNumber)
+				}
+			}
+		}
+	} else {
+		logger.Error("批量生成号码失败: %v", err)
+	}
+
+	// 如果批量生成失败或数量不足，使用单个生成方法补足
+	if len(numbers) < count {
+		logger.Info("批量生成不足%d组，已获取%d组，使用单个生成方法补足", count, len(numbers))
+
+		// 创建一个号码集合，避免重复
+		numbersSet := make(map[string]bool)
+		for _, num := range numbers {
+			numbersSet[num] = true
+		}
+
+		// 一个个补充生成
+		for len(numbers) < count {
+			number, err := c.GenerateLotteryNumbers(ctx, lotteryType, model)
+			if err != nil {
+				logger.Error("单个生成号码失败: %v", err)
+				// 如果已经有一些号码，就返回已有的，否则返回错误
+				if len(numbers) > 0 {
+					logger.Info("虽然未能生成足够数量，但返回已生成的%d组号码", len(numbers))
+					return numbers, nil
+				}
+				return nil, err
+			}
+
+			// 确保没有重复
+			if !numbersSet[number] {
+				numbers = append(numbers, number)
+				numbersSet[number] = true
+				logger.Info("成功生成补充号码 %d/%d: %s", len(numbers), count, number)
+			}
+		}
+	}
+
+	logger.Info("成功为%s彩票生成%d组号码", lotteryType, len(numbers))
+	return numbers, nil
+}
+
 // GenerateLotteryNumbers 生成彩票号码
 func (c *Client) GenerateLotteryNumbers(ctx context.Context, lotteryType string, model string) (string, error) {
 	logger.Info("开始为彩票类型[%s]生成号码，使用模型：%s", lotteryType, model)
