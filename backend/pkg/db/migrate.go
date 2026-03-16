@@ -11,6 +11,7 @@ func autoMigrate() error {
 		&lotteryModel.LotteryType{},
 		&lotteryModel.DrawResult{},
 		&lotteryModel.DrawPrize{},
+		&lotteryModel.TicketUpload{},
 		&lotteryModel.Ticket{},
 		&lotteryModel.TicketEntry{},
 		&lotteryModel.Recommendation{},

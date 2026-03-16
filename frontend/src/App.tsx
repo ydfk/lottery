@@ -1,11 +1,21 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { LogOut, RefreshCw, ScanLine, Sparkles, Ticket, Trophy } from "lucide-react";
+import {
+  ClipboardCheck,
+  ImageUp,
+  LogOut,
+  RefreshCw,
+  ScanSearch,
+  Sparkles,
+  Ticket,
+  Trophy,
+} from "lucide-react";
 import { toast } from "sonner";
 import { AuthPanel, type AuthMode } from "@/components/lottery/auth-panel";
+import { TicketConfirmPanel } from "@/components/lottery/ticket-confirm-panel";
+import { TicketRecognitionPanel } from "@/components/lottery/ticket-recognition-panel";
+import { TicketUploadPanel } from "@/components/lottery/ticket-upload-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { NumberBalls } from "@/components/lottery/number-balls";
 import { SummaryCard } from "@/components/lottery/summary-card";
@@ -13,26 +23,67 @@ import { TicketCard } from "@/components/lottery/ticket-card";
 import { getStoredToken } from "@/lib/api/client";
 import { getProfile, loginAndStoreToken, logout, register } from "@/lib/api/methods/auth";
 import {
+  createTicket,
+  formatParsedEntry,
   generateRecommendation,
   getDashboard,
   getTickets,
-  scanTicket,
+  recognizeTicket,
   syncDraws,
+  uploadTicketImage,
 } from "@/lib/api/methods/lottery";
 import type { AuthUser } from "@/types/auth";
-import type { DashboardData, Recommendation, Ticket as TicketRecord } from "@/types/lottery";
+import type {
+  DashboardData,
+  ParsedEntry,
+  Recommendation,
+  Ticket as TicketRecord,
+  TicketRecognitionDraft,
+  TicketUpload,
+} from "@/types/lottery";
 
-type TabKey = "dashboard" | "scan" | "recommendation" | "tickets";
+type TabKey = "dashboard" | "upload" | "recognize" | "confirm" | "tickets" | "recommendation";
 
 const tabs: { key: TabKey; label: string; icon: typeof Sparkles }[] = [
-  { key: "dashboard", label: "总览", icon: Trophy },
-  { key: "scan", label: "录票", icon: ScanLine },
-  { key: "recommendation", label: "推荐", icon: Sparkles },
-  { key: "tickets", label: "票据", icon: Ticket },
+  { key: "dashboard", label: "看板", icon: Trophy },
+  { key: "upload", label: "上传原图", icon: ImageUp },
+  { key: "recognize", label: "识别校对", icon: ScanSearch },
+  { key: "confirm", label: "确认入库", icon: ClipboardCheck },
+  { key: "tickets", label: "票据记录", icon: Ticket },
+  { key: "recommendation", label: "推荐中心", icon: Sparkles },
 ];
 
 function formatCurrency(value: number) {
   return `¥ ${value.toFixed(2)}`;
+}
+
+function buildEntryText(entries: ParsedEntry[]) {
+  return entries
+    .map((entry) => {
+      const { redNumbers, blueNumbers } = formatParsedEntry(entry);
+      return `${redNumbers}+${blueNumbers}`;
+    })
+    .join("\n");
+}
+
+function parseEntryText(value: string) {
+  return value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [redPart, bluePart] = line.split("+");
+      const redNumbers = redPart
+        ?.split(",")
+        .map((item) => Number(item.trim()))
+        .filter((item) => Number.isFinite(item)) ?? [];
+      const blueNumbers = bluePart
+        ?.split(",")
+        .map((item) => Number(item.trim()))
+        .filter((item) => Number.isFinite(item)) ?? [];
+      return { red: redNumbers, blue: blueNumbers };
+    })
+    .filter((entry) => entry.red.length > 0 && entry.blue.length > 0);
 }
 
 export default function App() {
@@ -46,13 +97,18 @@ export default function App() {
   const [tickets, setTickets] = useState<TicketRecord[]>([]);
   const [latestRecommendation, setLatestRecommendation] = useState<Recommendation | null>(null);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const [uploadPending, setUploadPending] = useState(false);
+  const [recognizePending, setRecognizePending] = useState(false);
+  const [submitPending, setSubmitPending] = useState(false);
   const [actionPending, setActionPending] = useState(false);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
+  const [uploadedTicket, setUploadedTicket] = useState<TicketUpload | null>(null);
+  const [recognitionDraft, setRecognitionDraft] = useState<TicketRecognitionDraft | null>(null);
   const [issue, setIssue] = useState("");
   const [ocrText, setOcrText] = useState("");
   const [notes, setNotes] = useState("");
+  const [entryText, setEntryText] = useState("");
   const [lastScanned, setLastScanned] = useState<TicketRecord | null>(null);
 
   function resetLotteryState() {
@@ -61,6 +117,17 @@ export default function App() {
     setLatestRecommendation(null);
     setLastScanned(null);
     setActiveTab("dashboard");
+  }
+
+  function resetTicketWorkflow() {
+    setSelectedImage(null);
+    setPreviewUrl("");
+    setUploadedTicket(null);
+    setRecognitionDraft(null);
+    setIssue("");
+    setOcrText("");
+    setNotes("");
+    setEntryText("");
   }
 
   function handleRequestError(error: unknown, fallbackMessage: string) {
@@ -130,6 +197,16 @@ export default function App() {
     [dashboard?.latestRecommendation?.entries, latestRecommendation?.entries]
   );
 
+  const workflowStatus = useMemo(() => {
+    if (recognitionDraft) {
+      return { label: "待确认入库", hint: "识别结果已生成，可进入下一步确认号码" };
+    }
+    if (uploadedTicket) {
+      return { label: "待识别", hint: "原图已保存，下一步执行 OCR 识别" };
+    }
+    return { label: "待上传", hint: "从上传原图开始新的录票流程" };
+  }, [recognitionDraft, uploadedTicket]);
+
   async function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!authUsername.trim() || !authPassword.trim()) {
@@ -158,6 +235,7 @@ export default function App() {
     logout();
     setCurrentUser(null);
     resetLotteryState();
+    resetTicketWorkflow();
     toast.success("已退出登录");
   }
 
@@ -189,8 +267,17 @@ export default function App() {
     }
   }
 
-  async function handleScanSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function handleSelectImage(file: File | null) {
+    setSelectedImage(file);
+    setUploadedTicket(null);
+    setRecognitionDraft(null);
+    setIssue("");
+    setOcrText("");
+    setNotes("");
+    setEntryText("");
+  }
+
+  async function handleUploadTicketImage() {
     if (!selectedImage) {
       toast.error("请先上传彩票照片");
       return;
@@ -198,26 +285,76 @@ export default function App() {
 
     const formData = new FormData();
     formData.append("image", selectedImage);
-    if (issue) formData.append("issue", issue);
-    if (ocrText) formData.append("ocrText", ocrText);
-    if (notes) formData.append("notes", notes);
-    formData.append("purchasedAt", new Date().toISOString());
 
-    setSubmitting(true);
+    setUploadPending(true);
     try {
-      const ticket = await scanTicket(formData);
-      setLastScanned(ticket);
-      toast.success("彩票已识别并入库");
-      setSelectedImage(null);
-      setIssue("");
-      setOcrText("");
-      setNotes("");
-      await loadData();
-      setActiveTab("tickets");
+      const upload = await uploadTicketImage(formData);
+      setUploadedTicket(upload);
+      setRecognitionDraft(null);
+      toast.success("原图上传成功");
+      setActiveTab("recognize");
+    } catch (error) {
+      handleRequestError(error, "上传原图失败");
+    } finally {
+      setUploadPending(false);
+    }
+  }
+
+  async function handleRecognizeTicket() {
+    if (!uploadedTicket) {
+      toast.error("请先上传原图");
+      return;
+    }
+
+    setRecognizePending(true);
+    try {
+      const draft = await recognizeTicket({
+        uploadId: uploadedTicket.id,
+        ocrText: ocrText || undefined,
+      });
+      setUploadedTicket(draft.upload);
+      setRecognitionDraft(draft);
+      setIssue(draft.issue || "");
+      setEntryText(buildEntryText(draft.entries));
+      toast.success("识别完成，请校对号码");
+      setActiveTab("confirm");
     } catch (error) {
       handleRequestError(error, "识别失败");
     } finally {
-      setSubmitting(false);
+      setRecognizePending(false);
+    }
+  }
+
+  async function handleCreateTicket() {
+    if (!uploadedTicket) {
+      toast.error("请先上传原图");
+      return;
+    }
+
+    const entries = parseEntryText(entryText);
+    if (entries.length === 0) {
+      toast.error("请至少确认一注号码");
+      return;
+    }
+
+    setSubmitPending(true);
+    try {
+      const ticket = await createTicket({
+        uploadId: uploadedTicket.id,
+        issue: issue || undefined,
+        purchasedAt: new Date().toISOString(),
+        notes: notes || undefined,
+        entries: entries.map((entry) => formatParsedEntry(entry)),
+      });
+      setLastScanned(ticket);
+      toast.success("票据已入库并完成判奖检查");
+      resetTicketWorkflow();
+      await loadData();
+      setActiveTab("tickets");
+    } catch (error) {
+      handleRequestError(error, "入库失败");
+    } finally {
+      setSubmitPending(false);
     }
   }
 
@@ -404,7 +541,7 @@ export default function App() {
                     ))}
                     {!loading && tickets.length === 0 && (
                       <p className="text-sm text-slate-500">
-                        还没有票据记录，可以先去“录票”拍照上传。
+                    还没有票据记录，可以先去“上传原图”开始流程。
                       </p>
                     )}
                   </CardContent>
@@ -412,82 +549,40 @@ export default function App() {
               </>
             )}
 
-            {activeTab === "scan" && (
-              <Card className="border-white/60 bg-white/85 backdrop-blur">
-                <CardHeader>
-                  <CardTitle className="text-slate-900">拍照识别录票</CardTitle>
-                  <p className="text-sm text-slate-500">
-                    当前优先支持双色球。默认使用 PaddleOCR 识别，必要时也可以手动补充 OCR 文本做校正。
-                  </p>
-                </CardHeader>
-                <CardContent>
-                  <form className="space-y-5" onSubmit={handleScanSubmit}>
-                    <div className="grid gap-4 md:grid-cols-[1fr_0.9fr]">
-                      <label className="flex min-h-72 cursor-pointer flex-col items-center justify-center rounded-[1.75rem] border border-dashed border-slate-300 bg-slate-50 p-5 text-center">
-                        {previewUrl ? (
-                          <img
-                            src={previewUrl}
-                            alt="彩票预览"
-                            className="h-64 w-full rounded-2xl object-cover"
-                          />
-                        ) : (
-                          <>
-                            <ScanLine className="size-10 text-slate-400" />
-                            <p className="mt-4 text-base font-medium text-slate-700">
-                              点击拍照或上传彩票
-                            </p>
-                            <p className="mt-2 text-sm text-slate-500">
-                              手机端可直接调起后置摄像头
-                            </p>
-                          </>
-                        )}
-                        <input
-                          className="hidden"
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          onChange={(event) => setSelectedImage(event.target.files?.[0] || null)}
-                        />
-                      </label>
+            {activeTab === "upload" && (
+              <TicketUploadPanel
+                previewUrl={previewUrl}
+                selectedImage={selectedImage}
+                uploadPending={uploadPending}
+                uploadedTicket={uploadedTicket}
+                onSelectImage={handleSelectImage}
+                onUpload={() => void handleUploadTicketImage()}
+              />
+            )}
 
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-slate-700">期号</label>
-                          <Input
-                            placeholder="可留空，优先从识别结果中提取"
-                            value={issue}
-                            onChange={(event) => setIssue(event.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-slate-700">
-                            OCR 文本降级输入
-                          </label>
-                          <Textarea
-                            placeholder="例如：2026032 01 06 09 12 18 30 11"
-                            value={ocrText}
-                            onChange={(event) => setOcrText(event.target.value)}
-                            className="min-h-32"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-slate-700">备注</label>
-                          <Textarea
-                            placeholder="可选，例如购买门店、机选/自选说明"
-                            value={notes}
-                            onChange={(event) => setNotes(event.target.value)}
-                            className="min-h-24"
-                          />
-                        </div>
-                      </div>
-                    </div>
+            {activeTab === "recognize" && (
+              <TicketRecognitionPanel
+                uploadedTicket={uploadedTicket}
+                recognitionDraft={recognitionDraft}
+                ocrText={ocrText}
+                recognizePending={recognizePending}
+                onOCRTextChange={setOcrText}
+                onRecognize={() => void handleRecognizeTicket()}
+              />
+            )}
 
-                    <Button className="h-12 w-full rounded-2xl" disabled={submitting}>
-                      {submitting ? "识别中..." : "识别并入库"}
-                    </Button>
-                  </form>
-                </CardContent>
-              </Card>
+            {activeTab === "confirm" && (
+              <TicketConfirmPanel
+                recognitionDraft={recognitionDraft}
+                issue={issue}
+                notes={notes}
+                entryText={entryText}
+                submitPending={submitPending}
+                onIssueChange={setIssue}
+                onNotesChange={setNotes}
+                onEntryTextChange={setEntryText}
+                onCreateTicket={() => void handleCreateTicket()}
+              />
             )}
 
             {activeTab === "recommendation" && (
@@ -566,8 +661,26 @@ export default function App() {
                 <p>
                   已支持双色球开奖号同步、鉴权访问、推荐扩展点、拍照录票接口、自动判奖和移动端录入界面。
                 </p>
-                <p>拍照识别默认使用 PaddleOCR，上传原图会保留并可在票据列表中放大查看。</p>
+                <p>录票流程已经拆成上传原图、识别校对、确认入库三个独立页面，更适合逐步调试。</p>
                 <p>推荐默认走 mock 提供者，配置 OpenAI 兼容接口后可切到真实模型。</p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-white/60 bg-white/80 backdrop-blur">
+              <CardHeader>
+                <CardTitle className="text-slate-900">当前录票进度</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <p className="text-sm font-medium text-slate-700">{workflowStatus.label}</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-500">{workflowStatus.hint}</p>
+                </div>
+                {uploadedTicket && (
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Upload ID</p>
+                    <p className="mt-2 break-all text-sm text-slate-700">{uploadedTicket.id}</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -603,7 +716,7 @@ export default function App() {
         </div>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-4 z-50 mx-auto flex w-[calc(100%-1.5rem)] max-w-xl items-center justify-between rounded-full border border-white/70 bg-white/90 p-2 shadow-[0_18px_40px_rgba(15,23,42,0.14)] backdrop-blur">
+      <nav className="fixed inset-x-0 bottom-4 z-50 mx-auto flex w-[calc(100%-1.5rem)] max-w-5xl items-center gap-2 overflow-x-auto rounded-[2rem] border border-white/70 bg-white/90 p-2 shadow-[0_18px_40px_rgba(15,23,42,0.14)] backdrop-blur">
         {tabs.map((item) => {
           const Icon = item.icon;
           const active = activeTab === item.key;
@@ -611,7 +724,7 @@ export default function App() {
             <button
               key={item.key}
               type="button"
-              className={`flex flex-1 items-center justify-center gap-2 rounded-full px-3 py-3 text-sm transition ${
+              className={`flex min-w-[112px] flex-1 items-center justify-center gap-2 rounded-[1.25rem] px-3 py-3 text-sm transition ${
                 active
                   ? "bg-slate-900 text-white shadow-sm"
                   : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"

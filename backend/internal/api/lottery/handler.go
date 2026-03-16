@@ -1,8 +1,11 @@
 package lottery
 
 import (
+	"fmt"
+	"mime/multipart"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"go-fiber-starter/internal/api/response"
@@ -23,6 +26,24 @@ type SyncDrawRequest struct {
 	Start        int      `json:"start"`
 	Count        int      `json:"count"`
 	LotteryCodes []string `json:"lotteryCodes"`
+}
+
+type RecognizeTicketRequest struct {
+	UploadID string `json:"uploadId"`
+	OCRText  string `json:"ocrText"`
+}
+
+type CreateTicketEntryRequest struct {
+	RedNumbers  string `json:"redNumbers"`
+	BlueNumbers string `json:"blueNumbers"`
+}
+
+type CreateTicketRequest struct {
+	UploadID    string                     `json:"uploadId"`
+	Issue       string                     `json:"issue"`
+	PurchasedAt string                     `json:"purchasedAt"`
+	Notes       string                     `json:"notes"`
+	Entries     []CreateTicketEntryRequest `json:"entries"`
 }
 
 // @Summary 获取已启用彩票列表
@@ -185,6 +206,100 @@ func ListTickets(c *fiber.Ctx) error {
 	return response.Success(c, items)
 }
 
+// @Summary 上传彩票原图
+// @Description 仅上传并保存彩票原图，不执行 OCR 和入库
+// @Tags lottery
+// @Accept mpfd
+// @Produce json
+// @Security BearerAuth
+// @Param code path string true "彩票编码，如 ssq"
+// @Param image formData file true "彩票图片"
+// @Success 201 {object} TicketUploadResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /lotteries/{code}/tickets/upload-image [post]
+func UploadTicketImage(c *fiber.Ctx) error {
+	file, imagePath, err := saveTicketImage(c)
+	if err != nil {
+		return err
+	}
+
+	data, err := lotteryService.UploadTicketImage(lotteryService.UploadTicketImageInput{
+		Code:             c.Params("code"),
+		ImagePath:        imagePath,
+		OriginalFilename: file.Filename,
+	})
+	if err != nil {
+		return err
+	}
+	return response.Success(c, data, fiber.StatusCreated)
+}
+
+// @Summary 识别彩票内容
+// @Description 基于已上传原图执行 OCR 识别，只返回识别结果，不入库
+// @Tags lottery
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param code path string true "彩票编码，如 ssq"
+// @Param request body RecognizeTicketRequest true "识别参数"
+// @Success 200 {object} TicketRecognitionResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /lotteries/{code}/tickets/recognize [post]
+func RecognizeTicket(c *fiber.Ctx) error {
+	request := RecognizeTicketRequest{}
+	if err := c.BodyParser(&request); err != nil {
+		return response.Error(c, "参数不正确", fiber.StatusBadRequest)
+	}
+
+	data, err := lotteryService.RecognizeUploadedTicket(c.Context(), lotteryService.RecognizeUploadedTicketInput{
+		Code:     c.Params("code"),
+		UploadID: request.UploadID,
+		OCRText:  request.OCRText,
+	})
+	if err != nil {
+		return err
+	}
+	return response.Success(c, data)
+}
+
+// @Summary 确认入库并判奖
+// @Description 基于上传记录和识别结果确认票据入库，并在已开奖时自动判奖
+// @Tags lottery
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param code path string true "彩票编码，如 ssq"
+// @Param request body CreateTicketRequest true "入库参数"
+// @Success 201 {object} TicketDetailResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /lotteries/{code}/tickets [post]
+func CreateTicket(c *fiber.Ctx) error {
+	request := CreateTicketRequest{}
+	if err := c.BodyParser(&request); err != nil {
+		return response.Error(c, "参数不正确", fiber.StatusBadRequest)
+	}
+
+	purchasedAt, _ := time.Parse(time.RFC3339, request.PurchasedAt)
+	entries, err := parseCreateTicketEntries(request.Entries)
+	if err != nil {
+		return response.Error(c, err.Error(), fiber.StatusBadRequest)
+	}
+
+	data, err := lotteryService.CreateTicket(c.Context(), lotteryService.CreateTicketInput{
+		Code:        c.Params("code"),
+		UploadID:    request.UploadID,
+		Issue:       request.Issue,
+		PurchasedAt: purchasedAt,
+		Notes:       request.Notes,
+		Entries:     entries,
+	})
+	if err != nil {
+		return err
+	}
+	return response.Success(c, data, fiber.StatusCreated)
+}
+
 // @Summary 扫描彩票票据
 // @Description 上传票据图片并识别号码，识别成功后自动入库并尝试判奖
 // @Tags lottery
@@ -202,21 +317,8 @@ func ListTickets(c *fiber.Ctx) error {
 // @Failure 500 {object} ErrorResponse
 // @Router /lotteries/{code}/tickets/scan [post]
 func ScanTicket(c *fiber.Ctx) error {
-	file, err := c.FormFile("image")
+	_, imagePath, err := saveTicketImage(c)
 	if err != nil {
-		return response.Error(c, "请上传彩票图片", fiber.StatusBadRequest)
-	}
-
-	imagePath := filepath.Join(
-		config.Current.Storage.UploadDir,
-		"tickets",
-		time.Now().Format("20060102"),
-		uuid.NewString()+filepath.Ext(file.Filename),
-	)
-	if err := util.EnsureDir(imagePath); err != nil {
-		return err
-	}
-	if err := c.SaveFile(file, imagePath); err != nil {
 		return err
 	}
 
@@ -233,6 +335,57 @@ func ScanTicket(c *fiber.Ctx) error {
 		return err
 	}
 	return response.Success(c, data, fiber.StatusCreated)
+}
+
+func saveTicketImage(c *fiber.Ctx) (*multipart.FileHeader, string, error) {
+	file, err := c.FormFile("image")
+	if err != nil {
+		return nil, "", response.Error(c, "请上传彩票图片", fiber.StatusBadRequest)
+	}
+
+	imagePath := filepath.Join(
+		config.Current.Storage.UploadDir,
+		"tickets",
+		time.Now().Format("20060102"),
+		uuid.NewString()+filepath.Ext(file.Filename),
+	)
+	if err := util.EnsureDir(imagePath); err != nil {
+		return nil, "", err
+	}
+	if err := c.SaveFile(file, imagePath); err != nil {
+		return nil, "", err
+	}
+	return file, imagePath, nil
+}
+
+func parseCreateTicketEntries(items []CreateTicketEntryRequest) ([]lotteryService.ParsedEntry, error) {
+	if len(items) == 0 {
+		return nil, nil
+	}
+
+	result := make([]lotteryService.ParsedEntry, 0, len(items))
+	for _, item := range items {
+		if item.RedNumbers == "" || item.BlueNumbers == "" {
+			return nil, fmt.Errorf("每注号码都需要包含 redNumbers 和 blueNumbers")
+		}
+		result = append(result, lotteryService.ParsedEntry{
+			Red:  parseCSVValues(item.RedNumbers),
+			Blue: parseCSVValues(item.BlueNumbers),
+		})
+	}
+	return result, nil
+}
+
+func parseCSVValues(value string) []int {
+	parts := strings.Split(value, ",")
+	result := make([]int, 0, len(parts))
+	for _, part := range parts {
+		number := parseIntValue(strings.TrimSpace(part), -1)
+		if number >= 0 {
+			result = append(result, number)
+		}
+	}
+	return result
 }
 
 func parseSyncDrawRequest(c *fiber.Ctx) SyncDrawRequest {

@@ -60,3 +60,17 @@ type TicketDetailResponse struct {
 	Data lotteryService.TicketDetail `json:"data"`
 	Time string                      `json:"time" example:"2026-03-16T10:00:00Z"`
 }
+
+type TicketUploadResponse struct {
+	Flag bool                              `json:"flag" example:"true"`
+	Code int                               `json:"code" example:"201"`
+	Data lotteryService.TicketUploadDetail `json:"data"`
+	Time string                            `json:"time" example:"2026-03-16T10:00:00Z"`
+}
+
+type TicketRecognitionResponse struct {
+	Flag bool                                  `json:"flag" example:"true"`
+	Code int                                   `json:"code" example:"200"`
+	Data lotteryService.TicketRecognitionDraft `json:"data"`
+	Time string                                `json:"time" example:"2026-03-16T10:00:00Z"`
+}

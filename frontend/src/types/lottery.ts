@@ -62,6 +62,32 @@ export interface Ticket {
   entries: TicketEntry[];
 }
 
+export interface ParsedEntry {
+  red: number[];
+  blue: number[];
+}
+
+export interface TicketUpload {
+  id: string;
+  lotteryCode: string;
+  status: string;
+  originalFilename: string;
+  imagePath: string;
+  imageUrl: string;
+  recognizedText: string;
+  recognitionIssue: string;
+  recognitionConfidence: number;
+  errorMessage: string;
+}
+
+export interface TicketRecognitionDraft {
+  upload: TicketUpload;
+  issue: string;
+  rawText: string;
+  confidence: number;
+  entries: ParsedEntry[];
+}
+
 export interface DashboardStats {
   totalTickets: number;
   wonTickets: number;

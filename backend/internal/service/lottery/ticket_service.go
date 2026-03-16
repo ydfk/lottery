@@ -25,66 +25,31 @@ type TicketDetail struct {
 }
 
 func ScanTicket(ctx context.Context, input ScanTicketInput) (*TicketDetail, error) {
-	lotteryType, err := getLotteryType(input.Code)
-	if err != nil {
-		return nil, err
-	}
-	definition, err := GetDefinition(input.Code)
-	if err != nil {
-		return nil, err
-	}
-
-	recognized, err := recognizeTicket(ctx, definition, lotteryType, input.ImagePath, input.OCRText)
+	upload, err := UploadTicketImage(UploadTicketImageInput{
+		Code:             input.Code,
+		ImagePath:        input.ImagePath,
+		OriginalFilename: "",
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	issue := input.Issue
-	if issue == "" {
-		issue = recognized.Issue
-	}
-	if issue == "" {
-		return nil, fmt.Errorf("未识别到期号，请手动补充期号后重试")
-	}
-
-	purchasedAt := input.PurchasedAt
-	if purchasedAt.IsZero() {
-		purchasedAt = time.Now()
-	}
-
-	ticket := model.Ticket{
-		LotteryCode:    input.Code,
-		Issue:          issue,
-		Source:         "scan",
-		ImagePath:      input.ImagePath,
-		RecognizedText: recognized.RawText,
-		Status:         TicketStatusPending,
-		CostAmount:     float64(len(recognized.Entries) * 2),
-		PurchasedAt:    purchasedAt,
-		Notes:          input.Notes,
-	}
-	if err := db.DB.Create(&ticket).Error; err != nil {
+	recognized, err := RecognizeUploadedTicket(ctx, RecognizeUploadedTicketInput{
+		Code:     input.Code,
+		UploadID: upload.Id.String(),
+		OCRText:  input.OCRText,
+	})
+	if err != nil {
 		return nil, err
 	}
 
-	entries := make([]model.TicketEntry, 0, len(recognized.Entries))
-	for index, item := range recognized.Entries {
-		entries = append(entries, model.TicketEntry{
-			TicketID:     ticket.Id,
-			Sequence:     index + 1,
-			RedNumbers:   formatNumbers(item.Red),
-			BlueNumbers:  formatNumbers(item.Blue),
-			MatchSummary: "待开奖",
-		})
-	}
-	if err := db.DB.Create(&entries).Error; err != nil {
-		return nil, err
-	}
-
-	if err := EvaluateTicket(ticket.Id.String()); err != nil {
-		return nil, err
-	}
-	return GetTicketDetail(ticket.Id.String())
+	return CreateTicket(ctx, CreateTicketInput{
+		Code:        input.Code,
+		UploadID:    upload.Id.String(),
+		Issue:       resolveValue(input.Issue, recognized.Issue),
+		PurchasedAt: input.PurchasedAt,
+		Notes:       input.Notes,
+	})
 }
 
 func recognizeTicket(ctx context.Context, definition Definition, lotteryType model.LotteryType, imagePath string, ocrText string) (*RecognitionResult, error) {
