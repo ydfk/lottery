@@ -1,0 +1,19 @@
+# 根仓库忽略
+.DS_Store
+Thumbs.db
+
+# 后端产物
+backend/data/
+backend/log/
+backend/bin/
+backend/tmp/
+backend/config/config.local.yaml
+
+# 前端产物
+frontend/node_modules/
+frontend/dist/
+frontend/.turbo/
+
+# 编辑器与缓存
+.idea/
+.vscode/

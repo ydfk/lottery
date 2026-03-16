@@ -1,0 +1,837 @@
+basePath: /api
+definitions:
+  go-fiber-starter_internal_model_lottery.DrawPrize:
+    properties:
+      createdAt:
+        description: 指定为自动创建时间
+        type: string
+      drawResultId:
+        type: string
+      id:
+        type: string
+      prizeName:
+        type: string
+      prizeRule:
+        type: string
+      singleBonus:
+        type: number
+      updatedAt:
+        description: 指定为自动更新时间
+        type: string
+      winnerCount:
+        type: integer
+    type: object
+  go-fiber-starter_internal_model_lottery.DrawResult:
+    properties:
+      blueNumbers:
+        type: string
+      createdAt:
+        description: 指定为自动创建时间
+        type: string
+      drawDate:
+        type: string
+      id:
+        type: string
+      issue:
+        type: string
+      lotteryCode:
+        type: string
+      prizeDetails:
+        items:
+          $ref: '#/definitions/go-fiber-starter_internal_model_lottery.DrawPrize'
+        type: array
+      prizePoolAmount:
+        type: number
+      rawPayload:
+        type: string
+      redNumbers:
+        type: string
+      saleAmount:
+        type: number
+      source:
+        type: string
+      updatedAt:
+        description: 指定为自动更新时间
+        type: string
+    type: object
+  go-fiber-starter_internal_model_lottery.LotteryType:
+    properties:
+      blueCount:
+        type: integer
+      blueMax:
+        type: integer
+      blueMin:
+        type: integer
+      code:
+        type: string
+      createdAt:
+        description: 指定为自动创建时间
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      recommendationCount:
+        type: integer
+      recommendationModel:
+        type: string
+      recommendationProvider:
+        type: string
+      redCount:
+        type: integer
+      redMax:
+        type: integer
+      redMin:
+        type: integer
+      remoteLotteryId:
+        type: string
+      status:
+        type: string
+      updatedAt:
+        description: 指定为自动更新时间
+        type: string
+      visionModel:
+        type: string
+      visionProvider:
+        type: string
+    type: object
+  go-fiber-starter_internal_model_lottery.Recommendation:
+    properties:
+      basis:
+        type: string
+      checkedAt:
+        type: string
+      createdAt:
+        description: 指定为自动创建时间
+        type: string
+      entries:
+        items:
+          $ref: '#/definitions/go-fiber-starter_internal_model_lottery.RecommendationEntry'
+        type: array
+      id:
+        type: string
+      issue:
+        type: string
+      lotteryCode:
+        type: string
+      model:
+        type: string
+      prizeAmount:
+        type: number
+      promptVersion:
+        type: string
+      provider:
+        type: string
+      rawPayload:
+        type: string
+      strategy:
+        type: string
+      summary:
+        type: string
+      updatedAt:
+        description: 指定为自动更新时间
+        type: string
+    type: object
+  go-fiber-starter_internal_model_lottery.RecommendationEntry:
+    properties:
+      blueNumbers:
+        type: string
+      confidence:
+        type: number
+      createdAt:
+        description: 指定为自动创建时间
+        type: string
+      id:
+        type: string
+      isWinning:
+        type: boolean
+      matchSummary:
+        type: string
+      prizeAmount:
+        type: number
+      prizeName:
+        type: string
+      reason:
+        type: string
+      recommendationId:
+        type: string
+      redNumbers:
+        type: string
+      sequence:
+        type: integer
+      updatedAt:
+        description: 指定为自动更新时间
+        type: string
+    type: object
+  go-fiber-starter_internal_model_lottery.TicketEntry:
+    properties:
+      blueNumbers:
+        type: string
+      createdAt:
+        description: 指定为自动创建时间
+        type: string
+      id:
+        type: string
+      isWinning:
+        type: boolean
+      matchSummary:
+        type: string
+      prizeAmount:
+        type: number
+      prizeName:
+        type: string
+      redNumbers:
+        type: string
+      sequence:
+        type: integer
+      ticketId:
+        type: string
+      updatedAt:
+        description: 指定为自动更新时间
+        type: string
+    type: object
+  go-fiber-starter_internal_model_user.User:
+    properties:
+      createdAt:
+        description: 指定为自动创建时间
+        type: string
+      id:
+        type: string
+      updatedAt:
+        description: 指定为自动更新时间
+        type: string
+      username:
+        example: admin
+        type: string
+    type: object
+  go-fiber-starter_internal_service_lottery.BatchSyncResult:
+    properties:
+      results:
+        items:
+          $ref: '#/definitions/go-fiber-starter_internal_service_lottery.SyncResult'
+        type: array
+    type: object
+  go-fiber-starter_internal_service_lottery.DashboardData:
+    properties:
+      latestDraw:
+        $ref: '#/definitions/go-fiber-starter_internal_model_lottery.DrawResult'
+      latestRecommendation:
+        $ref: '#/definitions/go-fiber-starter_internal_model_lottery.Recommendation'
+      lottery:
+        $ref: '#/definitions/go-fiber-starter_internal_model_lottery.LotteryType'
+      recentTickets:
+        items:
+          $ref: '#/definitions/go-fiber-starter_internal_service_lottery.TicketDetail'
+        type: array
+      stats:
+        $ref: '#/definitions/go-fiber-starter_internal_service_lottery.DashboardStats'
+    type: object
+  go-fiber-starter_internal_service_lottery.DashboardStats:
+    properties:
+      totalCost:
+        type: number
+      totalPrize:
+        type: number
+      totalTickets:
+        type: integer
+      wonTickets:
+        type: integer
+    type: object
+  go-fiber-starter_internal_service_lottery.SyncResult:
+    properties:
+      issue:
+        type: string
+      lotteryCode:
+        type: string
+      syncedCount:
+        type: integer
+    type: object
+  go-fiber-starter_internal_service_lottery.TicketDetail:
+    properties:
+      checkedAt:
+        type: string
+      costAmount:
+        type: number
+      createdAt:
+        description: 指定为自动创建时间
+        type: string
+      entries:
+        items:
+          $ref: '#/definitions/go-fiber-starter_internal_model_lottery.TicketEntry'
+        type: array
+      id:
+        type: string
+      imagePath:
+        type: string
+      imageUrl:
+        type: string
+      issue:
+        type: string
+      lotteryCode:
+        type: string
+      notes:
+        type: string
+      prizeAmount:
+        type: number
+      purchasedAt:
+        type: string
+      recognizedText:
+        type: string
+      source:
+        type: string
+      status:
+        type: string
+      updatedAt:
+        description: 指定为自动更新时间
+        type: string
+    type: object
+  internal_api_auth.AuthRequest:
+    properties:
+      password:
+        example: pass123
+        type: string
+      username:
+        example: alice
+        type: string
+    type: object
+  internal_api_auth.ErrorResponse:
+    properties:
+      code:
+        example: 500
+        type: integer
+      flag:
+        example: false
+        type: boolean
+      msg:
+        example: 请求失败
+        type: string
+      time:
+        example: "2026-03-16T10:00:00Z"
+        type: string
+    type: object
+  internal_api_auth.LoginData:
+    properties:
+      token:
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9
+        type: string
+    type: object
+  internal_api_auth.LoginResponse:
+    properties:
+      code:
+        example: 200
+        type: integer
+      data:
+        $ref: '#/definitions/internal_api_auth.LoginData'
+      flag:
+        example: true
+        type: boolean
+      time:
+        example: "2026-03-16T10:00:00Z"
+        type: string
+    type: object
+  internal_api_auth.UserResponse:
+    properties:
+      code:
+        example: 200
+        type: integer
+      data:
+        $ref: '#/definitions/go-fiber-starter_internal_model_user.User'
+      flag:
+        example: true
+        type: boolean
+      time:
+        example: "2026-03-16T10:00:00Z"
+        type: string
+    type: object
+  internal_api_lottery.BatchSyncResultResponse:
+    properties:
+      code:
+        example: 200
+        type: integer
+      data:
+        $ref: '#/definitions/go-fiber-starter_internal_service_lottery.BatchSyncResult'
+      flag:
+        example: true
+        type: boolean
+      time:
+        example: "2026-03-16T10:00:00Z"
+        type: string
+    type: object
+  internal_api_lottery.DashboardResponse:
+    properties:
+      code:
+        example: 200
+        type: integer
+      data:
+        $ref: '#/definitions/go-fiber-starter_internal_service_lottery.DashboardData'
+      flag:
+        example: true
+        type: boolean
+      time:
+        example: "2026-03-16T10:00:00Z"
+        type: string
+    type: object
+  internal_api_lottery.ErrorResponse:
+    properties:
+      code:
+        example: 500
+        type: integer
+      flag:
+        example: false
+        type: boolean
+      msg:
+        example: 请求失败
+        type: string
+      time:
+        example: "2026-03-16T10:00:00Z"
+        type: string
+    type: object
+  internal_api_lottery.GenerateRecommendationRequest:
+    properties:
+      count:
+        type: integer
+    type: object
+  internal_api_lottery.LotteryListResponse:
+    properties:
+      code:
+        example: 200
+        type: integer
+      data:
+        items:
+          $ref: '#/definitions/go-fiber-starter_internal_model_lottery.LotteryType'
+        type: array
+      flag:
+        example: true
+        type: boolean
+      time:
+        example: "2026-03-16T10:00:00Z"
+        type: string
+    type: object
+  internal_api_lottery.RecommendationResponse:
+    properties:
+      code:
+        example: 200
+        type: integer
+      data:
+        $ref: '#/definitions/go-fiber-starter_internal_model_lottery.Recommendation'
+      flag:
+        example: true
+        type: boolean
+      time:
+        example: "2026-03-16T10:00:00Z"
+        type: string
+    type: object
+  internal_api_lottery.SyncDrawRequest:
+    properties:
+      count:
+        type: integer
+      issue:
+        type: string
+      lotteryCodes:
+        items:
+          type: string
+        type: array
+      start:
+        type: integer
+    type: object
+  internal_api_lottery.SyncResultResponse:
+    properties:
+      code:
+        example: 200
+        type: integer
+      data:
+        $ref: '#/definitions/go-fiber-starter_internal_service_lottery.SyncResult'
+      flag:
+        example: true
+        type: boolean
+      time:
+        example: "2026-03-16T10:00:00Z"
+        type: string
+    type: object
+  internal_api_lottery.TicketDetailResponse:
+    properties:
+      code:
+        example: 201
+        type: integer
+      data:
+        $ref: '#/definitions/go-fiber-starter_internal_service_lottery.TicketDetail'
+      flag:
+        example: true
+        type: boolean
+      time:
+        example: "2026-03-16T10:00:00Z"
+        type: string
+    type: object
+  internal_api_lottery.TicketListResponse:
+    properties:
+      code:
+        example: 200
+        type: integer
+      data:
+        items:
+          $ref: '#/definitions/go-fiber-starter_internal_service_lottery.TicketDetail'
+        type: array
+      flag:
+        example: true
+        type: boolean
+      time:
+        example: "2026-03-16T10:00:00Z"
+        type: string
+    type: object
+host: localhost:25610
+info:
+  contact: {}
+  description: Go Fiber Starter API
+  title: Go Fiber API
+  version: "1.0"
+paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: 用户登录接口
+      parameters:
+      - description: 登录信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_auth.AuthRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_api_auth.LoginResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_api_auth.ErrorResponse'
+      summary: 用户登录
+      tags:
+      - auth
+  /auth/profile:
+    get:
+      description: 返回当前登录用户信息
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_api_auth.UserResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_api_auth.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取当前用户
+      tags:
+      - auth
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: 创建账号并返回用户信息
+      parameters:
+      - description: 注册信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_auth.AuthRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_api_auth.UserResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_api_auth.ErrorResponse'
+      summary: 用户注册
+      tags:
+      - auth
+  /lotteries/:
+    get:
+      description: 返回系统当前已加载并入库的彩票类型
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_api_lottery.LotteryListResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_api_lottery.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取已启用彩票列表
+      tags:
+      - lottery
+  /lotteries/{code}/dashboard:
+    get:
+      description: 返回指定彩票的最新开奖、最新推荐、最近票据和统计信息
+      parameters:
+      - description: 彩票编码，如 ssq、dlt
+        in: path
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_api_lottery.DashboardResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_api_lottery.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取彩票看板
+      tags:
+      - lottery
+  /lotteries/{code}/draws/sync:
+    post:
+      consumes:
+      - application/json
+      description: 使用极速数据 query 接口同步当前期或指定期的开奖信息，并触发票据与推荐结算
+      parameters:
+      - description: 彩票编码，如 ssq、dlt
+        in: path
+        name: code
+        required: true
+        type: string
+      - description: 同步参数，issue 为空时同步当前期
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/internal_api_lottery.SyncDrawRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_api_lottery.SyncResultResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_api_lottery.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 同步当期开奖
+      tags:
+      - lottery
+  /lotteries/{code}/draws/sync-history:
+    post:
+      consumes:
+      - application/json
+      description: 使用极速数据 history 接口分页同步指定彩票的历史开奖信息，默认最近 100 期
+      parameters:
+      - description: 彩票编码，如 ssq、dlt
+        in: path
+        name: code
+        required: true
+        type: string
+      - description: 历史同步参数
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/internal_api_lottery.SyncDrawRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_api_lottery.SyncResultResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_api_lottery.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 同步单种彩票历史开奖
+      tags:
+      - lottery
+  /lotteries/{code}/recommendations/generate:
+    post:
+      consumes:
+      - application/json
+      description: 按当前彩票配置的 AI 模型和提示词生成推荐号码
+      parameters:
+      - description: 彩票编码，如 ssq、dlt
+        in: path
+        name: code
+        required: true
+        type: string
+      - description: 推荐生成参数
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/internal_api_lottery.GenerateRecommendationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_api_lottery.RecommendationResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_api_lottery.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 生成推荐号码
+      tags:
+      - lottery
+  /lotteries/{code}/recommendations/latest:
+    get:
+      description: 返回指定彩票最近一次生成的推荐号码
+      parameters:
+      - description: 彩票编码，如 ssq、dlt
+        in: path
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_api_lottery.RecommendationResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_api_lottery.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取最新推荐
+      tags:
+      - lottery
+  /lotteries/{code}/tickets:
+    get:
+      description: 返回指定彩票最近录入的票据记录
+      parameters:
+      - description: 彩票编码，如 ssq、dlt
+        in: path
+        name: code
+        required: true
+        type: string
+      - description: 返回数量，默认 20
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_api_lottery.TicketListResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_api_lottery.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取票据列表
+      tags:
+      - lottery
+  /lotteries/{code}/tickets/scan:
+    post:
+      consumes:
+      - multipart/form-data
+      description: 上传票据图片并识别号码，识别成功后自动入库并尝试判奖
+      parameters:
+      - description: 彩票编码，如 ssq
+        in: path
+        name: code
+        required: true
+        type: string
+      - description: 彩票图片
+        in: formData
+        name: image
+        required: true
+        type: file
+      - description: 期号
+        in: formData
+        name: issue
+        type: string
+      - description: 购买时间，RFC3339 格式
+        in: formData
+        name: purchasedAt
+        type: string
+      - description: OCR 降级文本
+        in: formData
+        name: ocrText
+        type: string
+      - description: 备注
+        in: formData
+        name: notes
+        type: string
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/internal_api_lottery.TicketDetailResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_api_lottery.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_api_lottery.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 扫描彩票票据
+      tags:
+      - lottery
+  /lotteries/draws/sync-history:
+    post:
+      consumes:
+      - application/json
+      description: 批量调用历史开奖同步，lotteryCodes 为空时同步所有已启用彩票
+      parameters:
+      - description: 批量历史同步参数
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/internal_api_lottery.SyncDrawRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_api_lottery.BatchSyncResultResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_api_lottery.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 批量同步多种彩票历史开奖
+      tags:
+      - lottery
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

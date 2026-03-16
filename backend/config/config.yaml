@@ -1,0 +1,74 @@
+app:
+  port: "25610"
+  env: "development"
+jwt:
+  secret: "123456789"
+  expiration: 604800
+database:
+  path: "data/db.sqlite"
+storage:
+  uploadDir: "data/uploads"
+jisu:
+  baseURL: "https://api.jisuapi.com"
+  appKey: ""
+  timeoutSeconds: 15
+ai:
+  baseURL: ""
+  apiKey: ""
+  timeoutSeconds: 20
+vision:
+  provider: "paddleocr"
+  model: "paddleocr"
+  command: "python"
+  args:
+    - "scripts/paddleocr_runner.py"
+  lang: "ch"
+  useAngleCls: true
+  timeoutSeconds: 30
+lotteries:
+  - code: "ssq"
+    name: "福彩双色球"
+    enabled: true
+    remoteLotteryId: "11"
+    redCount: 6
+    blueCount: 1
+    redMin: 1
+    redMax: 33
+    blueMin: 1
+    blueMax: 16
+    recommendation:
+      count: 5
+      historyWindow: 30
+      provider: "mock"
+      model: "history-weighted-mock"
+      promptVersion: "v1"
+      prompt: |
+        你是双色球推荐助手。
+        请结合最近开奖历史，为用户输出结构化 JSON 推荐结果。
+    sync:
+      enabled: true
+      cron: "0 35 21,22 * * *"
+      historySize: 20
+  - code: "dlt"
+    name: "体彩大乐透"
+    enabled: true
+    remoteLotteryId: "13"
+    redCount: 5
+    blueCount: 2
+    redMin: 1
+    redMax: 35
+    blueMin: 1
+    blueMax: 12
+    recommendation:
+      count: 5
+      historyWindow: 30
+      provider: "mock"
+      model: "history-weighted-mock"
+      promptVersion: "v1"
+      prompt: |
+        你是大乐透推荐助手。
+        请结合最近开奖历史，为用户输出结构化 JSON 推荐结果。
+    sync:
+      enabled: true
+      cron: "0 35 20,21 * * *"
+      historySize: 20

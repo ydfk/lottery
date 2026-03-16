@@ -1,0 +1,33 @@
+version: "3.8"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: go-fiber-api
+    restart: unless-stopped
+    ports:
+      - "25610:25610"
+    volumes:
+      # 持久化数据卷
+      - app-data:/app/data
+      # 日志卷
+      - app-logs:/app/log
+      # 配置文件可以选择挂载本地配置或使用volume
+      - ./config:/app/config
+    environment:
+      # 可以在这里添加环境变量覆盖配置
+      - TZ=Asia/Shanghai
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  app-data:
+    driver: local
+  app-logs:
+    driver: local

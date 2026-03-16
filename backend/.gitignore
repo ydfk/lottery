@@ -1,0 +1,57 @@
+
+# 编译生成的二进制文件
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go-fiber-starter
+go-fiber-starter.exe
+
+# 依赖目录
+vendor/
+
+# 日志文件
+*.log
+log/*.json
+
+# 数据库文件
+*.db
+*.sqlite
+data/*.sqlite
+
+# IDE和编辑器相关
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 操作系统相关文件
+.DS_Store
+Thumbs.db
+
+# 环境变量文件
+.env
+.env.local
+
+# 配置文件（如有需要）
+# config.yaml
+
+# 临时文件
+tmp/
+temp/
+.worktrees/
+
+# 证书文件
+*.pem
+*.cert
+*.key
+"@
+
+.history
+*.local.yaml
+*.local.yml
+*.local.json

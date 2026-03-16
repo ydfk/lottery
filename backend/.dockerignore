@@ -1,0 +1,23 @@
+# Git相关
+.git
+.gitignore
+
+# 二进制文件和构建产物
+/main
+
+# 日志文件
+/log/*
+
+# 临时数据库文件 (如果有需要持久化的数据，应该使用volumes)
+/data/db.sqlite
+
+# IDE和编辑器相关
+.idea
+.vscode
+*.swp
+*.swo
+
+# 其他不需要的文件
+README.md
+Dockerfile
+.dockerignore

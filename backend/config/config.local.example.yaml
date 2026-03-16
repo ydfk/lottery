@@ -1,0 +1,21 @@
+jisu:
+  appKey: "your-jisu-app-key"
+
+ai:
+  baseURL: "https://your-openai-compatible-host/v1"
+  apiKey: "your-ai-api-key"
+
+vision:
+  provider: "paddleocr"
+  model: "paddleocr"
+  command: "python"
+  args:
+    - "scripts/paddleocr_runner.py"
+  lang: "ch"
+  useAngleCls: true
+
+lotteries:
+  - code: "ssq"
+    recommendation:
+      provider: "openai-compatible"
+      model: "gpt-4.1-mini"
