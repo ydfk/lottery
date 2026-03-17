@@ -18,13 +18,13 @@ ai:
   timeoutSeconds: 20
 vision:
   provider: "paddleocr"
-  model: "paddleocr"
-  command: "python"
-  args:
-    - "scripts/paddleocr_runner.py"
-  lang: "ch"
-  useAngleCls: true
-  timeoutSeconds: 30
+  model: "layout-parsing"
+  baseURL: ""
+  apiKey: ""
+  timeoutSeconds: 90
+  useDocOrientationClassify: false
+  useDocUnwarping: false
+  useChartRecognition: false
 lotteries:
   - code: "ssq"
     name: "福彩双色球"

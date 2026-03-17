@@ -194,33 +194,57 @@ func fetchDrawHistory(ctx context.Context, lotteryType model.LotteryType, issue 
 }
 
 func requestJisu(ctx context.Context, requestURL string) (*jisuResponse, error) {
+	startedAt := time.Now()
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
+		logThirdPartyFailure("jisuapi", http.MethodGet, requestURL, map[string]any{
+			"url": maskURL(requestURL),
+		}, nil, 0, startedAt, err)
 		return nil, err
 	}
 
 	client := &http.Client{Timeout: time.Duration(max(10, config.Current.Jisu.TimeoutSeconds)) * time.Second}
 	response, err := client.Do(request)
 	if err != nil {
+		logThirdPartyFailure("jisuapi", http.MethodGet, requestURL, map[string]any{
+			"url": maskURL(requestURL),
+		}, nil, 0, startedAt, err)
 		return nil, err
 	}
 	defer response.Body.Close()
 
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
+		logThirdPartyFailure("jisuapi", http.MethodGet, requestURL, map[string]any{
+			"url": maskURL(requestURL),
+		}, nil, response.StatusCode, startedAt, err)
 		return nil, err
 	}
 	if response.StatusCode >= http.StatusBadRequest {
-		return nil, fmt.Errorf("开奖同步失败: %s", string(body))
+		requestErr := fmt.Errorf("开奖同步失败: %s", string(body))
+		logThirdPartyFailure("jisuapi", http.MethodGet, requestURL, map[string]any{
+			"url": maskURL(requestURL),
+		}, body, response.StatusCode, startedAt, requestErr)
+		return nil, requestErr
 	}
 
 	parsed := jisuResponse{}
 	if err := json.Unmarshal(body, &parsed); err != nil {
+		logThirdPartyFailure("jisuapi", http.MethodGet, requestURL, map[string]any{
+			"url": maskURL(requestURL),
+		}, body, response.StatusCode, startedAt, err)
 		return nil, err
 	}
 	if parsed.Status != 0 {
-		return nil, fmt.Errorf("开奖同步失败: %s", parsed.Msg)
+		requestErr := fmt.Errorf("开奖同步失败: %s", parsed.Msg)
+		logThirdPartyFailure("jisuapi", http.MethodGet, requestURL, map[string]any{
+			"url": maskURL(requestURL),
+		}, body, response.StatusCode, startedAt, requestErr)
+		return nil, requestErr
 	}
+	logThirdPartySuccess("jisuapi", http.MethodGet, requestURL, map[string]any{
+		"url": maskURL(requestURL),
+	}, body, response.StatusCode, startedAt)
 	return &parsed, nil
 }
 

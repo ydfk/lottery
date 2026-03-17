@@ -27,16 +27,30 @@ export interface RecommendationEntry {
   blueNumbers: string;
   confidence: number;
   reason: string;
+  isWinning: boolean;
+  prizeName: string;
+  prizeAmount: number;
+  matchSummary: string;
 }
 
 export interface Recommendation {
   id: string;
+  lotteryCode: string;
   issue: string;
   provider: string;
   model: string;
+  strategy: string;
+  promptVersion: string;
   summary: string;
   basis: string;
+  checkedAt?: string;
+  prizeAmount: number;
+  createdAt: string;
   entries: RecommendationEntry[];
+  entryCount?: number;
+  winningCount?: number;
+  isPurchased?: boolean;
+  purchasedTicket?: Ticket;
 }
 
 export interface TicketEntry {
@@ -44,6 +58,7 @@ export interface TicketEntry {
   sequence: number;
   redNumbers: string;
   blueNumbers: string;
+  multiple: number;
   isWinning: boolean;
   prizeName: string;
   prizeAmount: number;
@@ -52,11 +67,14 @@ export interface TicketEntry {
 
 export interface Ticket {
   id: string;
+  lotteryCode: string;
+  recommendationId?: string;
   issue: string;
   status: string;
   costAmount: number;
   prizeAmount: number;
   purchasedAt: string;
+  drawDate?: string;
   recognizedText: string;
   imageUrl: string;
   entries: TicketEntry[];
@@ -65,6 +83,7 @@ export interface Ticket {
 export interface ParsedEntry {
   red: number[];
   blue: number[];
+  multiple: number;
 }
 
 export interface TicketUpload {
@@ -82,6 +101,7 @@ export interface TicketUpload {
 
 export interface TicketRecognitionDraft {
   upload: TicketUpload;
+  lotteryCode: string;
   issue: string;
   rawText: string;
   confidence: number;

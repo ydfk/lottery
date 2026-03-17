@@ -176,6 +176,8 @@ definitions:
         type: boolean
       matchSummary:
         type: string
+      multiple:
+        type: integer
       prizeAmount:
         type: number
       prizeName:
@@ -188,20 +190,6 @@ definitions:
         type: string
       updatedAt:
         description: 指定为自动更新时间
-        type: string
-    type: object
-  go-fiber-starter_internal_model_user.User:
-    properties:
-      createdAt:
-        description: 指定为自动创建时间
-        type: string
-      id:
-        type: string
-      updatedAt:
-        description: 指定为自动更新时间
-        type: string
-      username:
-        example: admin
         type: string
     type: object
   go-fiber-starter_internal_service_lottery.BatchSyncResult:
@@ -243,10 +231,57 @@ definitions:
         items:
           type: integer
         type: array
+      multiple:
+        type: integer
       red:
         items:
           type: integer
         type: array
+    type: object
+  go-fiber-starter_internal_service_lottery.RecommendationDetail:
+    properties:
+      basis:
+        type: string
+      checkedAt:
+        type: string
+      createdAt:
+        description: 指定为自动创建时间
+        type: string
+      entries:
+        items:
+          $ref: '#/definitions/go-fiber-starter_internal_model_lottery.RecommendationEntry'
+        type: array
+      entryCount:
+        type: integer
+      id:
+        type: string
+      isPurchased:
+        type: boolean
+      issue:
+        type: string
+      lotteryCode:
+        type: string
+      model:
+        type: string
+      prizeAmount:
+        type: number
+      promptVersion:
+        type: string
+      provider:
+        type: string
+      purchasedTicket:
+        $ref: '#/definitions/go-fiber-starter_internal_service_lottery.TicketDetail'
+      rawPayload:
+        type: string
+      strategy:
+        type: string
+      summary:
+        type: string
+      updatedAt:
+        description: 指定为自动更新时间
+        type: string
+      winningCount:
+        type: integer
     type: object
   go-fiber-starter_internal_service_lottery.SyncResult:
     properties:
@@ -265,6 +300,8 @@ definitions:
         type: number
       createdAt:
         description: 指定为自动创建时间
+        type: string
+      drawDate:
         type: string
       entries:
         items:
@@ -288,6 +325,8 @@ definitions:
         type: string
       recognizedText:
         type: string
+      recommendationId:
+        type: string
       source:
         type: string
       status:
@@ -305,6 +344,8 @@ definitions:
           $ref: '#/definitions/go-fiber-starter_internal_service_lottery.ParsedEntry'
         type: array
       issue:
+        type: string
+      lotteryCode:
         type: string
       rawText:
         type: string
@@ -386,13 +427,22 @@ definitions:
         example: "2026-03-16T10:00:00Z"
         type: string
     type: object
+  internal_api_auth.UserData:
+    properties:
+      id:
+        example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+        type: string
+      username:
+        example: alice
+        type: string
+    type: object
   internal_api_auth.UserResponse:
     properties:
       code:
         example: 200
         type: integer
       data:
-        $ref: '#/definitions/go-fiber-starter_internal_model_user.User'
+        $ref: '#/definitions/internal_api_auth.UserData'
       flag:
         example: true
         type: boolean
@@ -418,6 +468,8 @@ definitions:
     properties:
       blueNumbers:
         type: string
+      multiple:
+        type: integer
       redNumbers:
         type: string
     type: object
@@ -432,6 +484,8 @@ definitions:
       notes:
         type: string
       purchasedAt:
+        type: string
+      recommendationId:
         type: string
       uploadId:
         type: string
@@ -491,6 +545,36 @@ definitions:
       ocrText:
         type: string
       uploadId:
+        type: string
+    type: object
+  internal_api_lottery.RecommendationDetailResponse:
+    properties:
+      code:
+        example: 200
+        type: integer
+      data:
+        $ref: '#/definitions/go-fiber-starter_internal_service_lottery.RecommendationDetail'
+      flag:
+        example: true
+        type: boolean
+      time:
+        example: "2026-03-16T10:00:00Z"
+        type: string
+    type: object
+  internal_api_lottery.RecommendationListResponse:
+    properties:
+      code:
+        example: 200
+        type: integer
+      data:
+        items:
+          $ref: '#/definitions/go-fiber-starter_internal_service_lottery.RecommendationDetail'
+        type: array
+      flag:
+        example: true
+        type: boolean
+      time:
+        example: "2026-03-16T10:00:00Z"
         type: string
     type: object
   internal_api_lottery.RecommendationResponse:
@@ -778,6 +862,65 @@ paths:
       summary: 同步单种彩票历史开奖
       tags:
       - lottery
+  /lotteries/{code}/recommendations:
+    get:
+      description: 返回指定彩票最近生成的推荐记录列表，包含是否已记录购买票据
+      parameters:
+      - description: 彩票编码，如 ssq、dlt
+        in: path
+        name: code
+        required: true
+        type: string
+      - description: 返回数量，默认 20
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_api_lottery.RecommendationListResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_api_lottery.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取推荐列表
+      tags:
+      - lottery
+  /lotteries/{code}/recommendations/{recommendationId}:
+    get:
+      description: 返回指定推荐记录的完整号码、命中情况和购买关联信息
+      parameters:
+      - description: 彩票编码，如 ssq、dlt
+        in: path
+        name: code
+        required: true
+        type: string
+      - description: 推荐记录 ID
+        in: path
+        name: recommendationId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_api_lottery.RecommendationDetailResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_api_lottery.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取推荐详情
+      tags:
+      - lottery
   /lotteries/{code}/recommendations/generate:
     post:
       consumes:
@@ -1042,6 +1185,116 @@ paths:
       security:
       - BearerAuth: []
       summary: 批量同步多种彩票历史开奖
+      tags:
+      - lottery
+  /lotteries/tickets:
+    get:
+      description: 返回最近录入的全部票据记录，适合在不预先区分彩种的记录页使用
+      parameters:
+      - description: 返回数量，默认 20
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_api_lottery.TicketListResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_api_lottery.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取全部票据列表
+      tags:
+      - lottery
+    post:
+      consumes:
+      - application/json
+      description: 基于上传记录和识别结果确认票据入库，彩种由识别结果或推荐记录自动决定
+      parameters:
+      - description: 入库参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_lottery.CreateTicketRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/internal_api_lottery.TicketDetailResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_api_lottery.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 通用票据入库并判奖
+      tags:
+      - lottery
+  /lotteries/tickets/recognize:
+    post:
+      consumes:
+      - application/json
+      description: 基于已上传原图执行 OCR 识别，并自动判断彩票类型
+      parameters:
+      - description: 识别参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_lottery.RecognizeTicketRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_api_lottery.TicketRecognitionResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_api_lottery.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 识别通用彩票内容
+      tags:
+      - lottery
+  /lotteries/tickets/upload-image:
+    post:
+      consumes:
+      - multipart/form-data
+      description: 上传时不要求先知道彩票类型，图片会在识别阶段自动判断彩种
+      parameters:
+      - description: 彩票图片
+        in: formData
+        name: image
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/internal_api_lottery.TicketUploadResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_api_lottery.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_api_lottery.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 上传通用彩票原图
       tags:
       - lottery
 securityDefinitions:

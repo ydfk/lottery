@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { NumberBalls } from "./number-balls";
+import { getLotteryDisplayName } from "@/lib/lottery-display";
 import type { Ticket } from "@/types/lottery";
 import { format } from "date-fns";
 
@@ -24,10 +25,17 @@ export function TicketCard({ ticket }: { ticket: Ticket }) {
     <Card className="border-white/60 bg-white/80 backdrop-blur">
       <CardHeader className="flex flex-row items-start justify-between gap-4">
         <div>
-          <CardTitle className="text-base text-slate-900">第 {ticket.issue} 期</CardTitle>
+          <CardTitle className="text-base text-slate-900">
+            {getLotteryDisplayName(ticket.lotteryCode)} · 第 {ticket.issue} 期
+          </CardTitle>
           <p className="mt-1 text-xs text-slate-500">
             {format(new Date(ticket.purchasedAt), "yyyy-MM-dd HH:mm")}
           </p>
+          {ticket.drawDate && (
+            <p className="mt-1 text-xs text-slate-500">
+              开奖日期 {format(new Date(ticket.drawDate), "yyyy-MM-dd")}
+            </p>
+          )}
         </div>
         <Badge variant={ticket.status === "won" ? "default" : "secondary"}>
           {statusLabelMap[ticket.status] || ticket.status}
@@ -66,7 +74,9 @@ export function TicketCard({ ticket }: { ticket: Ticket }) {
         {ticket.entries.map((entry) => (
           <div key={entry.id} className="rounded-2xl bg-slate-50 p-3">
             <div className="flex items-center justify-between gap-3">
-              <span className="text-sm font-medium text-slate-600">第 {entry.sequence} 注</span>
+              <span className="text-sm font-medium text-slate-600">
+                第 {entry.sequence} 注 · {entry.multiple || 1} 倍
+              </span>
               <span className="text-sm text-slate-500">{entry.matchSummary || "待开奖"}</span>
             </div>
             <div className="mt-3">
@@ -79,9 +89,15 @@ export function TicketCard({ ticket }: { ticket: Ticket }) {
           </div>
         ))}
 
-        <div className="flex items-center justify-between border-t border-dashed border-slate-200 pt-3 text-sm">
-          <span className="text-slate-500">票据总金额</span>
-          <span className="font-semibold text-slate-900">¥ {ticket.prizeAmount.toFixed(2)}</span>
+        <div className="grid gap-3 border-t border-dashed border-slate-200 pt-3 text-sm sm:grid-cols-2">
+          <div className="flex items-center justify-between">
+            <span className="text-slate-500">花费金额</span>
+            <span className="font-semibold text-slate-900">¥ {ticket.costAmount.toFixed(2)}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-slate-500">中奖金额</span>
+            <span className="font-semibold text-slate-900">¥ {ticket.prizeAmount.toFixed(2)}</span>
+          </div>
         </div>
       </CardContent>
     </Card>

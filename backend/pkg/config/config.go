@@ -48,16 +48,15 @@ type AIConnectionConfig struct {
 }
 
 type VisionConnectionConfig struct {
-	Provider       string   `mapstructure:"provider"`
-	Model          string   `mapstructure:"model"`
-	Prompt         string   `mapstructure:"prompt"`
-	BaseURL        string   `mapstructure:"baseURL"`
-	APIKey         string   `mapstructure:"apiKey"`
-	Command        string   `mapstructure:"command"`
-	Args           []string `mapstructure:"args"`
-	Lang           string   `mapstructure:"lang"`
-	UseAngleCls    bool     `mapstructure:"useAngleCls"`
-	TimeoutSeconds int      `mapstructure:"timeoutSeconds"`
+	Provider                  string `mapstructure:"provider"`
+	Model                     string `mapstructure:"model"`
+	Prompt                    string `mapstructure:"prompt"`
+	BaseURL                   string `mapstructure:"baseURL"`
+	APIKey                    string `mapstructure:"apiKey"`
+	TimeoutSeconds            int    `mapstructure:"timeoutSeconds"`
+	UseDocOrientationClassify bool   `mapstructure:"useDocOrientationClassify"`
+	UseDocUnwarping           bool   `mapstructure:"useDocUnwarping"`
+	UseChartRecognition       bool   `mapstructure:"useChartRecognition"`
 }
 
 type LotteryConfig struct {

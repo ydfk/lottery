@@ -15,9 +15,10 @@ import (
 )
 
 var (
-	jsonFencePattern = regexp.MustCompile("(?s)```json\\s*(.*?)\\s*```")
-	issuePattern     = regexp.MustCompile(`20\d{5}`)
-	numberPattern    = regexp.MustCompile(`\d{1,2}`)
+	jsonFencePattern     = regexp.MustCompile("(?s)```json\\s*(.*?)\\s*```")
+	issuePattern         = regexp.MustCompile(`20\d{5}`)
+	numberPattern        = regexp.MustCompile(`\d{1,2}`)
+	entryMultiplePattern = regexp.MustCompile(`[（(]\s*(\d+)\s*[)）]`)
 )
 
 func mustJSON(value any) string {
@@ -55,6 +56,19 @@ func normalizeText(text string) string {
 		"：", " ",
 	)
 	return replacer.Replace(text)
+}
+
+func parseEntryMultiple(text string) int {
+	matches := entryMultiplePattern.FindStringSubmatch(text)
+	if len(matches) != 2 {
+		return 1
+	}
+
+	value, err := strconv.Atoi(matches[1])
+	if err != nil || value <= 0 {
+		return 1
+	}
+	return value
 }
 
 func parseFloat(value any) float64 {

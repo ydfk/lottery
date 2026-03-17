@@ -36,14 +36,16 @@ type RecognizeTicketRequest struct {
 type CreateTicketEntryRequest struct {
 	RedNumbers  string `json:"redNumbers"`
 	BlueNumbers string `json:"blueNumbers"`
+	Multiple    int    `json:"multiple"`
 }
 
 type CreateTicketRequest struct {
-	UploadID    string                     `json:"uploadId"`
-	Issue       string                     `json:"issue"`
-	PurchasedAt string                     `json:"purchasedAt"`
-	Notes       string                     `json:"notes"`
-	Entries     []CreateTicketEntryRequest `json:"entries"`
+	UploadID         string                     `json:"uploadId"`
+	RecommendationID string                     `json:"recommendationId"`
+	Issue            string                     `json:"issue"`
+	PurchasedAt      string                     `json:"purchasedAt"`
+	Notes            string                     `json:"notes"`
+	Entries          []CreateTicketEntryRequest `json:"entries"`
 }
 
 // @Summary 获取已启用彩票列表
@@ -79,6 +81,25 @@ func GetDashboard(c *fiber.Ctx) error {
 	return response.Success(c, data)
 }
 
+// @Summary 获取推荐列表
+// @Description 返回指定彩票最近生成的推荐记录列表，包含是否已记录购买票据
+// @Tags lottery
+// @Produce json
+// @Security BearerAuth
+// @Param code path string true "彩票编码，如 ssq、dlt"
+// @Param limit query int false "返回数量，默认 20"
+// @Success 200 {object} RecommendationListResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /lotteries/{code}/recommendations [get]
+func ListRecommendations(c *fiber.Ctx) error {
+	limit, _ := strconv.Atoi(c.Query("limit", "20"))
+	data, err := lotteryService.ListRecommendations(c.Params("code"), limit)
+	if err != nil {
+		return err
+	}
+	return response.Success(c, data)
+}
+
 // @Summary 获取最新推荐
 // @Description 返回指定彩票最近一次生成的推荐号码
 // @Tags lottery
@@ -90,6 +111,24 @@ func GetDashboard(c *fiber.Ctx) error {
 // @Router /lotteries/{code}/recommendations/latest [get]
 func GetLatestRecommendation(c *fiber.Ctx) error {
 	data, err := lotteryService.GetLatestRecommendation(c.Params("code"))
+	if err != nil {
+		return err
+	}
+	return response.Success(c, data)
+}
+
+// @Summary 获取推荐详情
+// @Description 返回指定推荐记录的完整号码、命中情况和购买关联信息
+// @Tags lottery
+// @Produce json
+// @Security BearerAuth
+// @Param code path string true "彩票编码，如 ssq、dlt"
+// @Param recommendationId path string true "推荐记录 ID"
+// @Success 200 {object} RecommendationDetailResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /lotteries/{code}/recommendations/{recommendationId} [get]
+func GetRecommendationDetail(c *fiber.Ctx) error {
+	data, err := lotteryService.GetRecommendationDetail(c.Params("code"), c.Params("recommendationId"))
 	if err != nil {
 		return err
 	}
@@ -206,6 +245,24 @@ func ListTickets(c *fiber.Ctx) error {
 	return response.Success(c, items)
 }
 
+// @Summary 获取全部票据列表
+// @Description 返回最近录入的全部票据记录，适合在不预先区分彩种的记录页使用
+// @Tags lottery
+// @Produce json
+// @Security BearerAuth
+// @Param limit query int false "返回数量，默认 20"
+// @Success 200 {object} TicketListResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /lotteries/tickets [get]
+func ListAllTickets(c *fiber.Ctx) error {
+	limit, _ := strconv.Atoi(c.Query("limit", "20"))
+	items, err := lotteryService.ListAllTickets(limit)
+	if err != nil {
+		return err
+	}
+	return response.Success(c, items)
+}
+
 // @Summary 上传彩票原图
 // @Description 仅上传并保存彩票原图，不执行 OCR 和入库
 // @Tags lottery
@@ -226,6 +283,33 @@ func UploadTicketImage(c *fiber.Ctx) error {
 
 	data, err := lotteryService.UploadTicketImage(lotteryService.UploadTicketImageInput{
 		Code:             c.Params("code"),
+		ImagePath:        imagePath,
+		OriginalFilename: file.Filename,
+	})
+	if err != nil {
+		return err
+	}
+	return response.Success(c, data, fiber.StatusCreated)
+}
+
+// @Summary 上传通用彩票原图
+// @Description 上传时不要求先知道彩票类型，图片会在识别阶段自动判断彩种
+// @Tags lottery
+// @Accept mpfd
+// @Produce json
+// @Security BearerAuth
+// @Param image formData file true "彩票图片"
+// @Success 201 {object} TicketUploadResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /lotteries/tickets/upload-image [post]
+func UploadGenericTicketImage(c *fiber.Ctx) error {
+	file, imagePath, err := saveTicketImage(c)
+	if err != nil {
+		return err
+	}
+
+	data, err := lotteryService.UploadTicketImage(lotteryService.UploadTicketImageInput{
 		ImagePath:        imagePath,
 		OriginalFilename: file.Filename,
 	})
@@ -263,6 +347,32 @@ func RecognizeTicket(c *fiber.Ctx) error {
 	return response.Success(c, data)
 }
 
+// @Summary 识别通用彩票内容
+// @Description 基于已上传原图执行 OCR 识别，并自动判断彩票类型
+// @Tags lottery
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body RecognizeTicketRequest true "识别参数"
+// @Success 200 {object} TicketRecognitionResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /lotteries/tickets/recognize [post]
+func RecognizeGenericTicket(c *fiber.Ctx) error {
+	request := RecognizeTicketRequest{}
+	if err := c.BodyParser(&request); err != nil {
+		return response.Error(c, "参数不正确", fiber.StatusBadRequest)
+	}
+
+	data, err := lotteryService.RecognizeUploadedTicket(c.Context(), lotteryService.RecognizeUploadedTicketInput{
+		UploadID: request.UploadID,
+		OCRText:  request.OCRText,
+	})
+	if err != nil {
+		return err
+	}
+	return response.Success(c, data)
+}
+
 // @Summary 确认入库并判奖
 // @Description 基于上传记录和识别结果确认票据入库，并在已开奖时自动判奖
 // @Tags lottery
@@ -287,12 +397,49 @@ func CreateTicket(c *fiber.Ctx) error {
 	}
 
 	data, err := lotteryService.CreateTicket(c.Context(), lotteryService.CreateTicketInput{
-		Code:        c.Params("code"),
-		UploadID:    request.UploadID,
-		Issue:       request.Issue,
-		PurchasedAt: purchasedAt,
-		Notes:       request.Notes,
-		Entries:     entries,
+		Code:             c.Params("code"),
+		UploadID:         request.UploadID,
+		RecommendationID: request.RecommendationID,
+		Issue:            request.Issue,
+		PurchasedAt:      purchasedAt,
+		Notes:            request.Notes,
+		Entries:          entries,
+	})
+	if err != nil {
+		return err
+	}
+	return response.Success(c, data, fiber.StatusCreated)
+}
+
+// @Summary 通用票据入库并判奖
+// @Description 基于上传记录和识别结果确认票据入库，彩种由识别结果或推荐记录自动决定
+// @Tags lottery
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body CreateTicketRequest true "入库参数"
+// @Success 201 {object} TicketDetailResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /lotteries/tickets [post]
+func CreateGenericTicket(c *fiber.Ctx) error {
+	request := CreateTicketRequest{}
+	if err := c.BodyParser(&request); err != nil {
+		return response.Error(c, "参数不正确", fiber.StatusBadRequest)
+	}
+
+	purchasedAt, _ := time.Parse(time.RFC3339, request.PurchasedAt)
+	entries, err := parseCreateTicketEntries(request.Entries)
+	if err != nil {
+		return response.Error(c, err.Error(), fiber.StatusBadRequest)
+	}
+
+	data, err := lotteryService.CreateTicket(c.Context(), lotteryService.CreateTicketInput{
+		UploadID:         request.UploadID,
+		RecommendationID: request.RecommendationID,
+		Issue:            request.Issue,
+		PurchasedAt:      purchasedAt,
+		Notes:            request.Notes,
+		Entries:          entries,
 	})
 	if err != nil {
 		return err
@@ -369,8 +516,9 @@ func parseCreateTicketEntries(items []CreateTicketEntryRequest) ([]lotteryServic
 			return nil, fmt.Errorf("每注号码都需要包含 redNumbers 和 blueNumbers")
 		}
 		result = append(result, lotteryService.ParsedEntry{
-			Red:  parseCSVValues(item.RedNumbers),
-			Blue: parseCSVValues(item.BlueNumbers),
+			Red:      parseCSVValues(item.RedNumbers),
+			Blue:     parseCSVValues(item.BlueNumbers),
+			Multiple: item.Multiple,
 		})
 	}
 	return result, nil

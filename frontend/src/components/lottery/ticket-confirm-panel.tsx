@@ -26,7 +26,8 @@ function buildEntryText(recognitionDraft: TicketRecognitionDraft | null) {
     .map((entry) => {
       const red = entry.red.map((value) => value.toString().padStart(2, "0")).join(",");
       const blue = entry.blue.map((value) => value.toString().padStart(2, "0")).join(",");
-      return `${red}+${blue}`;
+      const multiple = entry.multiple > 1 ? ` (${entry.multiple})` : "";
+      return `${red}+${blue}${multiple}`;
     })
     .join("\n");
 }
@@ -50,12 +51,12 @@ export function TicketConfirmPanel(props: TicketConfirmPanelProps) {
     <Card className="border-white/60 bg-white/85 backdrop-blur">
       <CardHeader>
         <CardTitle className="text-slate-900">确认入库</CardTitle>
-        <p className="text-sm text-slate-500">第三步确认期号、号码和备注，提交后正式入库并自动判奖。</p>
+        <p className="text-sm text-slate-500">确认并保存</p>
       </CardHeader>
       <CardContent className="space-y-5">
         {!recognitionDraft ? (
           <div className="rounded-[1.5rem] border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-500">
-            请先完成“识别校对”，确认有可用号码后再入库。
+            先完成识别
           </div>
         ) : (
           <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
@@ -63,7 +64,7 @@ export function TicketConfirmPanel(props: TicketConfirmPanelProps) {
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700">期号</label>
                 <Input
-                  placeholder="可手动修正期号"
+                  placeholder="期号"
                   value={issue}
                   onChange={(event) => onIssueChange(event.target.value)}
                 />
@@ -71,14 +72,11 @@ export function TicketConfirmPanel(props: TicketConfirmPanelProps) {
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700">备注</label>
                 <Textarea
-                  placeholder="例如购买门店、机选/自选说明"
+                  placeholder="备注"
                   className="min-h-24 bg-white"
                   value={notes}
                   onChange={(event) => onNotesChange(event.target.value)}
                 />
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600">
-                提交后会把原图、识别文本和最终确认的号码一并入库；如果该期已开奖，会立即判奖。
               </div>
             </div>
 
@@ -89,7 +87,7 @@ export function TicketConfirmPanel(props: TicketConfirmPanelProps) {
                   <p className="text-sm font-medium">确认号码</p>
                 </div>
                 <p className="mt-2 text-xs text-slate-500">
-                  每行一注，格式：`01,02,03,04,05,06+07`
+                  每行一注，例如 `01,02,03,04,05,06+07 (2)`
                 </p>
                 <Textarea
                   className="mt-3 min-h-56"

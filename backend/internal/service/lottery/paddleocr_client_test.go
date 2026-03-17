@@ -3,15 +3,21 @@ package lottery
 import "testing"
 
 func TestParsePaddleOCRPayload(t *testing.T) {
-	payload, err := parsePaddleOCRPayload([]byte(`{"rawText":"2026001\n01 02 03 04 05 06 07","confidence":0.91}`))
+	payload, err := parsePaddleOCRPayload([]byte(`{
+		"result": {
+			"layoutParsingResults": [
+				{"markdown": {"text": "2026001\n01 02 03 04 05 06 07"}}
+			]
+		}
+	}`))
 	if err != nil {
 		t.Fatalf("parse payload: %v", err)
 	}
 	if payload.RawText == "" {
 		t.Fatalf("expected raw text")
 	}
-	if payload.Confidence != 0.91 {
-		t.Fatalf("unexpected confidence: %v", payload.Confidence)
+	if len(payload.Lines) != 1 {
+		t.Fatalf("unexpected lines: %d", len(payload.Lines))
 	}
 }
 
@@ -31,5 +37,14 @@ func TestBuildRecognitionFromOCRPayloadForSSQ(t *testing.T) {
 	}
 	if recognized.Confidence != 0.88 {
 		t.Fatalf("unexpected confidence: %v", recognized.Confidence)
+	}
+}
+
+func TestDetectPaddleOCRFileType(t *testing.T) {
+	if fileType := detectPaddleOCRFileType("ticket.jpg"); fileType != 1 {
+		t.Fatalf("unexpected image file type: %d", fileType)
+	}
+	if fileType := detectPaddleOCRFileType("ticket.pdf"); fileType != 0 {
+		t.Fatalf("unexpected pdf file type: %d", fileType)
 	}
 }

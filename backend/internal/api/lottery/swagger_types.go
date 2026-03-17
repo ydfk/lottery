@@ -33,6 +33,20 @@ type RecommendationResponse struct {
 	Time string               `json:"time" example:"2026-03-16T10:00:00Z"`
 }
 
+type RecommendationListResponse struct {
+	Flag bool                                  `json:"flag" example:"true"`
+	Code int                                   `json:"code" example:"200"`
+	Data []lotteryService.RecommendationDetail `json:"data"`
+	Time string                                `json:"time" example:"2026-03-16T10:00:00Z"`
+}
+
+type RecommendationDetailResponse struct {
+	Flag bool                                `json:"flag" example:"true"`
+	Code int                                 `json:"code" example:"200"`
+	Data lotteryService.RecommendationDetail `json:"data"`
+	Time string                              `json:"time" example:"2026-03-16T10:00:00Z"`
+}
+
 type SyncResultResponse struct {
 	Flag bool                      `json:"flag" example:"true"`
 	Code int                       `json:"code" example:"200"`

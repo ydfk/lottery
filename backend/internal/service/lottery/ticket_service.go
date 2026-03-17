@@ -21,7 +21,8 @@ type ScanTicketInput struct {
 
 type TicketDetail struct {
 	model.Ticket
-	ImageURL string `json:"imageUrl"`
+	ImageURL string     `json:"imageUrl"`
+	DrawDate *time.Time `json:"drawDate"`
 }
 
 func ScanTicket(ctx context.Context, input ScanTicketInput) (*TicketDetail, error) {
@@ -52,15 +53,26 @@ func ScanTicket(ctx context.Context, input ScanTicketInput) (*TicketDetail, erro
 	})
 }
 
-func recognizeTicket(ctx context.Context, definition Definition, lotteryType model.LotteryType, imagePath string, ocrText string) (*RecognitionResult, error) {
+func recognizeTicket(ctx context.Context, code string, imagePath string, ocrText string) (*RecognitionResult, error) {
 	if ocrText != "" {
-		if definition.Code != "ssq" {
-			return nil, fmt.Errorf("当前仅支持双色球 OCR 文本识别")
+		if code != "" {
+			return ParseLotteryText(code, ocrText)
 		}
-		return ParseSSQText(ocrText)
+		return DetectLotteryByText(ocrText)
 	}
 
-	recognizer := newVisionRecognizer(resolveValue(config.Current.Vision.Provider, lotteryType.VisionProvider))
+	var lotteryType *model.LotteryType
+	provider := config.Current.Vision.Provider
+	if code != "" {
+		typeRecord, err := getLotteryType(code)
+		if err != nil {
+			return nil, err
+		}
+		lotteryType = &typeRecord
+		provider = resolveValue(config.Current.Vision.Provider, typeRecord.VisionProvider)
+	}
+
+	recognizer := newVisionRecognizer(provider)
 	if recognizer == nil {
 		return nil, fmt.Errorf("未配置视觉模型，请填写 OCR 文本作为降级输入")
 	}
@@ -70,13 +82,16 @@ func recognizeTicket(ctx context.Context, definition Definition, lotteryType mod
 		return nil, err
 	}
 	if len(recognized.Entries) == 0 && recognized.RawText != "" {
-		if definition.Code != "ssq" {
-			return nil, fmt.Errorf("当前仅支持双色球自动识别")
+		if code != "" {
+			return ParseLotteryText(code, recognized.RawText)
 		}
-		return ParseSSQText(recognized.RawText)
+		return DetectLotteryByText(recognized.RawText)
 	}
 	if len(recognized.Entries) == 0 {
 		return nil, fmt.Errorf("未从图片中识别到有效号码")
+	}
+	if recognized.LotteryCode == "" && code != "" {
+		recognized.LotteryCode = code
 	}
 	return recognized, nil
 }
@@ -129,9 +144,9 @@ func EvaluateTicket(ticketID string) error {
 		result := JudgeNumbers(ticket.LotteryCode, entry.RedNumbers, entry.BlueNumbers, draw, prizeMap)
 		entry.IsWinning = result.IsWinning
 		entry.PrizeName = result.PrizeName
-		entry.PrizeAmount = result.PrizeAmount
+		entry.PrizeAmount = result.PrizeAmount * float64(max(1, entry.Multiple))
 		entry.MatchSummary = result.MatchSummary
-		totalPrize += result.PrizeAmount
+		totalPrize += entry.PrizeAmount
 		hasWinning = hasWinning || result.IsWinning
 		if err := db.DB.Save(&entry).Error; err != nil {
 			return err
@@ -154,10 +169,7 @@ func GetTicketDetail(ticketID string) (*TicketDetail, error) {
 	if err := db.DB.Preload("Entries").First(&ticket, "id = ?", ticketID).Error; err != nil {
 		return nil, err
 	}
-	return &TicketDetail{
-		Ticket:   ticket,
-		ImageURL: buildPublicImageURL(ticket.ImagePath),
-	}, nil
+	return buildTicketDetail(ticket), nil
 }
 
 func ListTickets(code string, limit int) ([]TicketDetail, error) {
@@ -172,10 +184,39 @@ func ListTickets(code string, limit int) ([]TicketDetail, error) {
 
 	result := make([]TicketDetail, 0, len(tickets))
 	for _, ticket := range tickets {
-		result = append(result, TicketDetail{
-			Ticket:   ticket,
-			ImageURL: buildPublicImageURL(ticket.ImagePath),
-		})
+		result = append(result, *buildTicketDetail(ticket))
 	}
 	return result, nil
+}
+
+func ListAllTickets(limit int) ([]TicketDetail, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+
+	tickets := make([]model.Ticket, 0)
+	if err := db.DB.Preload("Entries").Order("created_at desc").Limit(limit).Find(&tickets).Error; err != nil {
+		return nil, err
+	}
+
+	result := make([]TicketDetail, 0, len(tickets))
+	for _, ticket := range tickets {
+		result = append(result, *buildTicketDetail(ticket))
+	}
+	return result, nil
+}
+
+func buildTicketDetail(ticket model.Ticket) *TicketDetail {
+	detail := &TicketDetail{
+		Ticket:   ticket,
+		ImageURL: buildPublicImageURL(ticket.ImagePath),
+	}
+
+	draw := model.DrawResult{}
+	if err := db.DB.Select("draw_date").Where("lottery_code = ? AND issue = ?", ticket.LotteryCode, ticket.Issue).First(&draw).Error; err == nil {
+		drawDate := draw.DrawDate
+		detail.DrawDate = &drawDate
+	}
+
+	return detail
 }

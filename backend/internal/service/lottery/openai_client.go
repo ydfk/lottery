@@ -95,6 +95,7 @@ func callOpenAICompatible(ctx context.Context, baseURL string, apiKey string, mo
 		return "", fmt.Errorf("未配置 OpenAI 兼容模型")
 	}
 
+	startedAt := time.Now()
 	endpoint := strings.TrimRight(baseURL, "/")
 	if !strings.HasSuffix(endpoint, "/chat/completions") {
 		endpoint += "/chat/completions"
@@ -107,11 +108,13 @@ func callOpenAICompatible(ctx context.Context, baseURL string, apiKey string, mo
 	}
 	rawRequest, err := json.Marshal(requestBody)
 	if err != nil {
+		logThirdPartyFailure("openai-compatible", http.MethodPost, endpoint, buildOpenAIRequestLog(requestBody), nil, 0, startedAt, err)
 		return "", err
 	}
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(rawRequest))
 	if err != nil {
+		logThirdPartyFailure("openai-compatible", http.MethodPost, endpoint, buildOpenAIRequestLog(requestBody), nil, 0, startedAt, err)
 		return "", err
 	}
 	request.Header.Set("Content-Type", "application/json")
@@ -120,25 +123,83 @@ func callOpenAICompatible(ctx context.Context, baseURL string, apiKey string, mo
 	client := &http.Client{Timeout: timeout}
 	response, err := client.Do(request)
 	if err != nil {
+		logThirdPartyFailure("openai-compatible", http.MethodPost, endpoint, buildOpenAIRequestLog(requestBody), nil, 0, startedAt, err)
 		return "", err
 	}
 	defer response.Body.Close()
 
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
+		logThirdPartyFailure("openai-compatible", http.MethodPost, endpoint, buildOpenAIRequestLog(requestBody), nil, response.StatusCode, startedAt, err)
 		return "", err
 	}
 	if response.StatusCode >= http.StatusBadRequest {
-		return "", fmt.Errorf("模型请求失败: %s", string(body))
+		requestErr := fmt.Errorf("模型请求失败: %s", string(body))
+		logThirdPartyFailure("openai-compatible", http.MethodPost, endpoint, buildOpenAIRequestLog(requestBody), body, response.StatusCode, startedAt, requestErr)
+		return "", requestErr
 	}
 
 	parsed := openAIResponse{}
 	if err := json.Unmarshal(body, &parsed); err != nil {
+		logThirdPartyFailure("openai-compatible", http.MethodPost, endpoint, buildOpenAIRequestLog(requestBody), body, response.StatusCode, startedAt, err)
 		return "", err
 	}
 	if len(parsed.Choices) == 0 {
-		return "", fmt.Errorf("模型未返回内容")
+		requestErr := fmt.Errorf("模型未返回内容")
+		logThirdPartyFailure("openai-compatible", http.MethodPost, endpoint, buildOpenAIRequestLog(requestBody), body, response.StatusCode, startedAt, requestErr)
+		return "", requestErr
 	}
 
+	logThirdPartySuccess("openai-compatible", http.MethodPost, endpoint, buildOpenAIRequestLog(requestBody), body, response.StatusCode, startedAt)
 	return stripJSONFence(parsed.Choices[0].Message.Content), nil
+}
+
+func buildOpenAIRequestLog(request openAIRequest) map[string]any {
+	return map[string]any{
+		"model":       request.Model,
+		"temperature": request.Temperature,
+		"messages":    sanitizeOpenAIMessages(request.Messages),
+	}
+}
+
+func sanitizeOpenAIMessages(messages []openAIMessage) []map[string]any {
+	result := make([]map[string]any, 0, len(messages))
+	for _, message := range messages {
+		item := map[string]any{
+			"role": message.Role,
+		}
+
+		switch content := message.Content.(type) {
+		case string:
+			item["content"] = truncateLogValue(content)
+		case []map[string]any:
+			item["content"] = sanitizeOpenAIContentItems(content)
+		default:
+			item["content"] = truncateLogValue(mustJSON(content))
+		}
+		result = append(result, item)
+	}
+	return result
+}
+
+func sanitizeOpenAIContentItems(items []map[string]any) []map[string]any {
+	result := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		cloned := make(map[string]any, len(item))
+		for key, value := range item {
+			cloned[key] = value
+		}
+
+		itemType, _ := cloned["type"].(string)
+		if itemType == "image_url" {
+			cloned["image_url"] = map[string]string{"url": "<base64 omitted>"}
+		}
+		if itemType == "text" {
+			if text, ok := cloned["text"].(string); ok {
+				cloned["text"] = truncateLogValue(text)
+			}
+		}
+		result = append(result, cloned)
+	}
+	return result
 }

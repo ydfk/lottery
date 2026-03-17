@@ -19,7 +19,7 @@ export function TicketUploadPanel(props: TicketUploadPanelProps) {
     <Card className="border-white/60 bg-white/85 backdrop-blur">
       <CardHeader>
         <CardTitle className="text-slate-900">上传原图</CardTitle>
-        <p className="text-sm text-slate-500">第一步只负责保存原图，不做 OCR，不做入库。</p>
+        <p className="text-sm text-slate-500">上传票据照片</p>
       </CardHeader>
       <CardContent className="space-y-5">
         <div className="grid gap-4 md:grid-cols-[1fr_0.9fr]">
@@ -44,13 +44,6 @@ export function TicketUploadPanel(props: TicketUploadPanelProps) {
 
           <div className="flex flex-col justify-between rounded-[1.75rem] bg-slate-50 p-5">
             <div className="space-y-4">
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                <p className="text-sm font-medium text-slate-700">当前阶段</p>
-                <p className="mt-2 text-sm leading-6 text-slate-500">
-                  上传成功后会拿到 `uploadId`，后续识别和入库都基于这条上传记录继续。
-                </p>
-              </div>
-
               {selectedImage && (
                 <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
                   已选择：{selectedImage.name}
@@ -59,11 +52,11 @@ export function TicketUploadPanel(props: TicketUploadPanelProps) {
 
               {uploadedTicket && (
                 <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <p className="text-sm font-medium text-slate-700">最近上传</p>
+                  <p className="text-sm font-medium text-slate-700">已上传</p>
                   <p className="mt-2 break-all text-xs text-slate-500">uploadId: {uploadedTicket.id}</p>
                   <div className="mt-3 flex items-center gap-2 text-sm text-slate-600">
                     <ScanLine className="size-4" />
-                    原图已保存，可继续进入识别校对
+                    可继续识别
                   </div>
                 </div>
               )}

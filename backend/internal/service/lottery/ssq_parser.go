@@ -6,16 +6,28 @@ import (
 	"strings"
 )
 
+type ssqRecognitionParser struct{}
+
+func (ssqRecognitionParser) Code() string {
+	return "ssq"
+}
+
+func (ssqRecognitionParser) ParseText(text string) (*RecognitionResult, error) {
+	return ParseSSQText(text)
+}
+
 type ParsedEntry struct {
-	Red  []int `json:"red"`
-	Blue []int `json:"blue"`
+	Red      []int `json:"red"`
+	Blue     []int `json:"blue"`
+	Multiple int   `json:"multiple"`
 }
 
 type RecognitionResult struct {
-	Issue      string        `json:"issue"`
-	RawText    string        `json:"rawText"`
-	Confidence float64       `json:"confidence"`
-	Entries    []ParsedEntry `json:"entries"`
+	LotteryCode string        `json:"lotteryCode"`
+	Issue       string        `json:"issue"`
+	RawText     string        `json:"rawText"`
+	Confidence  float64       `json:"confidence"`
+	Entries     []ParsedEntry `json:"entries"`
 }
 
 func ParseSSQText(text string) (*RecognitionResult, error) {
@@ -34,14 +46,17 @@ func ParseSSQText(text string) (*RecognitionResult, error) {
 	}
 
 	return &RecognitionResult{
-		Issue:      parseIssue(text),
-		RawText:    text,
-		Confidence: 0.6,
-		Entries:    uniqueEntries(entries),
+		LotteryCode: "ssq",
+		Issue:       parseIssue(text),
+		RawText:     text,
+		Confidence:  0.6,
+		Entries:     normalizeParsedEntriesList(entries),
 	}, nil
 }
 
 func parseSSQLine(line string) []ParsedEntry {
+	multiple := parseEntryMultiple(line)
+	line = entryMultiplePattern.ReplaceAllString(line, " ")
 	tokens := numberPattern.FindAllString(line, -1)
 	if len(tokens) < 7 {
 		return nil
@@ -62,8 +77,9 @@ func parseSSQLine(line string) []ParsedEntry {
 		blue := numbers[index+6]
 		if isValidSSQEntry(red, blue) {
 			entries = append(entries, ParsedEntry{
-				Red:  red,
-				Blue: []int{blue},
+				Red:      red,
+				Blue:     []int{blue},
+				Multiple: multiple,
 			})
 			index += 7
 			continue
@@ -85,18 +101,17 @@ func isValidSSQEntry(red []int, blue int) bool {
 	return blue >= 1 && blue <= 16
 }
 
-func uniqueEntries(entries []ParsedEntry) []ParsedEntry {
-	seen := make(map[string]struct{}, len(entries))
+func normalizeParsedEntriesList(entries []ParsedEntry) []ParsedEntry {
 	result := make([]ParsedEntry, 0, len(entries))
 	for _, entry := range entries {
-		key := formatNumbers(entry.Red) + "|" + formatNumbers(entry.Blue)
-		if _, ok := seen[key]; ok {
-			continue
+		multiple := entry.Multiple
+		if multiple <= 0 {
+			multiple = 1
 		}
-		seen[key] = struct{}{}
 		result = append(result, ParsedEntry{
-			Red:  parseCSVNumbers(formatNumbers(entry.Red)),
-			Blue: parseCSVNumbers(formatNumbers(entry.Blue)),
+			Red:      parseCSVNumbers(formatNumbers(entry.Red)),
+			Blue:     parseCSVNumbers(formatNumbers(entry.Blue)),
+			Multiple: multiple,
 		})
 	}
 	return result

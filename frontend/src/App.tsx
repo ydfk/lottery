@@ -1,35 +1,21 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
-import {
-  ClipboardCheck,
-  ImageUp,
-  LogOut,
-  RefreshCw,
-  ScanSearch,
-  Sparkles,
-  Ticket,
-  Trophy,
-} from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import { History, LayoutDashboard, ReceiptText, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { AuthPanel, type AuthMode } from "@/components/lottery/auth-panel";
-import { TicketConfirmPanel } from "@/components/lottery/ticket-confirm-panel";
-import { TicketRecognitionPanel } from "@/components/lottery/ticket-recognition-panel";
-import { TicketUploadPanel } from "@/components/lottery/ticket-upload-panel";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { NumberBalls } from "@/components/lottery/number-balls";
-import { SummaryCard } from "@/components/lottery/summary-card";
-import { TicketCard } from "@/components/lottery/ticket-card";
+import { DashboardPanel } from "@/components/lottery/dashboard-panel";
+import { HistoryPanel } from "@/components/lottery/history-panel";
+import { RecommendationPanel } from "@/components/lottery/recommendation-panel";
+import { RecordPanel } from "@/components/lottery/record-panel";
 import { getStoredToken } from "@/lib/api/client";
 import { getProfile, loginAndStoreToken, logout, register } from "@/lib/api/methods/auth";
 import {
   createTicket,
   formatParsedEntry,
-  generateRecommendation,
+  getAllTickets,
   getDashboard,
-  getTickets,
+  getRecommendationDetail,
+  getRecommendations,
   recognizeTicket,
-  syncDraws,
   uploadTicketImage,
 } from "@/lib/api/methods/lottery";
 import type { AuthUser } from "@/types/auth";
@@ -42,27 +28,28 @@ import type {
   TicketUpload,
 } from "@/types/lottery";
 
-type TabKey = "dashboard" | "upload" | "recognize" | "confirm" | "tickets" | "recommendation";
+type TabKey = "dashboard" | "recommendation" | "records" | "history";
 
-const tabs: { key: TabKey; label: string; icon: typeof Sparkles }[] = [
-  { key: "dashboard", label: "看板", icon: Trophy },
-  { key: "upload", label: "上传原图", icon: ImageUp },
-  { key: "recognize", label: "识别校对", icon: ScanSearch },
-  { key: "confirm", label: "确认入库", icon: ClipboardCheck },
-  { key: "tickets", label: "票据记录", icon: Ticket },
-  { key: "recommendation", label: "推荐中心", icon: Sparkles },
+const tabs: { key: TabKey; label: string; icon: typeof LayoutDashboard }[] = [
+  { key: "dashboard", label: "看板", icon: LayoutDashboard },
+  { key: "recommendation", label: "推荐", icon: Sparkles },
+  { key: "records", label: "记录", icon: ReceiptText },
+  { key: "history", label: "历史", icon: History },
 ];
 
-function formatCurrency(value: number) {
-  return `¥ ${value.toFixed(2)}`;
-}
-
-function buildEntryText(entries: ParsedEntry[]) {
+function buildParsedEntryText(entries: ParsedEntry[]) {
   return entries
     .map((entry) => {
       const { redNumbers, blueNumbers } = formatParsedEntry(entry);
-      return `${redNumbers}+${blueNumbers}`;
+      const multiple = entry.multiple > 1 ? ` (${entry.multiple})` : "";
+      return `${redNumbers}+${blueNumbers}${multiple}`;
     })
+    .join("\n");
+}
+
+function buildRecommendationEntryText(recommendation: Recommendation) {
+  return recommendation.entries
+    .map((entry) => `${entry.redNumbers}+${entry.blueNumbers}`)
     .join("\n");
 }
 
@@ -72,7 +59,10 @@ function parseEntryText(value: string) {
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      const [redPart, bluePart] = line.split("+");
+      const multipleMatch = line.match(/[（(]\s*(\d+)\s*[)）]\s*$/);
+      const multiple = multipleMatch ? Number(multipleMatch[1]) : 1;
+      const normalizedLine = line.replace(/[（(]\s*\d+\s*[)）]\s*$/, "").trim();
+      const [redPart, bluePart] = normalizedLine.split("+");
       const redNumbers = redPart
         ?.split(",")
         .map((item) => Number(item.trim()))
@@ -81,9 +71,22 @@ function parseEntryText(value: string) {
         ?.split(",")
         .map((item) => Number(item.trim()))
         .filter((item) => Number.isFinite(item)) ?? [];
-      return { red: redNumbers, blue: blueNumbers };
+      return { red: redNumbers, blue: blueNumbers, multiple: multiple > 0 ? multiple : 1 };
     })
     .filter((entry) => entry.red.length > 0 && entry.blue.length > 0);
+}
+
+function replaceRecommendation(
+  items: Recommendation[],
+  nextItem: Recommendation
+) {
+  const nextItems = items.slice();
+  const index = nextItems.findIndex((item) => item.id === nextItem.id);
+  if (index >= 0) {
+    nextItems[index] = nextItem;
+    return nextItems;
+  }
+  return [nextItem, ...nextItems];
 }
 
 export default function App() {
@@ -93,29 +96,31 @@ export default function App() {
   const [authUsername, setAuthUsername] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authPending, setAuthPending] = useState(false);
-  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
-  const [tickets, setTickets] = useState<TicketRecord[]>([]);
-  const [latestRecommendation, setLatestRecommendation] = useState<Recommendation | null>(null);
   const [loading, setLoading] = useState(true);
+  const [detailPending, setDetailPending] = useState(false);
   const [uploadPending, setUploadPending] = useState(false);
   const [recognizePending, setRecognizePending] = useState(false);
   const [submitPending, setSubmitPending] = useState(false);
-  const [actionPending, setActionPending] = useState(false);
+  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [tickets, setTickets] = useState<TicketRecord[]>([]);
+  const [selectedRecommendation, setSelectedRecommendation] = useState<Recommendation | null>(null);
+  const [purchaseRecommendation, setPurchaseRecommendation] = useState<Recommendation | null>(null);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [uploadedTicket, setUploadedTicket] = useState<TicketUpload | null>(null);
   const [recognitionDraft, setRecognitionDraft] = useState<TicketRecognitionDraft | null>(null);
   const [issue, setIssue] = useState("");
-  const [ocrText, setOcrText] = useState("");
+  const [ocrText, setOCRText] = useState("");
   const [notes, setNotes] = useState("");
   const [entryText, setEntryText] = useState("");
-  const [lastScanned, setLastScanned] = useState<TicketRecord | null>(null);
 
   function resetLotteryState() {
     setDashboard(null);
+    setRecommendations([]);
     setTickets([]);
-    setLatestRecommendation(null);
-    setLastScanned(null);
+    setSelectedRecommendation(null);
+    setPurchaseRecommendation(null);
     setActiveTab("dashboard");
   }
 
@@ -125,7 +130,7 @@ export default function App() {
     setUploadedTicket(null);
     setRecognitionDraft(null);
     setIssue("");
-    setOcrText("");
+    setOCRText("");
     setNotes("");
     setEntryText("");
   }
@@ -135,6 +140,7 @@ export default function App() {
       setCurrentUser(null);
       setAuthMode("login");
       resetLotteryState();
+      resetTicketWorkflow();
     }
     toast.error(error instanceof Error ? error.message : fallbackMessage);
   }
@@ -143,10 +149,15 @@ export default function App() {
     if (showLoading) {
       setLoading(true);
     }
+
     try {
-      const [dashboardData, ticketData] = await Promise.all([getDashboard(), getTickets()]);
+      const [dashboardData, recommendationData, ticketData] = await Promise.all([
+        getDashboard(),
+        getRecommendations(),
+        getAllTickets(),
+      ]);
       setDashboard(dashboardData);
-      setLatestRecommendation(dashboardData.latestRecommendation || null);
+      setRecommendations(recommendationData);
       setTickets(ticketData);
     } catch (error) {
       handleRequestError(error, "加载数据失败");
@@ -172,6 +183,7 @@ export default function App() {
       } catch (error) {
         logout();
         resetLotteryState();
+        resetTicketWorkflow();
         toast.error(error instanceof Error ? error.message : "登录已失效，请重新登录");
       } finally {
         setLoading(false);
@@ -191,21 +203,6 @@ export default function App() {
     setPreviewUrl(objectUrl);
     return () => URL.revokeObjectURL(objectUrl);
   }, [selectedImage]);
-
-  const recommendationEntries = useMemo(
-    () => latestRecommendation?.entries ?? dashboard?.latestRecommendation?.entries ?? [],
-    [dashboard?.latestRecommendation?.entries, latestRecommendation?.entries]
-  );
-
-  const workflowStatus = useMemo(() => {
-    if (recognitionDraft) {
-      return { label: "待确认入库", hint: "识别结果已生成，可进入下一步确认号码" };
-    }
-    if (uploadedTicket) {
-      return { label: "待识别", hint: "原图已保存，下一步执行 OCR 识别" };
-    }
-    return { label: "待上传", hint: "从上传原图开始新的录票流程" };
-  }, [recognitionDraft, uploadedTicket]);
 
   async function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -239,42 +236,41 @@ export default function App() {
     toast.success("已退出登录");
   }
 
-  async function handleGenerateRecommendation() {
-    setActionPending(true);
+  async function handleOpenRecommendation(recommendationId: string | null) {
+    if (!recommendationId) {
+      setSelectedRecommendation(null);
+      return;
+    }
+
+    const currentItem = recommendations.find((item) => item.id === recommendationId) || null;
+    setSelectedRecommendation(currentItem);
+    setDetailPending(true);
+
     try {
-      const result = await generateRecommendation(dashboard?.lottery.recommendationCount || 5);
-      setLatestRecommendation(result);
-      toast.success("推荐已生成");
-      await loadData();
-      setActiveTab("recommendation");
+      const detail = await getRecommendationDetail(recommendationId);
+      setSelectedRecommendation(detail);
+      setRecommendations((items) => replaceRecommendation(items, detail));
     } catch (error) {
-      handleRequestError(error, "生成推荐失败");
+      handleRequestError(error, "加载推荐详情失败");
     } finally {
-      setActionPending(false);
+      setDetailPending(false);
     }
   }
 
-  async function handleSyncDraws() {
-    setActionPending(true);
-    try {
-      const result = await syncDraws();
-      toast.success(`开奖同步完成，更新 ${result.syncedCount} 期`);
-      await loadData();
-    } catch (error) {
-      handleRequestError(error, "开奖同步失败");
-    } finally {
-      setActionPending(false);
-    }
+  function handleRecordPurchase(recommendation: Recommendation) {
+    setSelectedRecommendation(null);
+    setPurchaseRecommendation(recommendation);
+    setIssue(recommendation.issue || "");
+    setEntryText(buildRecommendationEntryText(recommendation));
+    setActiveTab("records");
+    toast.success("已切换到记录页，接下来上传这条推荐的购买票据即可");
   }
 
   function handleSelectImage(file: File | null) {
     setSelectedImage(file);
     setUploadedTicket(null);
     setRecognitionDraft(null);
-    setIssue("");
-    setOcrText("");
-    setNotes("");
-    setEntryText("");
+    setOCRText("");
   }
 
   async function handleUploadTicketImage() {
@@ -292,7 +288,6 @@ export default function App() {
       setUploadedTicket(upload);
       setRecognitionDraft(null);
       toast.success("原图上传成功");
-      setActiveTab("recognize");
     } catch (error) {
       handleRequestError(error, "上传原图失败");
     } finally {
@@ -314,10 +309,9 @@ export default function App() {
       });
       setUploadedTicket(draft.upload);
       setRecognitionDraft(draft);
-      setIssue(draft.issue || "");
-      setEntryText(buildEntryText(draft.entries));
-      toast.success("识别完成，请校对号码");
-      setActiveTab("confirm");
+      setIssue(draft.issue || issue);
+      setEntryText(buildParsedEntryText(draft.entries));
+      toast.success("识别完成，请继续校对并入库");
     } catch (error) {
       handleRequestError(error, "识别失败");
     } finally {
@@ -339,18 +333,21 @@ export default function App() {
 
     setSubmitPending(true);
     try {
-      const ticket = await createTicket({
+      await createTicket({
         uploadId: uploadedTicket.id,
+        recommendationId: purchaseRecommendation?.id,
         issue: issue || undefined,
         purchasedAt: new Date().toISOString(),
         notes: notes || undefined,
-        entries: entries.map((entry) => formatParsedEntry(entry)),
+        entries: entries.map((entry) => ({
+          ...formatParsedEntry(entry),
+          multiple: entry.multiple,
+        })),
       });
-      setLastScanned(ticket);
       toast.success("票据已入库并完成判奖检查");
       resetTicketWorkflow();
-      await loadData();
-      setActiveTab("tickets");
+      setPurchaseRecommendation(null);
+      await loadData(false);
     } catch (error) {
       handleRequestError(error, "入库失败");
     } finally {
@@ -384,339 +381,52 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.85),rgba(243,244,246,0.9)_45%,rgba(226,232,240,1))] pb-28">
-      <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 pb-12 pt-4 sm:px-6">
-        <section className="overflow-hidden rounded-[2rem] border border-white/60 bg-[linear-gradient(135deg,rgba(15,23,42,0.95),rgba(37,99,235,0.9)_58%,rgba(224,36,94,0.82))] p-6 text-white shadow-[0_24px_60px_rgba(15,23,42,0.18)]">
-          <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
-            <div className="max-w-2xl">
-              <Badge className="bg-white/15 text-white hover:bg-white/20">双色球 MVP</Badge>
-              <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">
-                彩票管理、AI 推荐与拍照录票一体化
-              </h1>
-              <p className="mt-3 text-sm leading-6 text-white/80 sm:text-base">
-                先围绕福彩双色球建立完整闭环：推荐、购买记录、拍照识别、开奖同步和自动判奖，后续再平滑扩展更多彩种。
-              </p>
-            </div>
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.84),rgba(241,245,249,0.9)_40%,rgba(226,232,240,1))] pb-28">
+      <div className="mx-auto w-full max-w-6xl px-4 pb-10 pt-4 sm:px-6">
+        {activeTab === "dashboard" && (
+          <DashboardPanel currentUser={currentUser} dashboard={dashboard} onLogout={handleLogout} />
+        )}
 
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Button
-                variant="secondary"
-                className="h-11 rounded-2xl bg-white text-slate-900 hover:bg-white/90"
-                onClick={() => void handleGenerateRecommendation()}
-                disabled={actionPending}
-              >
-                <Sparkles className="mr-2 size-4" />
-                生成推荐
-              </Button>
-              <Button
-                className="h-11 rounded-2xl border border-white/20 bg-white/10 text-white hover:bg-white/15"
-                onClick={() => void handleSyncDraws()}
-                disabled={actionPending}
-              >
-                <RefreshCw className="mr-2 size-4" />
-                同步开奖
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                className="h-11 rounded-2xl border border-white/20 bg-white/10 text-white hover:bg-white/15"
-                onClick={handleLogout}
-              >
-                <LogOut className="mr-2 size-4" />
-                {currentUser.username}
-              </Button>
-            </div>
-          </div>
+        {activeTab === "recommendation" && (
+          <RecommendationPanel
+            recommendations={recommendations}
+            selectedRecommendation={selectedRecommendation}
+            detailPending={detailPending}
+            onSelectRecommendation={(recommendationId) => void handleOpenRecommendation(recommendationId)}
+            onRecordPurchase={handleRecordPurchase}
+          />
+        )}
 
-          <div className="mt-8 grid gap-4 md:grid-cols-[1.2fr_0.8fr]">
-            <Card className="border-white/10 bg-white/10 text-white backdrop-blur">
-              <CardHeader>
-                <CardTitle className="text-sm font-medium text-white/75">最近一期开奖</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {dashboard?.latestDraw ? (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-2xl font-semibold">第 {dashboard.latestDraw.issue} 期</p>
-                        <p className="text-sm text-white/70">
-                          奖池 {formatCurrency(dashboard.latestDraw.prizePoolAmount)}
-                        </p>
-                      </div>
-                      <Badge className="bg-white/15 text-white">已同步</Badge>
-                    </div>
-                    <NumberBalls
-                      redNumbers={dashboard.latestDraw.redNumbers}
-                      blueNumbers={dashboard.latestDraw.blueNumbers}
-                    />
-                  </div>
-                ) : (
-                  <p className="text-sm text-white/75">
-                    还没有同步到开奖数据，先点击右上角“同步开奖”。
-                  </p>
-                )}
-              </CardContent>
-            </Card>
+        {activeTab === "records" && (
+          <RecordPanel
+            selectedRecommendation={purchaseRecommendation}
+            previewUrl={previewUrl}
+            selectedImage={selectedImage}
+            uploadPending={uploadPending}
+            uploadedTicket={uploadedTicket}
+            recognitionDraft={recognitionDraft}
+            ocrText={ocrText}
+            recognizePending={recognizePending}
+            issue={issue}
+            notes={notes}
+            entryText={entryText}
+            submitPending={submitPending}
+            onSelectImage={handleSelectImage}
+            onUpload={() => void handleUploadTicketImage()}
+            onOCRTextChange={setOCRText}
+            onRecognize={() => void handleRecognizeTicket()}
+            onIssueChange={setIssue}
+            onNotesChange={setNotes}
+            onEntryTextChange={setEntryText}
+            onCreateTicket={() => void handleCreateTicket()}
+            onClearRecommendation={() => setPurchaseRecommendation(null)}
+          />
+        )}
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <SummaryCard
-                title="已录入票据"
-                value={String(dashboard?.stats.totalTickets ?? 0)}
-                hint="包含拍照识别入库的购彩记录"
-              />
-              <SummaryCard
-                title="中奖票据"
-                value={String(dashboard?.stats.wonTickets ?? 0)}
-                hint="系统会在开奖同步后自动补判"
-              />
-              <SummaryCard
-                title="累计投入"
-                value={formatCurrency(dashboard?.stats.totalCost ?? 0)}
-                hint="当前只统计双色球"
-              />
-              <SummaryCard
-                title="累计奖金"
-                value={formatCurrency(dashboard?.stats.totalPrize ?? 0)}
-                hint="优先使用同步到库的奖级奖金"
-              />
-            </div>
-          </div>
-        </section>
-
-        <div className="mt-6 grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
-          <main className="space-y-6">
-            {activeTab === "dashboard" && (
-              <>
-                <Card className="border-white/60 bg-white/80 backdrop-blur">
-                  <CardHeader className="flex flex-row items-center justify-between">
-                    <div>
-                      <CardTitle className="text-slate-900">最新推荐</CardTitle>
-                      <p className="mt-1 text-sm text-slate-500">
-                        {latestRecommendation?.summary || "当前还没有推荐记录"}
-                      </p>
-                    </div>
-                    <Badge variant="secondary">
-                      {latestRecommendation?.provider ||
-                        dashboard?.lottery.recommendationProvider ||
-                        "mock"}
-                    </Badge>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {recommendationEntries.length > 0 ? (
-                      recommendationEntries.slice(0, 3).map((entry) => (
-                        <div key={entry.id} className="rounded-2xl bg-slate-50 p-4">
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="text-sm font-medium text-slate-600">
-                              推荐 {entry.sequence}
-                            </span>
-                            <span className="text-xs text-slate-500">
-                              置信度 {(entry.confidence * 100).toFixed(0)}%
-                            </span>
-                          </div>
-                          <div className="mt-3">
-                            <NumberBalls
-                              redNumbers={entry.redNumbers}
-                              blueNumbers={entry.blueNumbers}
-                              compact
-                            />
-                          </div>
-                          <p className="mt-3 text-sm leading-6 text-slate-600">{entry.reason}</p>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-slate-500">
-                        还没有推荐结果，点击“生成推荐”即可创建一批号码。
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card className="border-white/60 bg-white/80 backdrop-blur">
-                  <CardHeader>
-                    <CardTitle className="text-slate-900">最近票据</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {tickets.slice(0, 3).map((ticket) => (
-                      <TicketCard key={ticket.id} ticket={ticket} />
-                    ))}
-                    {!loading && tickets.length === 0 && (
-                      <p className="text-sm text-slate-500">
-                    还没有票据记录，可以先去“上传原图”开始流程。
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              </>
-            )}
-
-            {activeTab === "upload" && (
-              <TicketUploadPanel
-                previewUrl={previewUrl}
-                selectedImage={selectedImage}
-                uploadPending={uploadPending}
-                uploadedTicket={uploadedTicket}
-                onSelectImage={handleSelectImage}
-                onUpload={() => void handleUploadTicketImage()}
-              />
-            )}
-
-            {activeTab === "recognize" && (
-              <TicketRecognitionPanel
-                uploadedTicket={uploadedTicket}
-                recognitionDraft={recognitionDraft}
-                ocrText={ocrText}
-                recognizePending={recognizePending}
-                onOCRTextChange={setOcrText}
-                onRecognize={() => void handleRecognizeTicket()}
-              />
-            )}
-
-            {activeTab === "confirm" && (
-              <TicketConfirmPanel
-                recognitionDraft={recognitionDraft}
-                issue={issue}
-                notes={notes}
-                entryText={entryText}
-                submitPending={submitPending}
-                onIssueChange={setIssue}
-                onNotesChange={setNotes}
-                onEntryTextChange={setEntryText}
-                onCreateTicket={() => void handleCreateTicket()}
-              />
-            )}
-
-            {activeTab === "recommendation" && (
-              <Card className="border-white/60 bg-white/80 backdrop-blur">
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <div>
-                    <CardTitle className="text-slate-900">推荐中心</CardTitle>
-                    <p className="mt-1 text-sm text-slate-500">
-                      {latestRecommendation?.basis || "可按当前彩种默认数量生成推荐"}
-                    </p>
-                  </div>
-                  <Button
-                    onClick={() => void handleGenerateRecommendation()}
-                    disabled={actionPending}
-                  >
-                    <Sparkles className="mr-2 size-4" />
-                    重新生成
-                  </Button>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {recommendationEntries.length > 0 ? (
-                    recommendationEntries.map((entry) => (
-                      <div
-                        key={entry.id}
-                        className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4"
-                      >
-                        <div className="flex items-center justify-between gap-4">
-                          <div>
-                            <p className="text-sm font-medium text-slate-700">
-                              推荐 {entry.sequence}
-                            </p>
-                            <p className="text-xs text-slate-500">
-                              目标期号 {latestRecommendation?.issue || "待定"}
-                            </p>
-                          </div>
-                          <Badge variant="secondary">{(entry.confidence * 100).toFixed(0)}%</Badge>
-                        </div>
-                        <div className="mt-4">
-                          <NumberBalls
-                            redNumbers={entry.redNumbers}
-                            blueNumbers={entry.blueNumbers}
-                          />
-                        </div>
-                        <p className="mt-4 text-sm leading-6 text-slate-600">{entry.reason}</p>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-slate-500">还没有推荐记录。</p>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-
-            {activeTab === "tickets" && (
-              <div className="space-y-4">
-                {tickets.map((ticket) => (
-                  <TicketCard key={ticket.id} ticket={ticket} />
-                ))}
-                {!loading && tickets.length === 0 && (
-                  <Card className="border-white/60 bg-white/80 backdrop-blur">
-                    <CardContent className="py-10 text-center text-sm text-slate-500">
-                      当前还没有票据记录。
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-            )}
-          </main>
-
-          <aside className="space-y-6">
-            <Card className="border-white/60 bg-white/80 backdrop-blur">
-              <CardHeader>
-                <CardTitle className="text-slate-900">当前实现状态</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm leading-6 text-slate-600">
-                <p>
-                  已支持双色球开奖号同步、鉴权访问、推荐扩展点、拍照录票接口、自动判奖和移动端录入界面。
-                </p>
-                <p>录票流程已经拆成上传原图、识别校对、确认入库三个独立页面，更适合逐步调试。</p>
-                <p>推荐默认走 mock 提供者，配置 OpenAI 兼容接口后可切到真实模型。</p>
-              </CardContent>
-            </Card>
-
-            <Card className="border-white/60 bg-white/80 backdrop-blur">
-              <CardHeader>
-                <CardTitle className="text-slate-900">当前录票进度</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="rounded-2xl bg-slate-50 p-4">
-                  <p className="text-sm font-medium text-slate-700">{workflowStatus.label}</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-500">{workflowStatus.hint}</p>
-                </div>
-                {uploadedTicket && (
-                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Upload ID</p>
-                    <p className="mt-2 break-all text-sm text-slate-700">{uploadedTicket.id}</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {lastScanned && (
-              <Card className="border-white/60 bg-white/80 backdrop-blur">
-                <CardHeader>
-                  <CardTitle className="text-slate-900">最近识别结果</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-slate-500">期号</span>
-                    <span className="font-semibold text-slate-900">{lastScanned.issue}</span>
-                  </div>
-                  {lastScanned.entries.map((entry) => (
-                    <div key={entry.id} className="rounded-2xl bg-slate-50 p-3">
-                      <NumberBalls
-                        redNumbers={entry.redNumbers}
-                        blueNumbers={entry.blueNumbers}
-                        compact
-                      />
-                      <div className="mt-3 flex items-center justify-between text-sm">
-                        <span className="text-slate-500">{entry.matchSummary}</span>
-                        <span className="font-semibold text-slate-900">
-                          {formatCurrency(entry.prizeAmount)}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            )}
-          </aside>
-        </div>
+        {activeTab === "history" && <HistoryPanel tickets={tickets} />}
       </div>
 
-      <nav className="fixed inset-x-0 bottom-4 z-50 mx-auto flex w-[calc(100%-1.5rem)] max-w-5xl items-center gap-2 overflow-x-auto rounded-[2rem] border border-white/70 bg-white/90 p-2 shadow-[0_18px_40px_rgba(15,23,42,0.14)] backdrop-blur">
+      <nav className="fixed inset-x-0 bottom-4 z-50 mx-auto flex w-[calc(100%-1.5rem)] max-w-5xl items-center gap-2 rounded-[2rem] border border-white/70 bg-white/90 p-2 shadow-[0_18px_40px_rgba(15,23,42,0.14)] backdrop-blur">
         {tabs.map((item) => {
           const Icon = item.icon;
           const active = activeTab === item.key;
@@ -724,7 +434,7 @@ export default function App() {
             <button
               key={item.key}
               type="button"
-              className={`flex min-w-[112px] flex-1 items-center justify-center gap-2 rounded-[1.25rem] px-3 py-3 text-sm transition ${
+              className={`flex flex-1 items-center justify-center gap-2 rounded-[1.25rem] px-3 py-3 text-sm transition ${
                 active
                   ? "bg-slate-900 text-white shadow-sm"
                   : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"

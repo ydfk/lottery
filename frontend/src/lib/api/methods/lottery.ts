@@ -18,8 +18,20 @@ export function getTickets() {
   return apiGet<Ticket[]>(`/api/lotteries/${LOTTERY_CODE}/tickets?limit=20`);
 }
 
+export function getAllTickets() {
+  return apiGet<Ticket[]>(`/api/lotteries/tickets?limit=20`);
+}
+
+export function getRecommendations(limit = 20) {
+  return apiGet<Recommendation[]>(`/api/lotteries/${LOTTERY_CODE}/recommendations?limit=${limit}`);
+}
+
 export function getLatestRecommendation() {
   return apiGet<Recommendation>(`/api/lotteries/${LOTTERY_CODE}/recommendations/latest`);
+}
+
+export function getRecommendationDetail(recommendationId: string) {
+  return apiGet<Recommendation>(`/api/lotteries/${LOTTERY_CODE}/recommendations/${recommendationId}`);
 }
 
 export function generateRecommendation(count = 5) {
@@ -34,30 +46,32 @@ export function syncDraws() {
 }
 
 export function uploadTicketImage(formData: FormData) {
-  return apiPost<TicketUpload, FormData>(`/api/lotteries/${LOTTERY_CODE}/tickets/upload-image`, formData);
+  return apiPost<TicketUpload, FormData>(`/api/lotteries/tickets/upload-image`, formData);
 }
 
 export function recognizeTicket(body: { uploadId: string; ocrText?: string }) {
   return apiPost<TicketRecognitionDraft, { uploadId: string; ocrText?: string }>(
-    `/api/lotteries/${LOTTERY_CODE}/tickets/recognize`,
+    `/api/lotteries/tickets/recognize`,
     body
   );
 }
 
 export function createTicket(body: {
   uploadId: string;
+  recommendationId?: string;
   issue?: string;
   purchasedAt?: string;
   notes?: string;
-  entries?: Array<{ redNumbers: string; blueNumbers: string }>;
+  entries?: Array<{ redNumbers: string; blueNumbers: string; multiple?: number }>;
 }) {
   return apiPost<Ticket, {
     uploadId: string;
+    recommendationId?: string;
     issue?: string;
     purchasedAt?: string;
     notes?: string;
-    entries?: Array<{ redNumbers: string; blueNumbers: string }>;
-  }>(`/api/lotteries/${LOTTERY_CODE}/tickets`, body);
+    entries?: Array<{ redNumbers: string; blueNumbers: string; multiple?: number }>;
+  }>(`/api/lotteries/tickets`, body);
 }
 
 export function scanTicket(formData: FormData) {

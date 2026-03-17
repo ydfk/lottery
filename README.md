@@ -124,24 +124,20 @@ POST /api/lotteries/draws/sync-history
 - 上传原图后先落盘保存
 - 票据表会记录图片路径
 - 接口返回 `imageUrl`，可直接查看原图
-- OCR 默认调用项目内的 PaddleOCR 脚本，不走大模型
+- OCR 默认调用 PaddleOCR 服务接口，不走大模型
 
 PaddleOCR 相关配置在 [backend/config/config.yaml](F:/workSpace/lottery/backend/config/config.yaml)：
 
 ```yaml
 vision:
   provider: "paddleocr"
-  model: "paddleocr"
-  command: "python"
-  args:
-    - "scripts/paddleocr_runner.py"
-  lang: "ch"
-  useAngleCls: true
+  model: "layout-parsing"
+  baseURL: "https://your-paddleocr-service/layout-parsing"
+  apiKey: "your-paddleocr-token"
   timeoutSeconds: 30
+  useDocOrientationClassify: false
+  useDocUnwarping: false
+  useChartRecognition: false
 ```
 
-运行前需要在后端环境安装 PaddleOCR。当前脚本默认通过以下命令调用：
-
-```bash
-python scripts/paddleocr_runner.py <imagePath> ch true
-```
+后端会把图片转成 Base64 后直接请求 PaddleOCR HTTP 接口；图片文件自动用 `fileType=1`，PDF 自动用 `fileType=0`。

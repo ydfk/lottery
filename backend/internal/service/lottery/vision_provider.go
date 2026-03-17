@@ -10,7 +10,7 @@ import (
 )
 
 type VisionRecognizer interface {
-	Recognize(ctx context.Context, lotteryType model.LotteryType, imagePath string) (*RecognitionResult, error)
+	Recognize(ctx context.Context, lotteryType *model.LotteryType, imagePath string) (*RecognitionResult, error)
 }
 
 type paddleOCRVisionRecognizer struct{}
@@ -27,7 +27,7 @@ func newVisionRecognizer(provider string) VisionRecognizer {
 	return nil
 }
 
-func (recognizer *paddleOCRVisionRecognizer) Recognize(ctx context.Context, lotteryType model.LotteryType, imagePath string) (*RecognitionResult, error) {
+func (recognizer *paddleOCRVisionRecognizer) Recognize(ctx context.Context, lotteryType *model.LotteryType, imagePath string) (*RecognitionResult, error) {
 	output, err := callPaddleOCR(ctx, imagePath)
 	if err != nil {
 		return nil, err
@@ -38,16 +38,23 @@ func (recognizer *paddleOCRVisionRecognizer) Recognize(ctx context.Context, lott
 		return nil, err
 	}
 
-	return buildRecognitionFromOCRPayload(lotteryType.Code, payload)
+	lotteryCode := ""
+	if lotteryType != nil {
+		lotteryCode = lotteryType.Code
+	}
+	return buildRecognitionFromOCRPayload(lotteryCode, payload)
 }
 
-func (recognizer *openAIVisionRecognizer) Recognize(ctx context.Context, lotteryType model.LotteryType, imagePath string) (*RecognitionResult, error) {
+func (recognizer *openAIVisionRecognizer) Recognize(ctx context.Context, lotteryType *model.LotteryType, imagePath string) (*RecognitionResult, error) {
 	prompt := config.Current.Vision.Prompt
-	if prompt == "" {
+	if prompt == "" && lotteryType != nil {
 		prompt = fmt.Sprintf(
 			"识别图片中的%s彩票，只返回 JSON，格式为 {\"issue\":\"\",\"rawText\":\"\",\"confidence\":0.0,\"entries\":[{\"red\":[1,2,3,4,5,6],\"blue\":[7]}]}。",
 			lotteryType.Name,
 		)
+	}
+	if prompt == "" {
+		prompt = "识别图片中的彩票文本，只返回 JSON，格式为 {\"lotteryCode\":\"\",\"issue\":\"\",\"rawText\":\"\",\"confidence\":0.0,\"entries\":[]}。"
 	}
 
 	content, err := callVisionModel(ctx, config.Current.Vision.Model, prompt, imagePath)
@@ -58,6 +65,9 @@ func (recognizer *openAIVisionRecognizer) Recognize(ctx context.Context, lottery
 	result := RecognitionResult{}
 	if err := json.Unmarshal([]byte(content), &result); err != nil {
 		return nil, err
+	}
+	if result.LotteryCode == "" && lotteryType != nil {
+		result.LotteryCode = lotteryType.Code
 	}
 	if len(result.Entries) == 0 {
 		return nil, fmt.Errorf("未从图片中识别到有效号码")

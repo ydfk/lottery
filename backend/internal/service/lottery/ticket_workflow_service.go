@@ -8,6 +8,8 @@ import (
 
 	model "go-fiber-starter/internal/model/lottery"
 	"go-fiber-starter/pkg/db"
+
+	"github.com/google/uuid"
 )
 
 const (
@@ -30,12 +32,13 @@ type RecognizeUploadedTicketInput struct {
 }
 
 type CreateTicketInput struct {
-	Code        string
-	UploadID    string
-	Issue       string
-	PurchasedAt time.Time
-	Notes       string
-	Entries     []ParsedEntry
+	Code             string
+	UploadID         string
+	RecommendationID string
+	Issue            string
+	PurchasedAt      time.Time
+	Notes            string
+	Entries          []ParsedEntry
 }
 
 type TicketUploadDetail struct {
@@ -44,11 +47,12 @@ type TicketUploadDetail struct {
 }
 
 type TicketRecognitionDraft struct {
-	Upload     TicketUploadDetail `json:"upload"`
-	Issue      string             `json:"issue"`
-	RawText    string             `json:"rawText"`
-	Confidence float64            `json:"confidence"`
-	Entries    []ParsedEntry      `json:"entries"`
+	Upload      TicketUploadDetail `json:"upload"`
+	LotteryCode string             `json:"lotteryCode"`
+	Issue       string             `json:"issue"`
+	RawText     string             `json:"rawText"`
+	Confidence  float64            `json:"confidence"`
+	Entries     []ParsedEntry      `json:"entries"`
 }
 
 func UploadTicketImage(input UploadTicketImageInput) (*TicketUploadDetail, error) {
@@ -70,16 +74,7 @@ func RecognizeUploadedTicket(ctx context.Context, input RecognizeUploadedTicketI
 		return nil, err
 	}
 
-	lotteryType, err := getLotteryType(input.Code)
-	if err != nil {
-		return nil, err
-	}
-	definition, err := GetDefinition(input.Code)
-	if err != nil {
-		return nil, err
-	}
-
-	recognized, err := recognizeTicket(ctx, definition, lotteryType, upload.ImagePath, input.OCRText)
+	recognized, err := recognizeTicket(ctx, resolveTicketCode(input.Code, upload.LotteryCode), upload.ImagePath, input.OCRText)
 	if err != nil {
 		upload.Status = TicketUploadStatusFailed
 		upload.ErrorMessage = err.Error()
@@ -89,6 +84,7 @@ func RecognizeUploadedTicket(ctx context.Context, input RecognizeUploadedTicketI
 		return nil, err
 	}
 
+	upload.LotteryCode = recognized.LotteryCode
 	upload.Status = TicketUploadStatusRecognized
 	upload.ErrorMessage = ""
 	upload.RecognizedText = recognized.RawText
@@ -100,11 +96,12 @@ func RecognizeUploadedTicket(ctx context.Context, input RecognizeUploadedTicketI
 	}
 
 	return &TicketRecognitionDraft{
-		Upload:     *buildTicketUploadDetail(upload),
-		Issue:      recognized.Issue,
-		RawText:    recognized.RawText,
-		Confidence: recognized.Confidence,
-		Entries:    recognized.Entries,
+		Upload:      *buildTicketUploadDetail(upload),
+		LotteryCode: recognized.LotteryCode,
+		Issue:       recognized.Issue,
+		RawText:     recognized.RawText,
+		Confidence:  recognized.Confidence,
+		Entries:     recognized.Entries,
 	}, nil
 }
 
@@ -114,7 +111,17 @@ func CreateTicket(ctx context.Context, input CreateTicketInput) (*TicketDetail, 
 		return nil, err
 	}
 
-	definition, err := GetDefinition(input.Code)
+	recommendation, recommendationID, err := resolveRecommendation(input.Code, input.RecommendationID)
+	if err != nil {
+		return nil, err
+	}
+
+	code, err := resolveCreateTicketCode(input.Code, upload.LotteryCode, recommendation)
+	if err != nil {
+		return nil, err
+	}
+
+	definition, err := GetDefinition(code)
 	if err != nil {
 		return nil, err
 	}
@@ -136,6 +143,9 @@ func CreateTicket(ctx context.Context, input CreateTicketInput) (*TicketDetail, 
 	if issue == "" {
 		issue = upload.RecognitionIssue
 	}
+	if issue == "" && recommendation != nil {
+		issue = recommendation.Issue
+	}
 	if issue == "" {
 		return nil, fmt.Errorf("未识别到期号，请手动补充期号后重试")
 	}
@@ -145,11 +155,12 @@ func CreateTicket(ctx context.Context, input CreateTicketInput) (*TicketDetail, 
 		purchasedAt = time.Now()
 	}
 
-	ticket, err := createTicketRecord(input.Code, issue, upload.ImagePath, upload.RecognizedText, purchasedAt, input.Notes, entries)
+	ticket, err := createTicketRecord(code, recommendationID, issue, upload.ImagePath, upload.RecognizedText, purchasedAt, input.Notes, entries)
 	if err != nil {
 		return nil, err
 	}
 
+	upload.LotteryCode = code
 	upload.Status = TicketUploadStatusSaved
 	if err := db.DB.Save(&upload).Error; err != nil {
 		return nil, err
@@ -161,17 +172,23 @@ func CreateTicket(ctx context.Context, input CreateTicketInput) (*TicketDetail, 
 	return GetTicketDetail(ticket.Id.String())
 }
 
-func createTicketRecord(code string, issue string, imagePath string, recognizedText string, purchasedAt time.Time, notes string, entries []ParsedEntry) (*model.Ticket, error) {
+func createTicketRecord(code string, recommendationID *uuid.UUID, issue string, imagePath string, recognizedText string, purchasedAt time.Time, notes string, entries []ParsedEntry) (*model.Ticket, error) {
+	totalCost := 0.0
+	for _, entry := range entries {
+		totalCost += float64(resolveEntryMultiple(entry) * 2)
+	}
+
 	ticket := model.Ticket{
-		LotteryCode:    code,
-		Issue:          issue,
-		Source:         "upload",
-		ImagePath:      imagePath,
-		RecognizedText: recognizedText,
-		Status:         TicketStatusPending,
-		CostAmount:     float64(len(entries) * 2),
-		PurchasedAt:    purchasedAt,
-		Notes:          notes,
+		LotteryCode:      code,
+		RecommendationID: recommendationID,
+		Issue:            issue,
+		Source:           "upload",
+		ImagePath:        imagePath,
+		RecognizedText:   recognizedText,
+		Status:           TicketStatusPending,
+		CostAmount:       totalCost,
+		PurchasedAt:      purchasedAt,
+		Notes:            notes,
 	}
 	if err := db.DB.Create(&ticket).Error; err != nil {
 		return nil, err
@@ -184,6 +201,7 @@ func createTicketRecord(code string, issue string, imagePath string, recognizedT
 			Sequence:     index + 1,
 			RedNumbers:   formatNumbers(item.Red),
 			BlueNumbers:  formatNumbers(item.Blue),
+			Multiple:     resolveEntryMultiple(item),
 			MatchSummary: "待开奖",
 		})
 	}
@@ -198,7 +216,11 @@ func createTicketRecord(code string, issue string, imagePath string, recognizedT
 
 func getTicketUpload(code string, uploadID string) (model.TicketUpload, error) {
 	upload := model.TicketUpload{}
-	if err := db.DB.First(&upload, "id = ? AND lottery_code = ?", uploadID, code).Error; err != nil {
+	query := db.DB
+	if code != "" {
+		query = query.Where("lottery_code = ?", code)
+	}
+	if err := query.First(&upload, "id = ?", uploadID).Error; err != nil {
 		return upload, err
 	}
 	return upload, nil
@@ -226,6 +248,47 @@ func getRecognizedEntries(upload model.TicketUpload) ([]ParsedEntry, error) {
 	return recognized.Entries, nil
 }
 
+func resolveRecommendation(code string, recommendationID string) (*model.Recommendation, *uuid.UUID, error) {
+	if recommendationID == "" {
+		return nil, nil, nil
+	}
+
+	parsedID, err := uuid.Parse(recommendationID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("推荐记录不存在")
+	}
+
+	recommendation := model.Recommendation{}
+	query := db.DB
+	if code != "" {
+		query = query.Where("lottery_code = ?", code)
+	}
+	if err := query.First(&recommendation, "id = ?", parsedID).Error; err != nil {
+		return nil, nil, fmt.Errorf("推荐记录不存在")
+	}
+	return &recommendation, &parsedID, nil
+}
+
+func resolveCreateTicketCode(code string, uploadCode string, recommendation *model.Recommendation) (string, error) {
+	if code != "" {
+		return code, nil
+	}
+	if uploadCode != "" {
+		return uploadCode, nil
+	}
+	if recommendation != nil {
+		return recommendation.LotteryCode, nil
+	}
+	return "", fmt.Errorf("未识别出彩票类型，请先完成识别或手动指定彩种")
+}
+
+func resolveTicketCode(primary string, fallback string) string {
+	if primary != "" {
+		return primary
+	}
+	return fallback
+}
+
 func normalizeParsedEntries(definition Definition, entries []ParsedEntry) ([]ParsedEntry, error) {
 	if len(entries) == 0 {
 		return nil, fmt.Errorf("至少需要一注号码")
@@ -237,8 +300,9 @@ func normalizeParsedEntries(definition Definition, entries []ParsedEntry) ([]Par
 			return nil, err
 		}
 		result = append(result, ParsedEntry{
-			Red:  parseCSVNumbers(formatNumbers(entry.Red)),
-			Blue: parseCSVNumbers(formatNumbers(entry.Blue)),
+			Red:      parseCSVNumbers(formatNumbers(entry.Red)),
+			Blue:     parseCSVNumbers(formatNumbers(entry.Blue)),
+			Multiple: resolveEntryMultiple(entry),
 		})
 	}
 	return result, nil
@@ -268,5 +332,15 @@ func validateParsedEntry(definition Definition, entry ParsedEntry) error {
 			return fmt.Errorf("蓝球号码超出范围，应在 %d-%d 之间", definition.BlueMin, definition.BlueMax)
 		}
 	}
+	if resolveEntryMultiple(entry) <= 0 {
+		return fmt.Errorf("注数/倍数必须大于 0")
+	}
 	return nil
+}
+
+func resolveEntryMultiple(entry ParsedEntry) int {
+	if entry.Multiple <= 0 {
+		return 1
+	}
+	return entry.Multiple
 }

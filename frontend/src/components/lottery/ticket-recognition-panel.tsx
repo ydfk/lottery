@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { NumberBalls } from "@/components/lottery/number-balls";
+import { getLotteryDisplayName } from "@/lib/lottery-display";
 import type { TicketRecognitionDraft, TicketUpload } from "@/types/lottery";
 
 interface TicketRecognitionPanelProps {
@@ -26,12 +27,12 @@ export function TicketRecognitionPanel(props: TicketRecognitionPanelProps) {
     <Card className="border-white/60 bg-white/85 backdrop-blur">
       <CardHeader>
         <CardTitle className="text-slate-900">识别校对</CardTitle>
-        <p className="text-sm text-slate-500">第二步只做 OCR 识别和结果校对，不会入库。</p>
+        <p className="text-sm text-slate-500">识别号码</p>
       </CardHeader>
       <CardContent className="space-y-5">
         {!uploadedTicket ? (
           <div className="rounded-[1.5rem] border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-500">
-            请先在“上传原图”页上传一张彩票图片。
+            先上传原图
           </div>
         ) : (
           <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
@@ -40,10 +41,10 @@ export function TicketRecognitionPanel(props: TicketRecognitionPanelProps) {
                 <img src={uploadedTicket.imageUrl} alt="已上传彩票原图" className="h-72 w-full object-cover" />
               </div>
               <div className="rounded-[1.5rem] bg-slate-50 p-4">
-                <p className="text-sm font-medium text-slate-700">OCR 降级文本</p>
+                <p className="text-sm font-medium text-slate-700">OCR 文本</p>
                 <Textarea
                   className="mt-3 min-h-40 bg-white"
-                  placeholder="可选。填写后会优先使用这段文本识别，便于调试解析逻辑。"
+                  placeholder="可选"
                   value={ocrText}
                   onChange={(event) => onOCRTextChange(event.target.value)}
                 />
@@ -60,7 +61,10 @@ export function TicketRecognitionPanel(props: TicketRecognitionPanelProps) {
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-medium text-slate-700">识别结果概览</p>
-                        <p className="mt-1 text-xs text-slate-500">期号 {recognitionDraft.issue || "待补充"}</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          彩种 {getLotteryDisplayName(recognitionDraft.lotteryCode)} · 期号{" "}
+                          {recognitionDraft.issue || "待补充"}
+                        </p>
                       </div>
                       <Badge variant="secondary">
                         置信度 {(recognitionDraft.confidence * 100).toFixed(0)}%
@@ -75,7 +79,9 @@ export function TicketRecognitionPanel(props: TicketRecognitionPanelProps) {
                     {recognitionDraft.entries.map((entry, index) => (
                       <div key={`${formatNumbers(entry.red)}-${formatNumbers(entry.blue)}-${index}`} className="rounded-[1.5rem] border border-slate-200 bg-white p-4">
                         <div className="flex items-center justify-between gap-3">
-                          <span className="text-sm font-medium text-slate-700">识别注 {index + 1}</span>
+                          <span className="text-sm font-medium text-slate-700">
+                            识别注 {index + 1} · {entry.multiple || 1} 倍
+                          </span>
                           <ScanSearch className="size-4 text-slate-400" />
                         </div>
                         <div className="mt-3">
@@ -87,7 +93,7 @@ export function TicketRecognitionPanel(props: TicketRecognitionPanelProps) {
                 </>
               ) : (
                 <div className="rounded-[1.5rem] border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-500">
-                  上传完成后，在这里查看 OCR 识别出的期号、原始文本和号码注单。
+                  暂无识别结果
                 </div>
               )}
             </div>
