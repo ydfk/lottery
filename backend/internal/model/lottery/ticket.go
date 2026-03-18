@@ -27,15 +27,16 @@ type Ticket struct {
 
 type TicketEntry struct {
 	base.BaseModel
-	TicketID     uuid.UUID `gorm:"type:uuid;index" json:"ticketId"`
-	Sequence     int       `json:"sequence"`
-	RedNumbers   string    `gorm:"size:64" json:"redNumbers"`
-	BlueNumbers  string    `gorm:"size:32" json:"blueNumbers"`
-	Multiple     int       `json:"multiple"`
-	IsWinning    bool      `json:"isWinning"`
-	PrizeName    string    `gorm:"size:32" json:"prizeName"`
-	PrizeAmount  float64   `json:"prizeAmount"`
-	MatchSummary string    `gorm:"size:64" json:"matchSummary"`
+	TicketID      uuid.UUID `gorm:"type:uuid;index" json:"ticketId"`
+	Sequence      int       `json:"sequence"`
+	RedNumbers    string    `gorm:"size:64" json:"redNumbers"`
+	BlueNumbers   string    `gorm:"size:32" json:"blueNumbers"`
+	Multiple      int       `json:"multiple"`
+	IsAdditional  bool      `json:"isAdditional"`
+	IsWinning     bool      `json:"isWinning"`
+	PrizeName     string    `gorm:"size:32" json:"prizeName"`
+	PrizeAmount   float64   `json:"prizeAmount"`
+	MatchSummary  string    `gorm:"size:64" json:"matchSummary"`
 }
 
 func (Ticket) TableName() string {

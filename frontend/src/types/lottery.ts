@@ -59,6 +59,7 @@ export interface TicketEntry {
   redNumbers: string;
   blueNumbers: string;
   multiple: number;
+  isAdditional: boolean;
   isWinning: boolean;
   prizeName: string;
   prizeAmount: number;
@@ -75,6 +76,8 @@ export interface Ticket {
   prizeAmount: number;
   purchasedAt: string;
   drawDate?: string;
+  drawRedNumbers?: string;
+  drawBlueNumbers?: string;
   recognizedText: string;
   imageUrl: string;
   entries: TicketEntry[];
@@ -84,6 +87,7 @@ export interface ParsedEntry {
   red: number[];
   blue: number[];
   multiple: number;
+  isAdditional: boolean;
 }
 
 export interface TicketUpload {
@@ -103,6 +107,8 @@ export interface TicketRecognitionDraft {
   upload: TicketUpload;
   lotteryCode: string;
   issue: string;
+  drawDate: string;
+  costAmount: number;
   rawText: string;
   confidence: number;
   entries: ParsedEntry[];

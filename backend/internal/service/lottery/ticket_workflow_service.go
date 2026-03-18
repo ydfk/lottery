@@ -3,7 +3,9 @@ package lottery
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	model "go-fiber-starter/internal/model/lottery"
@@ -18,6 +20,8 @@ const (
 	TicketUploadStatusFailed     = "failed"
 	TicketUploadStatusSaved      = "saved"
 )
+
+var ErrDuplicateTicket = errors.New("相同票据已存在，不能重复录入")
 
 type UploadTicketImageInput struct {
 	Code             string
@@ -37,6 +41,7 @@ type CreateTicketInput struct {
 	RecommendationID string
 	Issue            string
 	PurchasedAt      time.Time
+	CostAmount       float64
 	Notes            string
 	Entries          []ParsedEntry
 }
@@ -50,6 +55,8 @@ type TicketRecognitionDraft struct {
 	Upload      TicketUploadDetail `json:"upload"`
 	LotteryCode string             `json:"lotteryCode"`
 	Issue       string             `json:"issue"`
+	DrawDate    string             `json:"drawDate"`
+	CostAmount  float64            `json:"costAmount"`
 	RawText     string             `json:"rawText"`
 	Confidence  float64            `json:"confidence"`
 	Entries     []ParsedEntry      `json:"entries"`
@@ -99,6 +106,8 @@ func RecognizeUploadedTicket(ctx context.Context, input RecognizeUploadedTicketI
 		Upload:      *buildTicketUploadDetail(upload),
 		LotteryCode: recognized.LotteryCode,
 		Issue:       recognized.Issue,
+		DrawDate:    recognized.DrawDate,
+		CostAmount:  recognized.CostAmount,
 		RawText:     recognized.RawText,
 		Confidence:  recognized.Confidence,
 		Entries:     recognized.Entries,
@@ -149,13 +158,18 @@ func CreateTicket(ctx context.Context, input CreateTicketInput) (*TicketDetail, 
 	if issue == "" {
 		return nil, fmt.Errorf("未识别到期号，请手动补充期号后重试")
 	}
+	issue = normalizeIssueByCode(code, issue)
 
 	purchasedAt := input.PurchasedAt
 	if purchasedAt.IsZero() {
 		purchasedAt = time.Now()
 	}
 
-	ticket, err := createTicketRecord(code, recommendationID, issue, upload.ImagePath, upload.RecognizedText, purchasedAt, input.Notes, entries)
+	if err := validateDuplicateTicket(code, issue, input.CostAmount, entries); err != nil {
+		return nil, err
+	}
+
+	ticket, err := createTicketRecord(code, recommendationID, issue, upload.ImagePath, upload.RecognizedText, purchasedAt, input.CostAmount, input.Notes, entries)
 	if err != nil {
 		return nil, err
 	}
@@ -166,16 +180,18 @@ func CreateTicket(ctx context.Context, input CreateTicketInput) (*TicketDetail, 
 		return nil, err
 	}
 
+	ensureIssueDrawSynced(ctx, code, issue)
+
 	if err := EvaluateTicket(ticket.Id.String()); err != nil {
 		return nil, err
 	}
 	return GetTicketDetail(ticket.Id.String())
 }
 
-func createTicketRecord(code string, recommendationID *uuid.UUID, issue string, imagePath string, recognizedText string, purchasedAt time.Time, notes string, entries []ParsedEntry) (*model.Ticket, error) {
-	totalCost := 0.0
-	for _, entry := range entries {
-		totalCost += float64(resolveEntryMultiple(entry) * 2)
+func createTicketRecord(code string, recommendationID *uuid.UUID, issue string, imagePath string, recognizedText string, purchasedAt time.Time, costAmount float64, notes string, entries []ParsedEntry) (*model.Ticket, error) {
+	totalCost := costAmount
+	if totalCost <= 0 {
+		totalCost = calculateEntriesCost(entries)
 	}
 
 	ticket := model.Ticket{
@@ -202,6 +218,7 @@ func createTicketRecord(code string, recommendationID *uuid.UUID, issue string, 
 			RedNumbers:   formatNumbers(item.Red),
 			BlueNumbers:  formatNumbers(item.Blue),
 			Multiple:     resolveEntryMultiple(item),
+			IsAdditional: item.IsAdditional,
 			MatchSummary: "待开奖",
 		})
 	}
@@ -212,6 +229,83 @@ func createTicketRecord(code string, recommendationID *uuid.UUID, issue string, 
 	}
 
 	return &ticket, nil
+}
+
+func validateDuplicateTicket(code string, issue string, costAmount float64, entries []ParsedEntry) error {
+	candidates := make([]model.Ticket, 0)
+	if err := db.DB.Preload("Entries").Where("lottery_code = ? AND issue IN ?", code, issueAliases(code, issue)).Find(&candidates).Error; err != nil {
+		return err
+	}
+
+	targetCost := costAmount
+	if targetCost <= 0 {
+		targetCost = calculateEntriesCost(entries)
+	}
+	targetSignature := buildTicketEntriesSignature(entries)
+	for _, candidate := range candidates {
+		if len(candidate.Entries) != len(entries) {
+			continue
+		}
+		if targetCost > 0 && candidate.CostAmount > 0 && !isSameAmount(candidate.CostAmount, targetCost) {
+			continue
+		}
+		if buildStoredTicketEntriesSignature(candidate.Entries) == targetSignature {
+			return ErrDuplicateTicket
+		}
+	}
+
+	return nil
+}
+
+func buildTicketEntriesSignature(entries []ParsedEntry) string {
+	signature := ""
+	for index, entry := range entries {
+		if index > 0 {
+			signature += "|"
+		}
+		signature += fmt.Sprintf(
+			"%d:%s:%s:%d:%t",
+			index+1,
+			formatNumbers(entry.Red),
+			formatNumbers(entry.Blue),
+			resolveEntryMultiple(entry),
+			entry.IsAdditional,
+		)
+	}
+	return signature
+}
+
+func buildStoredTicketEntriesSignature(entries []model.TicketEntry) string {
+	sort.Slice(entries, func(left int, right int) bool {
+		if entries[left].Sequence == entries[right].Sequence {
+			return entries[left].CreatedAt.Before(entries[right].CreatedAt)
+		}
+		return entries[left].Sequence < entries[right].Sequence
+	})
+
+	signature := ""
+	for index, entry := range entries {
+		if index > 0 {
+			signature += "|"
+		}
+		signature += fmt.Sprintf(
+			"%d:%s:%s:%d:%t",
+			entry.Sequence,
+			entry.RedNumbers,
+			entry.BlueNumbers,
+			max(1, entry.Multiple),
+			entry.IsAdditional,
+		)
+	}
+	return signature
+}
+
+func isSameAmount(left float64, right float64) bool {
+	delta := left - right
+	if delta < 0 {
+		delta = -delta
+	}
+	return delta < 0.0001
 }
 
 func getTicketUpload(code string, uploadID string) (model.TicketUpload, error) {
@@ -289,6 +383,21 @@ func resolveTicketCode(primary string, fallback string) string {
 	return fallback
 }
 
+func ensureIssueDrawSynced(ctx context.Context, code string, issue string) {
+	if issue == "" {
+		return
+	}
+
+	var count int64
+	if err := db.DB.Model(&model.DrawResult{}).Where("lottery_code = ? AND issue IN ?", code, issueAliases(code, issue)).Count(&count).Error; err == nil && count > 0 {
+		return
+	}
+
+	if _, err := SyncLatestDraw(ctx, code, issue); err != nil {
+		return
+	}
+}
+
 func normalizeParsedEntries(definition Definition, entries []ParsedEntry) ([]ParsedEntry, error) {
 	if len(entries) == 0 {
 		return nil, fmt.Errorf("至少需要一注号码")
@@ -300,15 +409,19 @@ func normalizeParsedEntries(definition Definition, entries []ParsedEntry) ([]Par
 			return nil, err
 		}
 		result = append(result, ParsedEntry{
-			Red:      parseCSVNumbers(formatNumbers(entry.Red)),
-			Blue:     parseCSVNumbers(formatNumbers(entry.Blue)),
-			Multiple: resolveEntryMultiple(entry),
+			Red:          parseCSVNumbers(formatNumbers(entry.Red)),
+			Blue:         parseCSVNumbers(formatNumbers(entry.Blue)),
+			Multiple:     resolveEntryMultiple(entry),
+			IsAdditional: entry.IsAdditional,
 		})
 	}
 	return result, nil
 }
 
 func validateParsedEntry(definition Definition, entry ParsedEntry) error {
+	if definition.Code == "ssq" && entry.IsAdditional {
+		return fmt.Errorf("双色球不支持追加")
+	}
 	if len(entry.Red) != definition.RedCount {
 		return fmt.Errorf("红球数量不正确，应为 %d 个", definition.RedCount)
 	}

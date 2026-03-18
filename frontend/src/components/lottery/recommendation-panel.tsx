@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { NumberBalls } from "@/components/lottery/number-balls";
 import { TicketCard } from "@/components/lottery/ticket-card";
-import { getLotteryDisplayName } from "@/lib/lottery-display";
+import { formatLotteryIssue, getLotteryDisplayName } from "@/lib/lottery-display";
 import type { Recommendation } from "@/types/lottery";
 
 interface RecommendationPanelProps {
@@ -55,7 +55,9 @@ export function RecommendationPanel(props: RecommendationPanelProps) {
               >
                 <div className="flex items-center justify-between gap-3">
                   <Badge variant="secondary">{getLotteryDisplayName(recommendation.lotteryCode)}</Badge>
-                  <span className="text-xs text-slate-500">第 {recommendation.issue} 期</span>
+                  <span className="text-xs text-slate-500">
+                    第 {formatLotteryIssue(recommendation.lotteryCode, recommendation.issue)} 期
+                  </span>
                 </div>
 
                 <div className="mt-4 space-y-4">
@@ -95,7 +97,9 @@ export function RecommendationPanel(props: RecommendationPanelProps) {
                 <DialogHeader className="space-y-3 text-left">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="secondary">{getLotteryDisplayName(selectedRecommendation.lotteryCode)}</Badge>
-                    <Badge variant="secondary">第 {selectedRecommendation.issue} 期</Badge>
+                    <Badge variant="secondary">
+                      第 {formatLotteryIssue(selectedRecommendation.lotteryCode, selectedRecommendation.issue)} 期
+                    </Badge>
                   </div>
                   <DialogTitle className="text-2xl text-slate-950">
                     {selectedRecommendation.summary || "推荐详情"}

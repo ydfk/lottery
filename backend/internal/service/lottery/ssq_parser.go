@@ -17,14 +17,17 @@ func (ssqRecognitionParser) ParseText(text string) (*RecognitionResult, error) {
 }
 
 type ParsedEntry struct {
-	Red      []int `json:"red"`
-	Blue     []int `json:"blue"`
-	Multiple int   `json:"multiple"`
+	Red          []int `json:"red"`
+	Blue         []int `json:"blue"`
+	Multiple     int   `json:"multiple"`
+	IsAdditional bool  `json:"isAdditional"`
 }
 
 type RecognitionResult struct {
 	LotteryCode string        `json:"lotteryCode"`
 	Issue       string        `json:"issue"`
+	DrawDate    string        `json:"drawDate"`
+	CostAmount  float64       `json:"costAmount"`
 	RawText     string        `json:"rawText"`
 	Confidence  float64       `json:"confidence"`
 	Entries     []ParsedEntry `json:"entries"`
@@ -48,6 +51,8 @@ func ParseSSQText(text string) (*RecognitionResult, error) {
 	return &RecognitionResult{
 		LotteryCode: "ssq",
 		Issue:       parseIssue(text),
+		DrawDate:    parseRecognizedDrawDate(text),
+		CostAmount:  parseRecognizedCost(text, entries),
 		RawText:     text,
 		Confidence:  0.6,
 		Entries:     normalizeParsedEntriesList(entries),
@@ -109,9 +114,10 @@ func normalizeParsedEntriesList(entries []ParsedEntry) []ParsedEntry {
 			multiple = 1
 		}
 		result = append(result, ParsedEntry{
-			Red:      parseCSVNumbers(formatNumbers(entry.Red)),
-			Blue:     parseCSVNumbers(formatNumbers(entry.Blue)),
-			Multiple: multiple,
+			Red:          parseCSVNumbers(formatNumbers(entry.Red)),
+			Blue:         parseCSVNumbers(formatNumbers(entry.Blue)),
+			Multiple:     multiple,
+			IsAdditional: entry.IsAdditional,
 		})
 	}
 	return result

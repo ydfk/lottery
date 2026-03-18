@@ -27,3 +27,16 @@ func TestParseSSQTextWithMultipleLineEntries(t *testing.T) {
 		t.Fatalf("unexpected multiples: %+v", result.Entries)
 	}
 }
+
+func TestParseSSQTextWithMetaFields(t *testing.T) {
+	result, err := ParseSSQText("双色球 2026032 开奖日期:2026-03-18 投注金额:4 03 09 14 21 25 32 - 07 (2)")
+	if err != nil {
+		t.Fatalf("parse ssq text: %v", err)
+	}
+	if result.DrawDate != "2026-03-18" {
+		t.Fatalf("unexpected draw date: %s", result.DrawDate)
+	}
+	if result.CostAmount != 4 {
+		t.Fatalf("unexpected cost amount: %v", result.CostAmount)
+	}
+}

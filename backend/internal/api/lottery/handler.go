@@ -1,6 +1,7 @@
 package lottery
 
 import (
+	"errors"
 	"fmt"
 	"mime/multipart"
 	"path/filepath"
@@ -34,16 +35,19 @@ type RecognizeTicketRequest struct {
 }
 
 type CreateTicketEntryRequest struct {
-	RedNumbers  string `json:"redNumbers"`
-	BlueNumbers string `json:"blueNumbers"`
-	Multiple    int    `json:"multiple"`
+	RedNumbers   string `json:"redNumbers"`
+	BlueNumbers  string `json:"blueNumbers"`
+	Multiple     int    `json:"multiple"`
+	IsAdditional bool   `json:"isAdditional"`
 }
 
 type CreateTicketRequest struct {
+	LotteryCode      string                     `json:"lotteryCode"`
 	UploadID         string                     `json:"uploadId"`
 	RecommendationID string                     `json:"recommendationId"`
 	Issue            string                     `json:"issue"`
 	PurchasedAt      string                     `json:"purchasedAt"`
+	CostAmount       float64                    `json:"costAmount"`
 	Notes            string                     `json:"notes"`
 	Entries          []CreateTicketEntryRequest `json:"entries"`
 }
@@ -75,6 +79,22 @@ func ListLotteries(c *fiber.Ctx) error {
 // @Router /lotteries/{code}/dashboard [get]
 func GetDashboard(c *fiber.Ctx) error {
 	data, err := lotteryService.GetDashboard(c.Params("code"))
+	if err != nil {
+		return err
+	}
+	return response.Success(c, data)
+}
+
+// @Summary 获取全局看板
+// @Description 返回当前账户全部已录入票据的汇总统计
+// @Tags lottery
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} DashboardResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /lotteries/dashboard [get]
+func GetGlobalDashboard(c *fiber.Ctx) error {
+	data, err := lotteryService.GetGlobalDashboard()
 	if err != nil {
 		return err
 	}
@@ -263,6 +283,43 @@ func ListAllTickets(c *fiber.Ctx) error {
 	return response.Success(c, items)
 }
 
+// @Summary 重新判奖
+// @Description 按当前期号重新同步开奖并再次判奖，适合补录历史开奖后修正票据状态
+// @Tags lottery
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param code path string true "彩票编码，如 ssq、dlt"
+// @Param ticketId path string true "票据 ID"
+// @Success 200 {object} TicketDetailResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /lotteries/{code}/tickets/{ticketId}/recheck [post]
+func RecheckTicket(c *fiber.Ctx) error {
+	data, err := lotteryService.RecheckTicket(c.Context(), c.Params("ticketId"), c.Params("code"))
+	if err != nil {
+		return err
+	}
+	return response.Success(c, data)
+}
+
+// @Summary 通用重新判奖
+// @Description 按票据自身的彩种与期号重新同步开奖并再次判奖
+// @Tags lottery
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param ticketId path string true "票据 ID"
+// @Success 200 {object} TicketDetailResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /lotteries/tickets/{ticketId}/recheck [post]
+func RecheckGenericTicket(c *fiber.Ctx) error {
+	data, err := lotteryService.RecheckTicket(c.Context(), c.Params("ticketId"), "")
+	if err != nil {
+		return err
+	}
+	return response.Success(c, data)
+}
+
 // @Summary 上传彩票原图
 // @Description 仅上传并保存彩票原图，不执行 OCR 和入库
 // @Tags lottery
@@ -397,15 +454,19 @@ func CreateTicket(c *fiber.Ctx) error {
 	}
 
 	data, err := lotteryService.CreateTicket(c.Context(), lotteryService.CreateTicketInput{
-		Code:             c.Params("code"),
+		Code:             firstNonEmpty(c.Params("code"), request.LotteryCode),
 		UploadID:         request.UploadID,
 		RecommendationID: request.RecommendationID,
 		Issue:            request.Issue,
 		PurchasedAt:      purchasedAt,
+		CostAmount:       request.CostAmount,
 		Notes:            request.Notes,
 		Entries:          entries,
 	})
 	if err != nil {
+		if errors.Is(err, lotteryService.ErrDuplicateTicket) {
+			return response.Error(c, err.Error(), fiber.StatusConflict)
+		}
 		return err
 	}
 	return response.Success(c, data, fiber.StatusCreated)
@@ -434,14 +495,19 @@ func CreateGenericTicket(c *fiber.Ctx) error {
 	}
 
 	data, err := lotteryService.CreateTicket(c.Context(), lotteryService.CreateTicketInput{
+		Code:             request.LotteryCode,
 		UploadID:         request.UploadID,
 		RecommendationID: request.RecommendationID,
 		Issue:            request.Issue,
 		PurchasedAt:      purchasedAt,
+		CostAmount:       request.CostAmount,
 		Notes:            request.Notes,
 		Entries:          entries,
 	})
 	if err != nil {
+		if errors.Is(err, lotteryService.ErrDuplicateTicket) {
+			return response.Error(c, err.Error(), fiber.StatusConflict)
+		}
 		return err
 	}
 	return response.Success(c, data, fiber.StatusCreated)
@@ -516,9 +582,10 @@ func parseCreateTicketEntries(items []CreateTicketEntryRequest) ([]lotteryServic
 			return nil, fmt.Errorf("每注号码都需要包含 redNumbers 和 blueNumbers")
 		}
 		result = append(result, lotteryService.ParsedEntry{
-			Red:      parseCSVValues(item.RedNumbers),
-			Blue:     parseCSVValues(item.BlueNumbers),
-			Multiple: item.Multiple,
+			Red:          parseCSVValues(item.RedNumbers),
+			Blue:         parseCSVValues(item.BlueNumbers),
+			Multiple:     item.Multiple,
+			IsAdditional: item.IsAdditional,
 		})
 	}
 	return result, nil
@@ -534,6 +601,13 @@ func parseCSVValues(value string) []int {
 		}
 	}
 	return result
+}
+
+func firstNonEmpty(value string, fallback string) string {
+	if value != "" {
+		return value
+	}
+	return fallback
 }
 
 func parseSyncDrawRequest(c *fiber.Ctx) SyncDrawRequest {

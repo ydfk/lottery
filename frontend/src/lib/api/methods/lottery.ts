@@ -11,7 +11,7 @@ import type {
 const LOTTERY_CODE = "ssq";
 
 export function getDashboard() {
-  return apiGet<DashboardData>(`/api/lotteries/${LOTTERY_CODE}/dashboard`);
+  return apiGet<DashboardData>(`/api/lotteries/dashboard`);
 }
 
 export function getTickets() {
@@ -57,21 +57,29 @@ export function recognizeTicket(body: { uploadId: string; ocrText?: string }) {
 }
 
 export function createTicket(body: {
+  lotteryCode?: string;
   uploadId: string;
   recommendationId?: string;
   issue?: string;
   purchasedAt?: string;
+  costAmount?: number;
   notes?: string;
-  entries?: Array<{ redNumbers: string; blueNumbers: string; multiple?: number }>;
+  entries?: Array<{ redNumbers: string; blueNumbers: string; multiple?: number; isAdditional?: boolean }>;
 }) {
   return apiPost<Ticket, {
+    lotteryCode?: string;
     uploadId: string;
     recommendationId?: string;
     issue?: string;
     purchasedAt?: string;
+    costAmount?: number;
     notes?: string;
-    entries?: Array<{ redNumbers: string; blueNumbers: string; multiple?: number }>;
+    entries?: Array<{ redNumbers: string; blueNumbers: string; multiple?: number; isAdditional?: boolean }>;
   }>(`/api/lotteries/tickets`, body);
+}
+
+export function recheckTicket(ticketId: string) {
+  return apiPost<Ticket>(`/api/lotteries/tickets/${ticketId}/recheck`);
 }
 
 export function scanTicket(formData: FormData) {

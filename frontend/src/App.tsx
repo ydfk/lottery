@@ -15,6 +15,7 @@ import {
   getDashboard,
   getRecommendationDetail,
   getRecommendations,
+  recheckTicket,
   recognizeTicket,
   uploadTicketImage,
 } from "@/lib/api/methods/lottery";
@@ -37,12 +38,13 @@ const tabs: { key: TabKey; label: string; icon: typeof LayoutDashboard }[] = [
   { key: "history", label: "历史", icon: History },
 ];
 
-function buildParsedEntryText(entries: ParsedEntry[]) {
+function buildParsedEntryText(entries: ParsedEntry[], lotteryCode?: string) {
   return entries
     .map((entry) => {
       const { redNumbers, blueNumbers } = formatParsedEntry(entry);
+      const additional = lotteryCode === "dlt" && entry.isAdditional ? " 追加" : "";
       const multiple = entry.multiple > 1 ? ` (${entry.multiple})` : "";
-      return `${redNumbers}+${blueNumbers}${multiple}`;
+      return `${redNumbers}+${blueNumbers}${additional}${multiple}`;
     })
     .join("\n");
 }
@@ -53,15 +55,17 @@ function buildRecommendationEntryText(recommendation: Recommendation) {
     .join("\n");
 }
 
-function parseEntryText(value: string) {
+function parseEntryText(value: string, lotteryCode: string) {
   return value
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      const multipleMatch = line.match(/[（(]\s*(\d+)\s*[)）]\s*$/);
+      const isAdditional = line.includes("追加");
+      const sourceLine = line.replace(/追加/g, "").trim();
+      const multipleMatch = sourceLine.match(/[（(]\s*(\d+)\s*[)）]\s*$/);
       const multiple = multipleMatch ? Number(multipleMatch[1]) : 1;
-      const normalizedLine = line.replace(/[（(]\s*\d+\s*[)）]\s*$/, "").trim();
+      const normalizedLine = sourceLine.replace(/[（(]\s*\d+\s*[)）]\s*$/, "").trim();
       const [redPart, bluePart] = normalizedLine.split("+");
       const redNumbers = redPart
         ?.split(",")
@@ -71,9 +75,48 @@ function parseEntryText(value: string) {
         ?.split(",")
         .map((item) => Number(item.trim()))
         .filter((item) => Number.isFinite(item)) ?? [];
-      return { red: redNumbers, blue: blueNumbers, multiple: multiple > 0 ? multiple : 1 };
+      return {
+        red: redNumbers,
+        blue: blueNumbers,
+        multiple: multiple > 0 ? multiple : 1,
+        isAdditional: lotteryCode === "dlt" ? isAdditional : false,
+      };
     })
     .filter((entry) => entry.red.length > 0 && entry.blue.length > 0);
+}
+
+function toggleEntryAdditionalText(value: string, index: number, lotteryCode: string) {
+  if (lotteryCode !== "dlt") {
+    return value;
+  }
+
+  const lines = value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return lines
+    .map((line, lineIndex) => {
+      if (lineIndex !== index) {
+        return line;
+      }
+
+      const hasAdditional = line.includes("追加");
+      const sourceLine = line.replace(/追加/g, "").trim();
+      if (hasAdditional) {
+        return sourceLine;
+      }
+
+      const multipleMatch = sourceLine.match(/[（(]\s*\d+\s*[)）]\s*$/);
+      if (!multipleMatch) {
+        return `${sourceLine} 追加`;
+      }
+
+      const multiplePart = multipleMatch[0];
+      const numbersPart = sourceLine.slice(0, sourceLine.length - multiplePart.length).trim();
+      return `${numbersPart} 追加 ${multiplePart}`.trim();
+    })
+    .join("\n");
 }
 
 function replaceRecommendation(
@@ -101,17 +144,21 @@ export default function App() {
   const [uploadPending, setUploadPending] = useState(false);
   const [recognizePending, setRecognizePending] = useState(false);
   const [submitPending, setSubmitPending] = useState(false);
+  const [recheckPending, setRecheckPending] = useState(false);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [tickets, setTickets] = useState<TicketRecord[]>([]);
   const [selectedRecommendation, setSelectedRecommendation] = useState<Recommendation | null>(null);
+  const [selectedHistoryTicket, setSelectedHistoryTicket] = useState<TicketRecord | null>(null);
   const [purchaseRecommendation, setPurchaseRecommendation] = useState<Recommendation | null>(null);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [uploadedTicket, setUploadedTicket] = useState<TicketUpload | null>(null);
   const [recognitionDraft, setRecognitionDraft] = useState<TicketRecognitionDraft | null>(null);
+  const [lotteryCode, setLotteryCode] = useState("");
   const [issue, setIssue] = useState("");
-  const [ocrText, setOCRText] = useState("");
+  const [drawDate, setDrawDate] = useState("");
+  const [costAmount, setCostAmount] = useState("");
   const [notes, setNotes] = useState("");
   const [entryText, setEntryText] = useState("");
 
@@ -120,6 +167,7 @@ export default function App() {
     setRecommendations([]);
     setTickets([]);
     setSelectedRecommendation(null);
+    setSelectedHistoryTicket(null);
     setPurchaseRecommendation(null);
     setActiveTab("dashboard");
   }
@@ -129,8 +177,10 @@ export default function App() {
     setPreviewUrl("");
     setUploadedTicket(null);
     setRecognitionDraft(null);
+    setLotteryCode("");
     setIssue("");
-    setOCRText("");
+    setDrawDate("");
+    setCostAmount("");
     setNotes("");
     setEntryText("");
   }
@@ -260,7 +310,10 @@ export default function App() {
   function handleRecordPurchase(recommendation: Recommendation) {
     setSelectedRecommendation(null);
     setPurchaseRecommendation(recommendation);
+    setLotteryCode(recommendation.lotteryCode || "");
     setIssue(recommendation.issue || "");
+    setDrawDate("");
+    setCostAmount((recommendation.entries.length * 2).toFixed(2));
     setEntryText(buildRecommendationEntryText(recommendation));
     setActiveTab("records");
     toast.success("已切换到记录页，接下来上传这条推荐的购买票据即可");
@@ -270,15 +323,12 @@ export default function App() {
     setSelectedImage(file);
     setUploadedTicket(null);
     setRecognitionDraft(null);
-    setOCRText("");
   }
 
-  async function handleUploadTicketImage() {
+  async function uploadSelectedTicketImage() {
     if (!selectedImage) {
-      toast.error("请先上传彩票照片");
-      return;
+      throw new Error("请先选择彩票照片");
     }
-
     const formData = new FormData();
     formData.append("image", selectedImage);
 
@@ -286,32 +336,35 @@ export default function App() {
     try {
       const upload = await uploadTicketImage(formData);
       setUploadedTicket(upload);
-      setRecognitionDraft(null);
-      toast.success("原图上传成功");
+      return upload;
     } catch (error) {
       handleRequestError(error, "上传原图失败");
+      throw error;
     } finally {
       setUploadPending(false);
     }
   }
 
   async function handleRecognizeTicket() {
-    if (!uploadedTicket) {
-      toast.error("请先上传原图");
+    if (!selectedImage && !uploadedTicket) {
+      toast.error("请先选择彩票照片");
       return;
     }
 
     setRecognizePending(true);
     try {
+      const upload = uploadedTicket || (await uploadSelectedTicketImage());
       const draft = await recognizeTicket({
-        uploadId: uploadedTicket.id,
-        ocrText: ocrText || undefined,
+        uploadId: upload.id,
       });
       setUploadedTicket(draft.upload);
       setRecognitionDraft(draft);
-      setIssue(draft.issue || issue);
-      setEntryText(buildParsedEntryText(draft.entries));
-      toast.success("识别完成，请继续校对并入库");
+      setLotteryCode(draft.lotteryCode || lotteryCode);
+      setIssue(draft.issue || "");
+      setDrawDate(draft.drawDate || "");
+      setCostAmount(draft.costAmount > 0 ? draft.costAmount.toFixed(2) : "");
+      setEntryText(buildParsedEntryText(draft.entries, draft.lotteryCode || lotteryCode));
+      toast.success("识别完成");
     } catch (error) {
       handleRequestError(error, "识别失败");
     } finally {
@@ -321,27 +374,35 @@ export default function App() {
 
   async function handleCreateTicket() {
     if (!uploadedTicket) {
-      toast.error("请先上传原图");
+      toast.error("请先识别彩票内容");
       return;
     }
 
-    const entries = parseEntryText(entryText);
+    const entries = parseEntryText(entryText, lotteryCode);
     if (entries.length === 0) {
       toast.error("请至少确认一注号码");
+      return;
+    }
+    if (!lotteryCode.trim()) {
+      toast.error("请确认彩票类型");
       return;
     }
 
     setSubmitPending(true);
     try {
+      const manualCostAmount = Number(costAmount);
       await createTicket({
+        lotteryCode: lotteryCode || undefined,
         uploadId: uploadedTicket.id,
         recommendationId: purchaseRecommendation?.id,
         issue: issue || undefined,
         purchasedAt: new Date().toISOString(),
+        costAmount: Number.isFinite(manualCostAmount) && manualCostAmount > 0 ? manualCostAmount : undefined,
         notes: notes || undefined,
         entries: entries.map((entry) => ({
           ...formatParsedEntry(entry),
           multiple: entry.multiple,
+          isAdditional: entry.isAdditional,
         })),
       });
       toast.success("票据已入库并完成判奖检查");
@@ -352,6 +413,24 @@ export default function App() {
       handleRequestError(error, "入库失败");
     } finally {
       setSubmitPending(false);
+    }
+  }
+
+  function handleToggleEntryAdditional(index: number) {
+    setEntryText((current) => toggleEntryAdditionalText(current, index, lotteryCode));
+  }
+
+  async function handleRecheckTicket(ticketId: string) {
+    setRecheckPending(true);
+    try {
+      const updatedTicket = await recheckTicket(ticketId);
+      setTickets((current) => current.map((item) => (item.id === updatedTicket.id ? updatedTicket : item)));
+      setSelectedHistoryTicket(updatedTicket);
+      toast.success("重新判奖完成");
+    } catch (error) {
+      handleRequestError(error, "重新判奖失败");
+    } finally {
+      setRecheckPending(false);
     }
   }
 
@@ -405,25 +484,37 @@ export default function App() {
             uploadPending={uploadPending}
             uploadedTicket={uploadedTicket}
             recognitionDraft={recognitionDraft}
-            ocrText={ocrText}
+            lotteryCode={lotteryCode}
             recognizePending={recognizePending}
             issue={issue}
+            drawDate={drawDate}
+            costAmount={costAmount}
             notes={notes}
             entryText={entryText}
             submitPending={submitPending}
             onSelectImage={handleSelectImage}
-            onUpload={() => void handleUploadTicketImage()}
-            onOCRTextChange={setOCRText}
+            onLotteryCodeChange={setLotteryCode}
             onRecognize={() => void handleRecognizeTicket()}
             onIssueChange={setIssue}
+            onDrawDateChange={setDrawDate}
+            onCostAmountChange={setCostAmount}
             onNotesChange={setNotes}
             onEntryTextChange={setEntryText}
+            onToggleEntryAdditional={handleToggleEntryAdditional}
             onCreateTicket={() => void handleCreateTicket()}
             onClearRecommendation={() => setPurchaseRecommendation(null)}
           />
         )}
 
-        {activeTab === "history" && <HistoryPanel tickets={tickets} />}
+        {activeTab === "history" && (
+          <HistoryPanel
+            tickets={tickets}
+            selectedTicket={selectedHistoryTicket}
+            recheckPending={recheckPending}
+            onSelectTicket={setSelectedHistoryTicket}
+            onRecheckTicket={(ticketId) => void handleRecheckTicket(ticketId)}
+          />
+        )}
       </div>
 
       <nav className="fixed inset-x-0 bottom-4 z-50 mx-auto flex w-[calc(100%-1.5rem)] max-w-5xl items-center gap-2 rounded-[2rem] border border-white/70 bg-white/90 p-2 shadow-[0_18px_40px_rgba(15,23,42,0.14)] backdrop-blur">

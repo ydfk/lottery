@@ -20,6 +20,40 @@ type DashboardStats struct {
 	TotalPrize   float64 `json:"totalPrize"`
 }
 
+func loadDashboardStats(code string) DashboardStats {
+	stats := DashboardStats{}
+	var totalTickets int64
+	var wonTickets int64
+
+	query := db.DB.Model(&model.Ticket{})
+	if code != "" {
+		query = query.Where("lottery_code = ?", code)
+	}
+	query.Count(&totalTickets)
+
+	winQuery := db.DB.Model(&model.Ticket{}).Where("status = ?", TicketStatusWon)
+	if code != "" {
+		winQuery = winQuery.Where("lottery_code = ?", code)
+	}
+	winQuery.Count(&wonTickets)
+
+	costQuery := db.DB.Model(&model.Ticket{})
+	if code != "" {
+		costQuery = costQuery.Where("lottery_code = ?", code)
+	}
+	costQuery.Select("COALESCE(sum(cost_amount), 0)").Scan(&stats.TotalCost)
+
+	prizeQuery := db.DB.Model(&model.Ticket{})
+	if code != "" {
+		prizeQuery = prizeQuery.Where("lottery_code = ?", code)
+	}
+	prizeQuery.Select("COALESCE(sum(prize_amount), 0)").Scan(&stats.TotalPrize)
+
+	stats.TotalTickets = int(totalTickets)
+	stats.WonTickets = int(wonTickets)
+	return stats
+}
+
 func getLotteryType(code string) (model.LotteryType, error) {
 	lotteryType := model.LotteryType{}
 	if err := db.DB.Where("code = ?", code).First(&lotteryType).Error; err != nil {
@@ -67,21 +101,18 @@ func GetDashboard(code string) (*DashboardData, error) {
 		return nil, err
 	}
 
-	stats := DashboardStats{}
-	var totalTickets int64
-	var wonTickets int64
-	db.DB.Model(&model.Ticket{}).Where("lottery_code = ?", code).Count(&totalTickets)
-	db.DB.Model(&model.Ticket{}).Where("lottery_code = ? AND status = ?", code, TicketStatusWon).Count(&wonTickets)
-	stats.TotalTickets = int(totalTickets)
-	stats.WonTickets = int(wonTickets)
-	db.DB.Model(&model.Ticket{}).Where("lottery_code = ?", code).Select("COALESCE(sum(cost_amount), 0)").Scan(&stats.TotalCost)
-	db.DB.Model(&model.Ticket{}).Where("lottery_code = ?", code).Select("COALESCE(sum(prize_amount), 0)").Scan(&stats.TotalPrize)
-
 	return &DashboardData{
 		Lottery:              lotteryType,
 		LatestDraw:           latestDraw,
 		LatestRecommendation: latestRecommendation,
 		RecentTickets:        recentTickets,
-		Stats:                stats,
+		Stats:                loadDashboardStats(code),
+	}, nil
+}
+
+func GetGlobalDashboard() (*DashboardData, error) {
+	return &DashboardData{
+		RecentTickets: make([]TicketDetail, 0),
+		Stats:         loadDashboardStats(""),
 	}, nil
 }

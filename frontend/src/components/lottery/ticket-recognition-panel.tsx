@@ -79,9 +79,12 @@ export function TicketRecognitionPanel(props: TicketRecognitionPanelProps) {
                     {recognitionDraft.entries.map((entry, index) => (
                       <div key={`${formatNumbers(entry.red)}-${formatNumbers(entry.blue)}-${index}`} className="rounded-[1.5rem] border border-slate-200 bg-white p-4">
                         <div className="flex items-center justify-between gap-3">
-                          <span className="text-sm font-medium text-slate-700">
-                            识别注 {index + 1} · {entry.multiple || 1} 倍
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-slate-700">
+                              识别注 {index + 1} · {entry.multiple || 1} 倍
+                            </span>
+                            {entry.isAdditional && <Badge variant="secondary">追加</Badge>}
+                          </div>
                           <ScanSearch className="size-4 text-slate-400" />
                         </div>
                         <div className="mt-3">

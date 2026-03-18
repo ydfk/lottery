@@ -3,7 +3,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { SummaryCard } from "@/components/lottery/summary-card";
-import { getLotteryDisplayName } from "@/lib/lottery-display";
 import type { AuthUser } from "@/types/auth";
 import type { DashboardData } from "@/types/lottery";
 
@@ -50,9 +49,6 @@ export function DashboardPanel({ currentUser, dashboard, onLogout }: DashboardPa
                 <p className="text-lg font-semibold">{currentUser.username}</p>
                 <p className="mt-1 text-sm text-white/70">已登录，可查看推荐、录票和历史记录</p>
               </div>
-            </div>
-            <div className="text-sm text-white/70">
-              当前彩种：{getLotteryDisplayName(dashboard?.lottery.code, dashboard?.lottery.name || "福彩双色球")}
             </div>
           </CardContent>
         </Card>

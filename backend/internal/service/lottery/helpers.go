@@ -15,10 +15,17 @@ import (
 )
 
 var (
-	jsonFencePattern     = regexp.MustCompile("(?s)```json\\s*(.*?)\\s*```")
-	issuePattern         = regexp.MustCompile(`20\d{5}`)
-	numberPattern        = regexp.MustCompile(`\d{1,2}`)
-	entryMultiplePattern = regexp.MustCompile(`[（(]\s*(\d+)\s*[)）]`)
+	jsonFencePattern      = regexp.MustCompile("(?s)```json\\s*(.*?)\\s*```")
+	issuePattern          = regexp.MustCompile(`20\d{5}`)
+	issueLabelPattern     = regexp.MustCompile(`第\s*(\d{5,7})\s*期`)
+	datePattern           = regexp.MustCompile(`(20\d{2})[年./-](\d{1,2})[月./-](\d{1,2})`)
+	shortDatePattern      = regexp.MustCompile(`\b(\d{2})[./-](\d{1,2})[./-](\d{1,2})\b`)
+	compactDatePattern    = regexp.MustCompile(`\b(20\d{2})(\d{2})(\d{2})\b`)
+	costPattern           = regexp.MustCompile(`(?:金额|合计|共计|投注金额|投注额|总金额|实付)\s*[:：]?\s*(\d+(?:\.\d+)?)`)
+	numberPattern         = regexp.MustCompile(`\d{1,2}`)
+	entryMultiplePattern  = regexp.MustCompile(`[（(]\s*(\d+)\s*[)）]`)
+	ticketMultiplePattern = regexp.MustCompile(`(?:追加投注|投注)?\s*(\d+)\s*倍`)
+	entryMarkerPattern    = regexp.MustCompile(`([①②③④⑤⑥⑦⑧⑨⑩])`)
 )
 
 func mustJSON(value any) string {
@@ -38,6 +45,9 @@ func stripJSONFence(content string) string {
 }
 
 func parseIssue(text string) string {
+	if matches := issueLabelPattern.FindStringSubmatch(text); len(matches) == 2 {
+		return matches[1]
+	}
 	return issuePattern.FindString(text)
 }
 
@@ -55,7 +65,7 @@ func normalizeText(text string) string {
 		":", " ",
 		"：", " ",
 	)
-	return replacer.Replace(text)
+	return entryMarkerPattern.ReplaceAllString(replacer.Replace(text), "\n$1")
 }
 
 func parseEntryMultiple(text string) int {
@@ -69,6 +79,72 @@ func parseEntryMultiple(text string) int {
 		return 1
 	}
 	return value
+}
+
+func parseTicketMultiple(text string) int {
+	matches := ticketMultiplePattern.FindStringSubmatch(text)
+	if len(matches) != 2 {
+		return 1
+	}
+
+	value, err := strconv.Atoi(matches[1])
+	if err != nil || value <= 0 {
+		return 1
+	}
+	return value
+}
+
+func parseRecognizedDrawDate(text string) string {
+	if matches := datePattern.FindStringSubmatch(text); len(matches) == 4 {
+		return formatDateString(matches[1], matches[2], matches[3])
+	}
+	if matches := shortDatePattern.FindStringSubmatch(text); len(matches) == 4 {
+		return formatDateString(normalizeShortYear(matches[1]), matches[2], matches[3])
+	}
+	if matches := compactDatePattern.FindStringSubmatch(text); len(matches) == 4 {
+		return formatDateString(matches[1], matches[2], matches[3])
+	}
+	return ""
+}
+
+func normalizeShortYear(value string) string {
+	year, err := strconv.Atoi(value)
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("20%02d", year)
+}
+
+func formatDateString(year string, month string, day string) string {
+	monthValue, err := strconv.Atoi(month)
+	if err != nil || monthValue < 1 || monthValue > 12 {
+		return ""
+	}
+	dayValue, err := strconv.Atoi(day)
+	if err != nil || dayValue < 1 || dayValue > 31 {
+		return ""
+	}
+	return fmt.Sprintf("%s-%02d-%02d", year, monthValue, dayValue)
+}
+
+func parseRecognizedCost(text string, entries []ParsedEntry) float64 {
+	if matches := costPattern.FindStringSubmatch(text); len(matches) == 2 {
+		return parseFloat(matches[1])
+	}
+	return calculateEntriesCost(entries)
+}
+
+func calculateEntriesCost(entries []ParsedEntry) float64 {
+	total := 0.0
+	for _, entry := range entries {
+		multiple := resolveEntryMultiple(entry)
+		perBetCost := 2
+		if entry.IsAdditional {
+			perBetCost++
+		}
+		total += float64(multiple * perBetCost)
+	}
+	return total
 }
 
 func parseFloat(value any) float64 {
@@ -228,6 +304,61 @@ func buildPublicImageURL(imagePath string) string {
 		return ""
 	}
 	return path.Join("/uploads", filepath.ToSlash(relativePath))
+}
+
+func normalizeIssueByCode(code string, issue string) string {
+	issue = strings.TrimSpace(issue)
+	if issue == "" {
+		return ""
+	}
+
+	if code == "dlt" && len(issue) == 5 && isDigits(issue) {
+		return "20" + issue
+	}
+	return issue
+}
+
+func issueAliases(code string, issue string) []string {
+	canonical := normalizeIssueByCode(code, issue)
+	aliases := make([]string, 0, 2)
+	for _, item := range []string{canonical, strings.TrimSpace(issue)} {
+		if item == "" {
+			continue
+		}
+		exists := false
+		for _, current := range aliases {
+			if current == item {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			aliases = append(aliases, item)
+		}
+	}
+	if code == "dlt" && len(canonical) == 7 && strings.HasPrefix(canonical, "20") {
+		shortIssue := canonical[2:]
+		exists := false
+		for _, current := range aliases {
+			if current == shortIssue {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			aliases = append(aliases, shortIssue)
+		}
+	}
+	return aliases
+}
+
+func isDigits(value string) bool {
+	for _, item := range value {
+		if item < '0' || item > '9' {
+			return false
+		}
+	}
+	return value != ""
 }
 
 func max(a int, b int) int {

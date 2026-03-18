@@ -6,12 +6,11 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { NumberBalls } from "@/components/lottery/number-balls";
 import { TicketCard } from "@/components/lottery/ticket-card";
-import { getLotteryDisplayName } from "@/lib/lottery-display";
+import { formatLotteryIssue, getLotteryDisplayName } from "@/lib/lottery-display";
 import type { Ticket } from "@/types/lottery";
 
 const statusLabelMap: Record<string, string> = {
@@ -28,9 +27,15 @@ const statusClassMap: Record<string, string> = {
 
 interface HistoryPanelProps {
   tickets: Ticket[];
+  selectedTicket: Ticket | null;
+  recheckPending: boolean;
+  onSelectTicket: (ticket: Ticket | null) => void;
+  onRecheckTicket: (ticketId: string) => void;
 }
 
-export function HistoryPanel({ tickets }: HistoryPanelProps) {
+export function HistoryPanel(props: HistoryPanelProps) {
+  const { tickets, selectedTicket, recheckPending, onSelectTicket, onRecheckTicket } = props;
+
   return (
     <div className="space-y-6">
       <section className="rounded-[2rem] border border-white/60 bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(248,250,252,0.98)_45%,rgba(226,232,240,1))] p-6 shadow-[0_24px_60px_rgba(15,23,42,0.08)]">
@@ -43,50 +48,44 @@ export function HistoryPanel({ tickets }: HistoryPanelProps) {
       {tickets.length > 0 ? (
         <div className="grid gap-4 lg:grid-cols-2">
           {tickets.map((ticket) => (
-            <Dialog key={ticket.id}>
-              <Card className="border-white/60 bg-white/85 shadow-[0_16px_40px_rgba(15,23,42,0.08)]">
+            <button
+              key={ticket.id}
+              type="button"
+              className="text-left"
+              onClick={() => onSelectTicket(ticket)}
+            >
+              <Card className="border-white/60 bg-white/85 shadow-[0_16px_40px_rgba(15,23,42,0.08)] transition hover:-translate-y-0.5 hover:shadow-[0_20px_48px_rgba(15,23,42,0.12)]">
                 <CardContent className="p-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary">{getLotteryDisplayName(ticket.lotteryCode)}</Badge>
-                        <span
-                          className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
-                            statusClassMap[ticket.status] || "border-slate-200 bg-slate-100 text-slate-700"
-                          }`}
-                        >
-                          {statusLabelMap[ticket.status] || ticket.status}
-                        </span>
-                      </div>
-                      <p className="mt-3 text-lg font-semibold text-slate-900">第 {ticket.issue} 期</p>
-                      <p className="mt-1 text-sm text-slate-500">
-                        {format(new Date(ticket.purchasedAt), "yyyy-MM-dd HH:mm")}
-                      </p>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary">{getLotteryDisplayName(ticket.lotteryCode)}</Badge>
+                      <span
+                        className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
+                          statusClassMap[ticket.status] || "border-slate-200 bg-slate-100 text-slate-700"
+                        }`}
+                      >
+                        {statusLabelMap[ticket.status] || ticket.status}
+                      </span>
                     </div>
-                    <DialogTrigger asChild>
-                      <Button type="button" variant="secondary" size="sm">
-                        查看详情
-                      </Button>
-                    </DialogTrigger>
-                  </div>
-
-                  {ticket.entries[0] && (
-                    <div className="mt-4 rounded-[1.5rem] bg-slate-50 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-sm font-medium text-slate-700">
-                          第 1 注 · {ticket.entries[0].multiple || 1} 倍
-                        </span>
-                        <span className="text-xs text-slate-500">{ticket.entries.length} 注</span>
-                      </div>
-                      <div className="mt-3">
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-lg font-semibold text-slate-900">
+                        第 {formatLotteryIssue(ticket.lotteryCode, ticket.issue)} 期
+                        {ticket.drawDate ? ` · ${format(new Date(ticket.drawDate), "yyyy-MM-dd")}` : ""}
+                      </p>
+                      {ticket.drawRedNumbers && ticket.drawBlueNumbers ? (
                         <NumberBalls
-                          redNumbers={ticket.entries[0].redNumbers}
-                          blueNumbers={ticket.entries[0].blueNumbers}
+                          redNumbers={ticket.drawRedNumbers}
+                          blueNumbers={ticket.drawBlueNumbers}
                           compact
                         />
-                      </div>
+                      ) : (
+                        <span className="text-sm font-medium text-slate-400">待开奖</span>
+                      )}
                     </div>
-                  )}
+                    <p className="mt-2 text-sm text-slate-500">
+                      {format(new Date(ticket.purchasedAt), "yyyy-MM-dd HH:mm")}
+                    </p>
+                  </div>
 
                   <div className="mt-4 flex items-center justify-between gap-4 rounded-2xl bg-slate-50 px-4 py-3">
                     <div className="min-w-0">
@@ -109,16 +108,7 @@ export function HistoryPanel({ tickets }: HistoryPanelProps) {
                   </div>
                 </CardContent>
               </Card>
-
-              <DialogContent className="max-h-[92vh] overflow-y-auto border-white/70 bg-[rgba(255,255,255,0.98)] p-0 sm:max-w-4xl">
-                <div className="p-6 sm:p-7">
-                  <DialogHeader className="mb-4">
-                    <DialogTitle>票据详情</DialogTitle>
-                  </DialogHeader>
-                  <TicketCard ticket={ticket} />
-                </div>
-              </DialogContent>
-            </Dialog>
+            </button>
           ))}
         </div>
       ) : (
@@ -128,6 +118,32 @@ export function HistoryPanel({ tickets }: HistoryPanelProps) {
           </CardContent>
         </Card>
       )}
+
+      <Dialog open={Boolean(selectedTicket)} onOpenChange={(open) => onSelectTicket(open ? selectedTicket : null)}>
+        <DialogContent className="max-h-[92vh] overflow-y-auto border-white/70 bg-[rgba(255,255,255,0.98)] p-0 sm:max-w-4xl">
+          <div className="p-6 sm:p-7">
+            {selectedTicket ? (
+              <>
+                <DialogHeader className="mb-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <DialogTitle>票据详情</DialogTitle>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      disabled={recheckPending}
+                      onClick={() => onRecheckTicket(selectedTicket.id)}
+                    >
+                      {recheckPending ? "判奖中..." : "重新判奖"}
+                    </Button>
+                  </div>
+                </DialogHeader>
+                <TicketCard ticket={selectedTicket} />
+              </>
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

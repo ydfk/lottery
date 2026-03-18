@@ -21,8 +21,10 @@ type ScanTicketInput struct {
 
 type TicketDetail struct {
 	model.Ticket
-	ImageURL string     `json:"imageUrl"`
-	DrawDate *time.Time `json:"drawDate"`
+	ImageURL        string     `json:"imageUrl"`
+	DrawDate        *time.Time `json:"drawDate"`
+	DrawRedNumbers  string     `json:"drawRedNumbers"`
+	DrawBlueNumbers string     `json:"drawBlueNumbers"`
 }
 
 func ScanTicket(ctx context.Context, input ScanTicketInput) (*TicketDetail, error) {
@@ -111,7 +113,7 @@ func EvaluatePendingTickets(code string) error {
 
 func EvaluateTicketsByIssue(code string, issue string) error {
 	tickets := make([]model.Ticket, 0)
-	if err := db.DB.Where("lottery_code = ? AND issue = ?", code, issue).Find(&tickets).Error; err != nil {
+	if err := db.DB.Where("lottery_code = ? AND issue IN ?", code, issueAliases(code, issue)).Find(&tickets).Error; err != nil {
 		return err
 	}
 	for _, ticket := range tickets {
@@ -127,9 +129,16 @@ func EvaluateTicket(ticketID string) error {
 	if err := db.DB.Preload("Entries").First(&ticket, "id = ?", ticketID).Error; err != nil {
 		return err
 	}
+	canonicalIssue := normalizeIssueByCode(ticket.LotteryCode, ticket.Issue)
+	if canonicalIssue != "" && canonicalIssue != ticket.Issue {
+		ticket.Issue = canonicalIssue
+		if err := db.DB.Omit("Entries").Save(&ticket).Error; err != nil {
+			return err
+		}
+	}
 
 	draw := model.DrawResult{}
-	if err := db.DB.Preload("PrizeDetails").Where("lottery_code = ? AND issue = ?", ticket.LotteryCode, ticket.Issue).First(&draw).Error; err != nil {
+	if err := db.DB.Preload("PrizeDetails").Where("lottery_code = ? AND issue IN ?", ticket.LotteryCode, issueAliases(ticket.LotteryCode, ticket.Issue)).First(&draw).Error; err != nil {
 		return nil
 	}
 
@@ -141,7 +150,7 @@ func EvaluateTicket(ticketID string) error {
 	totalPrize := 0.0
 	hasWinning := false
 	for _, entry := range ticket.Entries {
-		result := JudgeNumbers(ticket.LotteryCode, entry.RedNumbers, entry.BlueNumbers, draw, prizeMap)
+		result := JudgeNumbers(ticket.LotteryCode, entry.RedNumbers, entry.BlueNumbers, entry.IsAdditional, draw, prizeMap)
 		entry.IsWinning = result.IsWinning
 		entry.PrizeName = result.PrizeName
 		entry.PrizeAmount = result.PrizeAmount * float64(max(1, entry.Multiple))
@@ -161,7 +170,30 @@ func EvaluateTicket(ticketID string) error {
 	} else {
 		ticket.Status = TicketStatusNotWon
 	}
-	return db.DB.Save(&ticket).Error
+	return db.DB.Omit("Entries").Save(&ticket).Error
+}
+
+func RecheckTicket(ctx context.Context, ticketID string, code string) (*TicketDetail, error) {
+	ticket := model.Ticket{}
+	query := db.DB.Preload("Entries")
+	if code != "" {
+		query = query.Where("lottery_code = ?", code)
+	}
+	if err := query.First(&ticket, "id = ?", ticketID).Error; err != nil {
+		return nil, err
+	}
+
+	ticketIssue := normalizeIssueByCode(ticket.LotteryCode, ticket.Issue)
+	if ticketIssue == "" {
+		return nil, fmt.Errorf("票据期号不能为空")
+	}
+	if _, err := SyncLatestDraw(ctx, ticket.LotteryCode, ticketIssue); err != nil {
+		return nil, err
+	}
+	if err := EvaluateTicket(ticket.Id.String()); err != nil {
+		return nil, err
+	}
+	return GetTicketDetail(ticket.Id.String())
 }
 
 func GetTicketDetail(ticketID string) (*TicketDetail, error) {
@@ -213,9 +245,11 @@ func buildTicketDetail(ticket model.Ticket) *TicketDetail {
 	}
 
 	draw := model.DrawResult{}
-	if err := db.DB.Select("draw_date").Where("lottery_code = ? AND issue = ?", ticket.LotteryCode, ticket.Issue).First(&draw).Error; err == nil {
+	if err := db.DB.Select("draw_date", "red_numbers", "blue_numbers").Where("lottery_code = ? AND issue IN ?", ticket.LotteryCode, issueAliases(ticket.LotteryCode, ticket.Issue)).First(&draw).Error; err == nil {
 		drawDate := draw.DrawDate
 		detail.DrawDate = &drawDate
+		detail.DrawRedNumbers = draw.RedNumbers
+		detail.DrawBlueNumbers = draw.BlueNumbers
 	}
 
 	return detail

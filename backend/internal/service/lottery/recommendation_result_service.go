@@ -30,7 +30,7 @@ func EvaluateRecommendationsByIssue(code string, issue string) error {
 	for _, recommendation := range recommendations {
 		totalPrize := 0.0
 		for _, entry := range recommendation.Entries {
-			result := JudgeNumbers(code, entry.RedNumbers, entry.BlueNumbers, draw, prizeMap)
+			result := JudgeNumbers(code, entry.RedNumbers, entry.BlueNumbers, false, draw, prizeMap)
 			entry.IsWinning = result.IsWinning
 			entry.PrizeName = result.PrizeName
 			entry.PrizeAmount = result.PrizeAmount
@@ -43,7 +43,7 @@ func EvaluateRecommendationsByIssue(code string, issue string) error {
 
 		recommendation.CheckedAt = &checkedAt
 		recommendation.PrizeAmount = totalPrize
-		if err := db.DB.Save(&recommendation).Error; err != nil {
+		if err := db.DB.Omit("Entries").Save(&recommendation).Error; err != nil {
 			return err
 		}
 	}
