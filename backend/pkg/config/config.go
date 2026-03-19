@@ -70,14 +70,21 @@ type LotteryConfig struct {
 	RedMax          int                         `mapstructure:"redMax"`
 	BlueMin         int                         `mapstructure:"blueMin"`
 	BlueMax         int                         `mapstructure:"blueMax"`
+	DrawSchedule    LotteryDrawScheduleConfig   `mapstructure:"drawSchedule"`
 	Recommendation  LotteryRecommendationConfig `mapstructure:"recommendation"`
 	Sync            LotterySyncRuleConfig       `mapstructure:"sync"`
 }
 
+type LotteryDrawScheduleConfig struct {
+	Weekdays []int  `mapstructure:"weekdays"`
+	Time     string `mapstructure:"time"`
+}
+
 type LotteryRecommendationConfig struct {
+	Enabled       bool   `mapstructure:"enabled"`
+	Cron          string `mapstructure:"cron"`
 	Count         int    `mapstructure:"count"`
 	HistoryWindow int    `mapstructure:"historyWindow"`
-	Provider      string `mapstructure:"provider"`
 	Model         string `mapstructure:"model"`
 	Prompt        string `mapstructure:"prompt"`
 	PromptVersion string `mapstructure:"promptVersion"`

@@ -37,6 +37,7 @@ export interface Recommendation {
   id: string;
   lotteryCode: string;
   issue: string;
+  drawDate?: string;
   provider: string;
   model: string;
   strategy: string;
@@ -51,6 +52,20 @@ export interface Recommendation {
   winningCount?: number;
   isPurchased?: boolean;
   purchasedTicket?: Ticket;
+}
+
+export interface RecommendationFilters {
+  lotteryCode: string;
+  status: string;
+  sort: string;
+}
+
+export interface RecommendationPage {
+  items: Recommendation[];
+  page: number;
+  pageSize: number;
+  total: number;
+  hasMore: boolean;
 }
 
 export interface TicketEntry {
@@ -81,6 +96,20 @@ export interface Ticket {
   recognizedText: string;
   imageUrl: string;
   entries: TicketEntry[];
+}
+
+export interface TicketHistoryFilters {
+  lotteryCode: string;
+  status: string;
+  sort: string;
+}
+
+export interface TicketHistoryPage {
+  items: Ticket[];
+  page: number;
+  pageSize: number;
+  total: number;
+  hasMore: boolean;
 }
 
 export interface ParsedEntry {

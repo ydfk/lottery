@@ -18,10 +18,6 @@ import (
 	"github.com/google/uuid"
 )
 
-type GenerateRecommendationRequest struct {
-	Count int `json:"count"`
-}
-
 type SyncDrawRequest struct {
 	Issue        string   `json:"issue"`
 	Start        int      `json:"start"`
@@ -120,6 +116,33 @@ func ListRecommendations(c *fiber.Ctx) error {
 	return response.Success(c, data)
 }
 
+// @Summary 获取全部推荐列表
+// @Description 返回全部彩票推荐记录，支持按彩种、开奖状态筛选，并按时间或金额排序，适合移动端动态加载
+// @Tags lottery
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码，默认 1"
+// @Param pageSize query int false "每页数量，默认 10，最大 50"
+// @Param lotteryCode query string false "彩票编码，如 ssq、dlt"
+// @Param status query string false "状态，可选 pending、won、not_won"
+// @Param sort query string false "排序，可选 latest、oldest、draw_latest、draw_oldest、prize_high"
+// @Success 200 {object} RecommendationPageResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /lotteries/recommendations [get]
+func ListAllRecommendations(c *fiber.Ctx) error {
+	data, err := lotteryService.QueryRecommendations(lotteryService.RecommendationQueryOptions{
+		Page:        parseIntValue(c.Query("page"), 1),
+		PageSize:    parseIntValue(c.Query("pageSize"), 10),
+		LotteryCode: c.Query("lotteryCode"),
+		Status:      c.Query("status"),
+		Sort:        c.Query("sort", "latest"),
+	})
+	if err != nil {
+		return err
+	}
+	return response.Success(c, data)
+}
+
 // @Summary 获取最新推荐
 // @Description 返回指定彩票最近一次生成的推荐号码
 // @Tags lottery
@@ -158,21 +181,14 @@ func GetRecommendationDetail(c *fiber.Ctx) error {
 // @Summary 生成推荐号码
 // @Description 按当前彩票配置的 AI 模型和提示词生成推荐号码
 // @Tags lottery
-// @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param code path string true "彩票编码，如 ssq、dlt"
-// @Param request body GenerateRecommendationRequest false "推荐生成参数"
 // @Success 200 {object} RecommendationResponse
 // @Failure 500 {object} ErrorResponse
 // @Router /lotteries/{code}/recommendations/generate [post]
 func GenerateRecommendation(c *fiber.Ctx) error {
-	request := GenerateRecommendationRequest{}
-	if err := c.BodyParser(&request); err != nil {
-		request.Count = 0
-	}
-
-	data, err := lotteryService.GenerateRecommendation(c.Context(), c.Params("code"), request.Count)
+	data, err := lotteryService.GenerateRecommendation(c.Context(), c.Params("code"), 0)
 	if err != nil {
 		return err
 	}
@@ -281,6 +297,33 @@ func ListAllTickets(c *fiber.Ctx) error {
 		return err
 	}
 	return response.Success(c, items)
+}
+
+// @Summary 分页获取历史票据
+// @Description 支持按彩种、中奖状态筛选，并按时间或金额排序，适合移动端历史列表动态加载
+// @Tags lottery
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码，默认 1"
+// @Param pageSize query int false "每页数量，默认 10，最大 50"
+// @Param lotteryCode query string false "彩票编码，如 ssq、dlt"
+// @Param status query string false "状态，可选 pending、won、not_won"
+// @Param sort query string false "排序，可选 latest、oldest、prize_high、cost_high"
+// @Success 200 {object} TicketPageResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /lotteries/tickets/history [get]
+func ListTicketHistory(c *fiber.Ctx) error {
+	data, err := lotteryService.QueryAllTickets(lotteryService.TicketQueryOptions{
+		Page:        parseIntValue(c.Query("page"), 1),
+		PageSize:    parseIntValue(c.Query("pageSize"), 10),
+		LotteryCode: c.Query("lotteryCode"),
+		Status:      c.Query("status"),
+		Sort:        c.Query("sort", "latest"),
+	})
+	if err != nil {
+		return err
+	}
+	return response.Success(c, data)
 }
 
 // @Summary 重新判奖

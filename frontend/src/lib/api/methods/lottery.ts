@@ -3,7 +3,11 @@ import type {
   DashboardData,
   ParsedEntry,
   Recommendation,
+  RecommendationFilters,
+  RecommendationPage,
   Ticket,
+  TicketHistoryFilters,
+  TicketHistoryPage,
   TicketRecognitionDraft,
   TicketUpload,
 } from "@/types/lottery";
@@ -22,23 +26,69 @@ export function getAllTickets() {
   return apiGet<Ticket[]>(`/api/lotteries/tickets?limit=20`);
 }
 
-export function getRecommendations(limit = 20) {
-  return apiGet<Recommendation[]>(`/api/lotteries/${LOTTERY_CODE}/recommendations?limit=${limit}`);
+export function getTicketHistory(page: number, pageSize: number, filters: TicketHistoryFilters) {
+  const query = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+    sort: filters.sort || "latest",
+  });
+  if (filters.lotteryCode) {
+    query.set("lotteryCode", filters.lotteryCode);
+  }
+  if (filters.status) {
+    query.set("status", filters.status);
+  }
+  return apiGet<TicketHistoryPage>(`/api/lotteries/tickets/history?${query.toString()}`);
+}
+
+function normalizeRecommendationPage(data: RecommendationPage | Recommendation[]): RecommendationPage {
+  if (Array.isArray(data)) {
+    return {
+      items: data,
+      page: 1,
+      pageSize: data.length,
+      total: data.length,
+      hasMore: false,
+    };
+  }
+
+  return {
+    items: Array.isArray(data.items) ? data.items : [],
+    page: data.page || 1,
+    pageSize: data.pageSize || 10,
+    total: data.total || 0,
+    hasMore: Boolean(data.hasMore),
+  };
+}
+
+export async function getRecommendations(page: number, pageSize: number, filters: RecommendationFilters) {
+  const query = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+    sort: filters.sort || "latest",
+  });
+  if (filters.lotteryCode) {
+    query.set("lotteryCode", filters.lotteryCode);
+  }
+  if (filters.status) {
+    query.set("status", filters.status);
+  }
+  const data = await apiGet<RecommendationPage | Recommendation[]>(
+    `/api/lotteries/recommendations?${query.toString()}`
+  );
+  return normalizeRecommendationPage(data);
 }
 
 export function getLatestRecommendation() {
   return apiGet<Recommendation>(`/api/lotteries/${LOTTERY_CODE}/recommendations/latest`);
 }
 
-export function getRecommendationDetail(recommendationId: string) {
-  return apiGet<Recommendation>(`/api/lotteries/${LOTTERY_CODE}/recommendations/${recommendationId}`);
+export function getRecommendationDetail(lotteryCode: string, recommendationId: string) {
+  return apiGet<Recommendation>(`/api/lotteries/${lotteryCode}/recommendations/${recommendationId}`);
 }
 
-export function generateRecommendation(count = 5) {
-  return apiPost<Recommendation, { count: number }>(
-    `/api/lotteries/${LOTTERY_CODE}/recommendations/generate`,
-    { count }
-  );
+export function generateRecommendation() {
+  return apiPost<Recommendation>(`/api/lotteries/${LOTTERY_CODE}/recommendations/generate`);
 }
 
 export function syncDraws() {

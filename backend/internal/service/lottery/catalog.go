@@ -12,7 +12,6 @@ import (
 )
 
 const (
-	ProviderMock             = "mock"
 	ProviderPaddleOCR        = "paddleocr"
 	ProviderOpenAICompatible = "openai-compatible"
 
@@ -22,12 +21,18 @@ const (
 )
 
 type RecommendationSettings struct {
+	Enabled       bool
+	Cron          string
 	Count         int
 	HistoryWindow int
-	Provider      string
 	Model         string
 	Prompt        string
 	PromptVersion string
+}
+
+type DrawScheduleSettings struct {
+	Weekdays []int
+	Time     string
 }
 
 type SyncSettings struct {
@@ -47,6 +52,7 @@ type Definition struct {
 	RedMax          int
 	BlueMin         int
 	BlueMax         int
+	DrawSchedule    DrawScheduleSettings
 	Recommendation  RecommendationSettings
 	Sync            SyncSettings
 }
@@ -65,10 +71,15 @@ func ListDefinitions() []Definition {
 			RedMax:          item.RedMax,
 			BlueMin:         item.BlueMin,
 			BlueMax:         item.BlueMax,
+			DrawSchedule: DrawScheduleSettings{
+				Weekdays: append([]int(nil), item.DrawSchedule.Weekdays...),
+				Time:     item.DrawSchedule.Time,
+			},
 			Recommendation: RecommendationSettings{
+				Enabled:       item.Recommendation.Enabled,
+				Cron:          item.Recommendation.Cron,
 				Count:         item.Recommendation.Count,
 				HistoryWindow: item.Recommendation.HistoryWindow,
-				Provider:      item.Recommendation.Provider,
 				Model:         item.Recommendation.Model,
 				Prompt:        item.Recommendation.Prompt,
 				PromptVersion: item.Recommendation.PromptVersion,
@@ -114,8 +125,8 @@ func SeedLotteryTypes() error {
 				BlueMin:                definition.BlueMin,
 				BlueMax:                definition.BlueMax,
 				RecommendationCount:    max(1, definition.Recommendation.Count),
-				RecommendationProvider: resolveValue(definition.Recommendation.Provider, ProviderMock),
-				RecommendationModel:    resolveValue(definition.Recommendation.Model, "history-weighted-mock"),
+				RecommendationProvider: ProviderOpenAICompatible,
+				RecommendationModel:    definition.Recommendation.Model,
 				VisionProvider:         resolveValue(config.Current.Vision.Provider, ProviderPaddleOCR),
 				VisionModel:            resolveValue(config.Current.Vision.Model, "paddleocr"),
 			}
@@ -138,8 +149,8 @@ func SeedLotteryTypes() error {
 		item.BlueMin = definition.BlueMin
 		item.BlueMax = definition.BlueMax
 		item.RecommendationCount = max(1, definition.Recommendation.Count)
-		item.RecommendationProvider = resolveValue(definition.Recommendation.Provider, ProviderMock)
-		item.RecommendationModel = resolveValue(definition.Recommendation.Model, "history-weighted-mock")
+		item.RecommendationProvider = ProviderOpenAICompatible
+		item.RecommendationModel = definition.Recommendation.Model
 		item.VisionProvider = resolveValue(config.Current.Vision.Provider, ProviderPaddleOCR)
 		item.VisionModel = resolveValue(config.Current.Vision.Model, "paddleocr")
 		if saveErr := db.DB.Save(&item).Error; saveErr != nil {

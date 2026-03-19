@@ -8,6 +8,8 @@ import (
 	model "go-fiber-starter/internal/model/lottery"
 	"go-fiber-starter/pkg/config"
 	"go-fiber-starter/pkg/db"
+
+	"gorm.io/gorm"
 )
 
 type ScanTicketInput struct {
@@ -25,6 +27,22 @@ type TicketDetail struct {
 	DrawDate        *time.Time `json:"drawDate"`
 	DrawRedNumbers  string     `json:"drawRedNumbers"`
 	DrawBlueNumbers string     `json:"drawBlueNumbers"`
+}
+
+type TicketQueryOptions struct {
+	Page        int
+	PageSize    int
+	LotteryCode string
+	Status      string
+	Sort        string
+}
+
+type TicketPageResult struct {
+	Items    []TicketDetail `json:"items"`
+	Page     int            `json:"page"`
+	PageSize int            `json:"pageSize"`
+	Total    int64          `json:"total"`
+	HasMore  bool           `json:"hasMore"`
 }
 
 func ScanTicket(ctx context.Context, input ScanTicketInput) (*TicketDetail, error) {
@@ -236,6 +254,79 @@ func ListAllTickets(limit int) ([]TicketDetail, error) {
 		result = append(result, *buildTicketDetail(ticket))
 	}
 	return result, nil
+}
+
+func QueryAllTickets(options TicketQueryOptions) (*TicketPageResult, error) {
+	page := max(1, options.Page)
+	pageSize := options.PageSize
+	if pageSize <= 0 {
+		pageSize = 10
+	}
+	if pageSize > 50 {
+		pageSize = 50
+	}
+
+	query := db.DB.Model(&model.Ticket{})
+	if options.LotteryCode != "" {
+		query = query.Where("lottery_code = ?", options.LotteryCode)
+	}
+	if options.Status != "" {
+		query = query.Where("status = ?", options.Status)
+	}
+
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, err
+	}
+
+	tickets := make([]model.Ticket, 0)
+	if err := db.DB.Preload("Entries").
+		Scopes(applyTicketFilters(options), applyTicketSort(options.Sort)).
+		Offset((page - 1) * pageSize).
+		Limit(pageSize).
+		Find(&tickets).Error; err != nil {
+		return nil, err
+	}
+
+	items := make([]TicketDetail, 0, len(tickets))
+	for _, ticket := range tickets {
+		items = append(items, *buildTicketDetail(ticket))
+	}
+
+	return &TicketPageResult{
+		Items:    items,
+		Page:     page,
+		PageSize: pageSize,
+		Total:    total,
+		HasMore:  int64(page*pageSize) < total,
+	}, nil
+}
+
+func applyTicketFilters(options TicketQueryOptions) func(*gorm.DB) *gorm.DB {
+	return func(query *gorm.DB) *gorm.DB {
+		if options.LotteryCode != "" {
+			query = query.Where("lottery_code = ?", options.LotteryCode)
+		}
+		if options.Status != "" {
+			query = query.Where("status = ?", options.Status)
+		}
+		return query
+	}
+}
+
+func applyTicketSort(sort string) func(*gorm.DB) *gorm.DB {
+	return func(query *gorm.DB) *gorm.DB {
+		switch sort {
+		case "oldest":
+			return query.Order("purchased_at asc").Order("created_at asc")
+		case "prize_high":
+			return query.Order("prize_amount desc").Order("purchased_at desc")
+		case "cost_high":
+			return query.Order("cost_amount desc").Order("purchased_at desc")
+		default:
+			return query.Order("purchased_at desc").Order("created_at desc")
+		}
+	}
 }
 
 func buildTicketDetail(ticket model.Ticket) *TicketDetail {

@@ -27,3 +27,22 @@ export function formatLotteryIssue(code?: string | null, issue?: string | null) 
 
   return issue;
 }
+
+export function formatLotteryDrawDate(drawDate?: string | null) {
+  if (!drawDate) {
+    return "";
+  }
+
+  const parsed = new Date(drawDate);
+  if (!Number.isNaN(parsed.getTime())) {
+    const year = parsed.getFullYear();
+    const month = `${parsed.getMonth() + 1}`.padStart(2, "0");
+    const day = `${parsed.getDate()}`.padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  if (drawDate.length >= 10) {
+    return drawDate.slice(0, 10);
+  }
+  return drawDate;
+}

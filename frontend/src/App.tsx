@@ -1,30 +1,33 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { History, LayoutDashboard, ReceiptText, Sparkles } from "lucide-react";
 import { toast } from "sonner";
-import { AuthPanel, type AuthMode } from "@/components/lottery/auth-panel";
+import { AuthPanel } from "@/components/lottery/auth-panel";
 import { DashboardPanel } from "@/components/lottery/dashboard-panel";
 import { HistoryPanel } from "@/components/lottery/history-panel";
 import { RecommendationPanel } from "@/components/lottery/recommendation-panel";
 import { RecordPanel } from "@/components/lottery/record-panel";
 import { getStoredToken } from "@/lib/api/client";
-import { getProfile, loginAndStoreToken, logout, register } from "@/lib/api/methods/auth";
+import { getProfile, loginAndStoreToken, logout } from "@/lib/api/methods/auth";
 import {
   createTicket,
   formatParsedEntry,
-  getAllTickets,
   getDashboard,
   getRecommendationDetail,
   getRecommendations,
+  getTicketHistory,
   recheckTicket,
   recognizeTicket,
   uploadTicketImage,
 } from "@/lib/api/methods/lottery";
+import { formatLotteryDrawDate } from "@/lib/lottery-display";
 import type { AuthUser } from "@/types/auth";
 import type {
   DashboardData,
   ParsedEntry,
   Recommendation,
+  RecommendationFilters,
   Ticket as TicketRecord,
+  TicketHistoryFilters,
   TicketRecognitionDraft,
   TicketUpload,
 } from "@/types/lottery";
@@ -37,6 +40,18 @@ const tabs: { key: TabKey; label: string; icon: typeof LayoutDashboard }[] = [
   { key: "records", label: "记录", icon: ReceiptText },
   { key: "history", label: "历史", icon: History },
 ];
+
+const DEFAULT_HISTORY_FILTERS: TicketHistoryFilters = {
+  lotteryCode: "",
+  status: "",
+  sort: "latest",
+};
+
+const DEFAULT_RECOMMENDATION_FILTERS: RecommendationFilters = {
+  lotteryCode: "",
+  status: "",
+  sort: "latest",
+};
 
 function buildParsedEntryText(entries: ParsedEntry[], lotteryCode?: string) {
   return entries
@@ -134,7 +149,6 @@ function replaceRecommendation(
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
-  const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [authUsername, setAuthUsername] = useState("");
   const [authPassword, setAuthPassword] = useState("");
@@ -145,9 +159,21 @@ export default function App() {
   const [recognizePending, setRecognizePending] = useState(false);
   const [submitPending, setSubmitPending] = useState(false);
   const [recheckPending, setRecheckPending] = useState(false);
+  const [recommendationLoading, setRecommendationLoading] = useState(false);
+  const [recommendationLoadingMore, setRecommendationLoadingMore] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyLoadingMore, setHistoryLoadingMore] = useState(false);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [recommendationFilters, setRecommendationFilters] = useState<RecommendationFilters>(DEFAULT_RECOMMENDATION_FILTERS);
+  const [recommendationPage, setRecommendationPage] = useState(1);
+  const [recommendationHasMore, setRecommendationHasMore] = useState(false);
+  const [recommendationTotal, setRecommendationTotal] = useState(0);
   const [tickets, setTickets] = useState<TicketRecord[]>([]);
+  const [historyFilters, setHistoryFilters] = useState<TicketHistoryFilters>(DEFAULT_HISTORY_FILTERS);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyHasMore, setHistoryHasMore] = useState(false);
+  const [historyTotal, setHistoryTotal] = useState(0);
   const [selectedRecommendation, setSelectedRecommendation] = useState<Recommendation | null>(null);
   const [selectedHistoryTicket, setSelectedHistoryTicket] = useState<TicketRecord | null>(null);
   const [purchaseRecommendation, setPurchaseRecommendation] = useState<Recommendation | null>(null);
@@ -165,7 +191,15 @@ export default function App() {
   function resetLotteryState() {
     setDashboard(null);
     setRecommendations([]);
+    setRecommendationFilters(DEFAULT_RECOMMENDATION_FILTERS);
+    setRecommendationPage(1);
+    setRecommendationHasMore(false);
+    setRecommendationTotal(0);
     setTickets([]);
+    setHistoryFilters(DEFAULT_HISTORY_FILTERS);
+    setHistoryPage(1);
+    setHistoryHasMore(false);
+    setHistoryTotal(0);
     setSelectedRecommendation(null);
     setSelectedHistoryTicket(null);
     setPurchaseRecommendation(null);
@@ -188,7 +222,6 @@ export default function App() {
   function handleRequestError(error: unknown, fallbackMessage: string) {
     if (!getStoredToken()) {
       setCurrentUser(null);
-      setAuthMode("login");
       resetLotteryState();
       resetTicketWorkflow();
     }
@@ -201,19 +234,75 @@ export default function App() {
     }
 
     try {
-      const [dashboardData, recommendationData, ticketData] = await Promise.all([
+      const [dashboardData, recommendationData, historyData] = await Promise.all([
         getDashboard(),
-        getRecommendations(),
-        getAllTickets(),
+        getRecommendations(1, 10, recommendationFilters),
+        getTicketHistory(1, 10, historyFilters),
       ]);
       setDashboard(dashboardData);
-      setRecommendations(recommendationData);
-      setTickets(ticketData);
+      setRecommendations(recommendationData.items);
+      setRecommendationPage(recommendationData.page);
+      setRecommendationHasMore(recommendationData.hasMore);
+      setRecommendationTotal(recommendationData.total);
+      setTickets(historyData.items);
+      setHistoryPage(historyData.page);
+      setHistoryHasMore(historyData.hasMore);
+      setHistoryTotal(historyData.total);
     } catch (error) {
       handleRequestError(error, "加载数据失败");
     } finally {
       if (showLoading) {
         setLoading(false);
+      }
+    }
+  }
+
+  async function loadRecommendations(page: number, append: boolean, filters: RecommendationFilters) {
+    if (append) {
+      setRecommendationLoadingMore(true);
+    } else {
+      setRecommendationLoading(true);
+    }
+
+    try {
+      const recommendationData = await getRecommendations(page, 10, filters);
+      setRecommendations((current) =>
+        append ? [...current, ...recommendationData.items] : recommendationData.items
+      );
+      setRecommendationPage(recommendationData.page);
+      setRecommendationHasMore(recommendationData.hasMore);
+      setRecommendationTotal(recommendationData.total);
+    } catch (error) {
+      handleRequestError(error, "加载推荐失败");
+    } finally {
+      if (append) {
+        setRecommendationLoadingMore(false);
+      } else {
+        setRecommendationLoading(false);
+      }
+    }
+  }
+
+  async function loadHistoryTickets(page: number, append: boolean, filters: TicketHistoryFilters) {
+    if (append) {
+      setHistoryLoadingMore(true);
+    } else {
+      setHistoryLoading(true);
+    }
+
+    try {
+      const historyData = await getTicketHistory(page, 10, filters);
+      setTickets((current) => (append ? [...current, ...historyData.items] : historyData.items));
+      setHistoryPage(historyData.page);
+      setHistoryHasMore(historyData.hasMore);
+      setHistoryTotal(historyData.total);
+    } catch (error) {
+      handleRequestError(error, "加载历史记录失败");
+    } finally {
+      if (append) {
+        setHistoryLoadingMore(false);
+      } else {
+        setHistoryLoading(false);
       }
     }
   }
@@ -263,13 +352,10 @@ export default function App() {
 
     setAuthPending(true);
     try {
-      if (authMode === "register") {
-        await register(authUsername.trim(), authPassword);
-      }
       await loginAndStoreToken(authUsername.trim(), authPassword);
       const profile = await getProfile();
       setCurrentUser(profile);
-      toast.success(authMode === "login" ? "登录成功" : "注册并登录成功");
+      toast.success("登录成功");
       await loadData();
     } catch (error) {
       handleRequestError(error, "登录失败");
@@ -293,11 +379,15 @@ export default function App() {
     }
 
     const currentItem = recommendations.find((item) => item.id === recommendationId) || null;
+    if (!currentItem?.lotteryCode) {
+      toast.error("未找到推荐对应的彩票类型");
+      return;
+    }
     setSelectedRecommendation(currentItem);
     setDetailPending(true);
 
     try {
-      const detail = await getRecommendationDetail(recommendationId);
+      const detail = await getRecommendationDetail(currentItem.lotteryCode, recommendationId);
       setSelectedRecommendation(detail);
       setRecommendations((items) => replaceRecommendation(items, detail));
     } catch (error) {
@@ -312,7 +402,7 @@ export default function App() {
     setPurchaseRecommendation(recommendation);
     setLotteryCode(recommendation.lotteryCode || "");
     setIssue(recommendation.issue || "");
-    setDrawDate("");
+    setDrawDate(formatLotteryDrawDate(recommendation.drawDate));
     setCostAmount((recommendation.entries.length * 2).toFixed(2));
     setEntryText(buildRecommendationEntryText(recommendation));
     setActiveTab("records");
@@ -434,6 +524,32 @@ export default function App() {
     }
   }
 
+  function handleHistoryFilterChange(nextFilters: TicketHistoryFilters) {
+    setHistoryFilters(nextFilters);
+    setSelectedHistoryTicket(null);
+    void loadHistoryTickets(1, false, nextFilters);
+  }
+
+  function handleRecommendationFilterChange(nextFilters: RecommendationFilters) {
+    setRecommendationFilters(nextFilters);
+    setSelectedRecommendation(null);
+    void loadRecommendations(1, false, nextFilters);
+  }
+
+  function handleLoadMoreHistory() {
+    if (!historyHasMore || historyLoadingMore) {
+      return;
+    }
+    void loadHistoryTickets(historyPage + 1, true, historyFilters);
+  }
+
+  function handleLoadMoreRecommendations() {
+    if (!recommendationHasMore || recommendationLoadingMore) {
+      return;
+    }
+    void loadRecommendations(recommendationPage + 1, true, recommendationFilters);
+  }
+
   if (!currentUser) {
     if (loading) {
       return (
@@ -445,13 +561,11 @@ export default function App() {
       );
     }
 
-    return (
+      return (
       <AuthPanel
-        mode={authMode}
         username={authUsername}
         password={authPassword}
         pending={authPending}
-        onModeChange={setAuthMode}
         onUsernameChange={setAuthUsername}
         onPasswordChange={setAuthPassword}
         onSubmit={handleAuthSubmit}
@@ -469,8 +583,15 @@ export default function App() {
         {activeTab === "recommendation" && (
           <RecommendationPanel
             recommendations={recommendations}
+            filters={recommendationFilters}
+            loading={recommendationLoading}
+            loadingMore={recommendationLoadingMore}
+            hasMore={recommendationHasMore}
+            total={recommendationTotal}
             selectedRecommendation={selectedRecommendation}
             detailPending={detailPending}
+            onFiltersChange={handleRecommendationFilterChange}
+            onLoadMore={handleLoadMoreRecommendations}
             onSelectRecommendation={(recommendationId) => void handleOpenRecommendation(recommendationId)}
             onRecordPurchase={handleRecordPurchase}
           />
@@ -509,8 +630,15 @@ export default function App() {
         {activeTab === "history" && (
           <HistoryPanel
             tickets={tickets}
+            filters={historyFilters}
+            loading={historyLoading}
+            loadingMore={historyLoadingMore}
+            hasMore={historyHasMore}
+            total={historyTotal}
             selectedTicket={selectedHistoryTicket}
             recheckPending={recheckPending}
+            onFiltersChange={handleHistoryFilterChange}
+            onLoadMore={handleLoadMoreHistory}
             onSelectTicket={setSelectedHistoryTicket}
             onRecheckTicket={(ticketId) => void handleRecheckTicket(ticketId)}
           />

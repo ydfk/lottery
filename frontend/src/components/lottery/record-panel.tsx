@@ -5,7 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { NumberBalls } from "@/components/lottery/number-balls";
-import { formatLotteryIssue, getLotteryDisplayName, lotteryDisplayOptions } from "@/lib/lottery-display";
+import {
+  formatLotteryDrawDate,
+  formatLotteryIssue,
+  getLotteryDisplayName,
+  lotteryDisplayOptions,
+} from "@/lib/lottery-display";
 import type { Recommendation, TicketRecognitionDraft, TicketUpload } from "@/types/lottery";
 
 interface RecordPanelProps {
@@ -114,6 +119,9 @@ export function RecordPanel(props: RecordPanelProps) {
                 <Badge variant="secondary">
                   第 {formatLotteryIssue(selectedRecommendation.lotteryCode, selectedRecommendation.issue)} 期
                 </Badge>
+                {selectedRecommendation.drawDate ? (
+                  <Badge variant="secondary">{formatLotteryDrawDate(selectedRecommendation.drawDate)} 开奖</Badge>
+                ) : null}
               </div>
             </div>
             <Button type="button" variant="ghost" size="icon" className="rounded-2xl" onClick={onClearRecommendation}>

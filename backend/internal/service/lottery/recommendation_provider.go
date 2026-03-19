@@ -3,14 +3,15 @@ package lottery
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"math/rand"
-	"strconv"
 	"strings"
 	"time"
 
 	model "go-fiber-starter/internal/model/lottery"
 	"go-fiber-starter/pkg/db"
+
+	"gorm.io/gorm"
 )
 
 type RecommendationNumber struct {
@@ -30,46 +31,13 @@ type RecommendationProvider interface {
 	Generate(ctx context.Context, definition Definition, lotteryType model.LotteryType, history []model.DrawResult, count int) (*RecommendationResult, error)
 }
 
-type mockRecommendationProvider struct{}
-
 type openAIRecommendationProvider struct{}
 
 func newRecommendationProvider(provider string) RecommendationProvider {
-	if provider == ProviderOpenAICompatible {
-		return &openAIRecommendationProvider{}
+	if provider != ProviderOpenAICompatible {
+		return nil
 	}
-	return &mockRecommendationProvider{}
-}
-
-func (provider *mockRecommendationProvider) Generate(_ context.Context, definition Definition, _ model.LotteryType, history []model.DrawResult, count int) (*RecommendationResult, error) {
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	redScores := make(map[int]int)
-	blueScores := make(map[int]int)
-
-	for _, draw := range history {
-		for _, red := range parseCSVNumbers(draw.RedNumbers) {
-			redScores[red]++
-		}
-		for _, blue := range parseCSVNumbers(draw.BlueNumbers) {
-			blueScores[blue]++
-		}
-	}
-
-	numbers := make([]RecommendationNumber, 0, count)
-	for index := 0; index < count; index++ {
-		numbers = append(numbers, RecommendationNumber{
-			Red:        weightedPick(redScores, definition.RedMin, definition.RedMax, definition.RedCount, rng),
-			Blue:       weightedPick(blueScores, definition.BlueMin, definition.BlueMax, definition.BlueCount, rng),
-			Confidence: 0.45 + float64(index)*0.05,
-			Reason:     "基于近期开奖频次和随机扰动生成，适合作为保底推荐",
-		})
-	}
-
-	return &RecommendationResult{
-		Summary: "使用历史频次加权生成推荐",
-		Basis:   fmt.Sprintf("样本期数 %d，红蓝球分别按近期出现频率加权抽样", len(history)),
-		Numbers: numbers,
-	}, nil
+	return &openAIRecommendationProvider{}
 }
 
 func (provider *openAIRecommendationProvider) Generate(ctx context.Context, definition Definition, _ model.LotteryType, history []model.DrawResult, count int) (*RecommendationResult, error) {
@@ -85,6 +53,10 @@ func (provider *openAIRecommendationProvider) Generate(ctx context.Context, defi
 	if len(result.Numbers) == 0 {
 		return nil, fmt.Errorf("AI 未返回推荐号码")
 	}
+	result.Numbers = normalizeRecommendationNumbers(result.Numbers, count)
+	if len(result.Numbers) == 0 {
+		return nil, fmt.Errorf("AI 返回的推荐号码为空")
+	}
 	return &result, nil
 }
 
@@ -96,8 +68,9 @@ func buildRecommendationPrompt(definition Definition, history []model.DrawResult
 
 	if definition.Recommendation.Prompt != "" {
 		return fmt.Sprintf(
-			"%s\n规则：红球 %d 个(%d-%d)，蓝球 %d 个(%d-%d)。\n最近开奖如下：\n%s\n请只返回 JSON：{\"summary\":\"\",\"basis\":\"\",\"numbers\":[{\"red\":[1,2,3,4,5,6],\"blue\":[7],\"confidence\":0.8,\"reason\":\"\"}]}",
+			"%s\n请严格生成 %d 组推荐号码，不能多也不能少。\n规则：红球 %d 个(%d-%d)，蓝球 %d 个(%d-%d)。\n最近开奖如下：\n%s\n请只返回 JSON：{\"summary\":\"\",\"basis\":\"\",\"numbers\":[{\"red\":[1,2,3,4,5,6],\"blue\":[7],\"confidence\":0.8,\"reason\":\"\"}]}，其中 numbers 数组长度必须等于 %d。",
 			definition.Recommendation.Prompt,
+			count,
 			definition.RedCount,
 			definition.RedMin,
 			definition.RedMax,
@@ -105,11 +78,12 @@ func buildRecommendationPrompt(definition Definition, history []model.DrawResult
 			definition.BlueMin,
 			definition.BlueMax,
 			strings.Join(lines, "\n"),
+			count,
 		)
 	}
 
 	return fmt.Sprintf(
-		"请为%s生成 %d 组推荐号码。规则：红球 %d 个(%d-%d)，蓝球 %d 个(%d-%d)。最近开奖如下：\n%s\n请只返回 JSON：{\"summary\":\"\",\"basis\":\"\",\"numbers\":[{\"red\":[1,2,3,4,5,6],\"blue\":[7],\"confidence\":0.8,\"reason\":\"\"}]}",
+		"请为%s生成 %d 组推荐号码，不能多也不能少。规则：红球 %d 个(%d-%d)，蓝球 %d 个(%d-%d)。最近开奖如下：\n%s\n请只返回 JSON：{\"summary\":\"\",\"basis\":\"\",\"numbers\":[{\"red\":[1,2,3,4,5,6],\"blue\":[7],\"confidence\":0.8,\"reason\":\"\"}]}，其中 numbers 数组长度必须等于 %d。",
 		definition.Name,
 		count,
 		definition.RedCount,
@@ -119,40 +93,15 @@ func buildRecommendationPrompt(definition Definition, history []model.DrawResult
 		definition.BlueMin,
 		definition.BlueMax,
 		strings.Join(lines, "\n"),
+		count,
 	)
 }
 
-func weightedPick(scores map[int]int, minValue int, maxValue int, count int, rng *rand.Rand) []int {
-	selected := make([]int, 0, count)
-	used := make(map[int]struct{}, count)
-
-	for len(selected) < count {
-		totalWeight := 0
-		for number := minValue; number <= maxValue; number++ {
-			if _, ok := used[number]; ok {
-				continue
-			}
-			totalWeight += max(1, scores[number])
-		}
-
-		target := rng.Intn(max(1, totalWeight))
-		accumulator := 0
-		chosen := minValue
-		for number := minValue; number <= maxValue; number++ {
-			if _, ok := used[number]; ok {
-				continue
-			}
-			accumulator += max(1, scores[number])
-			if accumulator > target {
-				chosen = number
-				break
-			}
-		}
-		selected = append(selected, chosen)
-		used[chosen] = struct{}{}
+func normalizeRecommendationNumbers(items []RecommendationNumber, count int) []RecommendationNumber {
+	if count <= 0 || len(items) <= count {
+		return items
 	}
-
-	return parseCSVNumbers(formatNumbers(selected))
+	return items[:count]
 }
 
 func GenerateRecommendation(ctx context.Context, code string, count int) (*model.Recommendation, error) {
@@ -170,32 +119,61 @@ func GenerateRecommendation(ctx context.Context, code string, count int) (*model
 
 	historyWindow := max(10, definition.Recommendation.HistoryWindow)
 	history := make([]model.DrawResult, 0)
-	if err := db.DB.Where("lottery_code = ?", code).Order("issue desc").Limit(historyWindow).Find(&history).Error; err != nil {
+	if err := db.DB.Where("lottery_code = ?", code).Order("draw_date desc").Order("issue desc").Limit(historyWindow).Find(&history).Error; err != nil {
 		return nil, err
 	}
 
-	provider := newRecommendationProvider(resolveValue(definition.Recommendation.Provider, ProviderMock))
-	result, err := provider.Generate(ctx, definition, lotteryType, history, count)
-	if err != nil && definition.Recommendation.Provider == ProviderOpenAICompatible {
-		result, err = newRecommendationProvider(ProviderMock).Generate(ctx, definition, lotteryType, history, count)
+	if definition.Recommendation.Model == "" {
+		return nil, fmt.Errorf("%s 未配置推荐模型", definition.Name)
 	}
+	targetIssue, targetDrawDate, err := buildRecommendationPlan(definition, history, time.Now())
+	if err != nil {
+		return nil, err
+	}
+	provider := newRecommendationProvider(ProviderOpenAICompatible)
+	if provider == nil {
+		return nil, fmt.Errorf("未配置可用的推荐模型提供方")
+	}
+	result, err := provider.Generate(ctx, definition, lotteryType, history, count)
 	if err != nil {
 		return nil, err
 	}
 
-	recommendation := model.Recommendation{
-		LotteryCode:   code,
-		Issue:         guessNextIssue(history),
-		Provider:      resolveValue(definition.Recommendation.Provider, ProviderMock),
-		Model:         resolveValue(definition.Recommendation.Model, "history-weighted-mock"),
-		Strategy:      "history+ai",
-		PromptVersion: definition.Recommendation.PromptVersion,
-		Summary:       result.Summary,
-		Basis:         result.Basis,
-		RawPayload:    mustJSON(result),
+	recommendation := model.Recommendation{}
+	saveModeCreate := false
+	findErr := db.DB.Where("lottery_code = ? AND issue = ?", code, targetIssue).Order("created_at desc").First(&recommendation).Error
+	if errors.Is(findErr, gorm.ErrRecordNotFound) {
+		recommendation = model.Recommendation{
+			LotteryCode: code,
+			Issue:       targetIssue,
+		}
+		saveModeCreate = true
+	} else if findErr != nil {
+		return nil, findErr
 	}
-	if err := db.DB.Create(&recommendation).Error; err != nil {
-		return nil, err
+
+	recommendation.DrawDate = &targetDrawDate
+	recommendation.Provider = ProviderOpenAICompatible
+	recommendation.Model = definition.Recommendation.Model
+	recommendation.Strategy = "history+ai"
+	recommendation.PromptVersion = definition.Recommendation.PromptVersion
+	recommendation.Summary = result.Summary
+	recommendation.Basis = result.Basis
+	recommendation.RawPayload = mustJSON(result)
+	recommendation.CheckedAt = nil
+	recommendation.PrizeAmount = 0
+
+	if saveModeCreate {
+		if err := db.DB.Create(&recommendation).Error; err != nil {
+			return nil, err
+		}
+	} else {
+		if err := db.DB.Omit("Entries").Save(&recommendation).Error; err != nil {
+			return nil, err
+		}
+		if err := db.DB.Where("recommendation_id = ?", recommendation.Id).Delete(&model.RecommendationEntry{}).Error; err != nil {
+			return nil, err
+		}
 	}
 
 	entries := make([]model.RecommendationEntry, 0, len(result.Numbers))
@@ -219,15 +197,4 @@ func GenerateRecommendation(ctx context.Context, code string, count int) (*model
 		return nil, err
 	}
 	return &recommendation, nil
-}
-
-func guessNextIssue(history []model.DrawResult) string {
-	if len(history) == 0 {
-		return ""
-	}
-	current, err := strconv.Atoi(history[0].Issue)
-	if err != nil {
-		return history[0].Issue
-	}
-	return strconv.Itoa(current + 1)
 }

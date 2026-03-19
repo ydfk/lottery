@@ -12,6 +12,7 @@ type Recommendation struct {
 	base.BaseModel
 	LotteryCode   string                `gorm:"index;size:32" json:"lotteryCode"`
 	Issue         string                `gorm:"index;size:32" json:"issue"`
+	DrawDate      *time.Time            `json:"drawDate"`
 	Provider      string                `gorm:"size:32" json:"provider"`
 	Model         string                `gorm:"size:128" json:"model"`
 	Strategy      string                `gorm:"size:64" json:"strategy"`

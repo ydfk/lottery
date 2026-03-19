@@ -1,74 +1,173 @@
+# 应用基础配置。
 app:
+  # 后端服务监听端口。
   port: "25610"
+  # 运行环境，常用值：development / production。
   env: "development"
+
+# JWT 鉴权配置。
 jwt:
+  # JWT 签名密钥，生产环境请仅放在 config.local.yaml 中覆盖。
   secret: "123456789"
+  # Token 有效期，单位：秒。
   expiration: 604800
+
+# 数据存储配置。
 database:
+  # SQLite 数据库文件路径。
   path: "data/db.sqlite"
+
+# 本地文件存储配置。
 storage:
+  # 上传文件根目录，彩票原图会保存在该目录下。
   uploadDir: "data/uploads"
+
+# 极速数据接口配置，用于同步开奖信息。
 jisu:
+  # 极速数据基础地址。
   baseURL: "https://api.jisuapi.com"
+  # 极速数据 appKey，建议放到 config.local.yaml 中覆盖。
   appKey: ""
+  # 调用极速数据接口超时时间，单位：秒。
   timeoutSeconds: 15
+
+# AI 推荐模型连接配置。
 ai:
+  # OpenAI 兼容接口基础地址，例如 http://host/v1。
   baseURL: ""
+  # AI 接口密钥，建议放到 config.local.yaml 中覆盖。
   apiKey: ""
+  # AI 接口超时时间，单位：秒。
   timeoutSeconds: 20
+
+# OCR 识别服务配置。
 vision:
+  # 视觉服务提供方，当前固定使用 paddleocr。
   provider: "paddleocr"
+  # 视觉服务模型或接口标识。
   model: "layout-parsing"
+  # PaddleOCR HTTP 服务地址。
   baseURL: ""
+  # PaddleOCR 服务访问密钥。
   apiKey: ""
+  # OCR 接口超时时间，单位：秒。
   timeoutSeconds: 90
+  # 是否启用文档方向分类。
   useDocOrientationClassify: false
+  # 是否启用文档去扭曲。
   useDocUnwarping: false
+  # 是否启用图表识别。
   useChartRecognition: false
+
+# 彩票类型配置。
+# 每个彩种的规则、开奖同步和推荐生成都从这里读取。
 lotteries:
   - code: "ssq"
+    # 彩种名称。
     name: "福彩双色球"
+    # 是否启用该彩种。
     enabled: true
+    # 第三方开奖接口对应的彩票 ID。
     remoteLotteryId: "11"
+    # 红球数量。
     redCount: 6
+    # 蓝球数量。
     blueCount: 1
+    # 红球最小值。
     redMin: 1
+    # 红球最大值。
     redMax: 33
+    # 蓝球最小值。
     blueMin: 1
+    # 蓝球最大值。
     blueMax: 16
+
+    # 官方开奖日配置。
+    drawSchedule:
+      # 开奖星期，0-6 分别表示周日到周六。
+      weekdays: [2, 4, 0]
+      # 官方开奖时间，24 小时制。
+      time: "21:30"
+
+    # 推荐配置。
     recommendation:
-      count: 5
+      # 是否启用定时推荐生成。
+      enabled: true
+      # 推荐生成 cron 表达式。
+      cron: "0 40 21 * * *"
+      # 每次生成的推荐注数，recommendations/generate 接口也会使用该值。
+      count: 2
+      # 推荐模型参考的历史开奖期数。
       historyWindow: 30
-      provider: "mock"
-      model: "history-weighted-mock"
+      # 推荐使用的 AI 模型名称。
+      model: "gpt-5.4-nano"
+      # 提示词版本号，便于后续迭代管理。
       promptVersion: "v1"
+      # 推荐模型提示词。
       prompt: |
         你是双色球推荐助手。
         请结合最近开奖历史，为用户输出结构化 JSON 推荐结果。
+
+    # 开奖同步配置。
     sync:
+      # 是否启用定时开奖同步。
       enabled: true
+      # 开奖同步 cron 表达式。
       cron: "0 35 21,22 * * *"
+      # 每次手动补历史时默认同步多少期。
       historySize: 20
+
   - code: "dlt"
+    # 彩种名称。
     name: "体彩大乐透"
+    # 是否启用该彩种。
     enabled: true
+    # 第三方开奖接口对应的彩票 ID。
     remoteLotteryId: "13"
+    # 前区号码数量。
     redCount: 5
+    # 后区号码数量。
     blueCount: 2
+    # 前区最小值。
     redMin: 1
+    # 前区最大值。
     redMax: 35
+    # 后区最小值。
     blueMin: 1
+    # 后区最大值。
     blueMax: 12
+
+    # 官方开奖日配置。
+    drawSchedule:
+      # 开奖星期，0-6 分别表示周日到周六。
+      weekdays: [1, 2, 6]
+      # 官方开奖时间，24 小时制。
+      time: "21:30"
+
+    # 推荐配置。
     recommendation:
-      count: 5
+      # 是否启用定时推荐生成。
+      enabled: true
+      # 推荐生成 cron 表达式。
+      cron: "0 40 20 * * *"
+      # 每次生成的推荐注数，recommendations/generate 接口也会使用该值。
+      count: 2
+      # 推荐模型参考的历史开奖期数。
       historyWindow: 30
-      provider: "mock"
-      model: "history-weighted-mock"
+      # 推荐使用的 AI 模型名称。
+      model: "gpt-5.4-nano"
+      # 提示词版本号，便于后续迭代管理。
       promptVersion: "v1"
+      # 推荐模型提示词。
       prompt: |
         你是大乐透推荐助手。
         请结合最近开奖历史，为用户输出结构化 JSON 推荐结果。
+
+    # 开奖同步配置。
     sync:
+      # 是否启用定时开奖同步。
       enabled: true
+      # 开奖同步 cron 表达式。
       cron: "0 35 20,21 * * *"
+      # 每次手动补历史时默认同步多少期。
       historySize: 20

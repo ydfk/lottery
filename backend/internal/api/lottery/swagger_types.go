@@ -40,6 +40,13 @@ type RecommendationListResponse struct {
 	Time string                                `json:"time" example:"2026-03-16T10:00:00Z"`
 }
 
+type RecommendationPageResponse struct {
+	Flag bool                                    `json:"flag" example:"true"`
+	Code int                                     `json:"code" example:"200"`
+	Data lotteryService.RecommendationPageResult `json:"data"`
+	Time string                                  `json:"time" example:"2026-03-16T10:00:00Z"`
+}
+
 type RecommendationDetailResponse struct {
 	Flag bool                                `json:"flag" example:"true"`
 	Code int                                 `json:"code" example:"200"`
@@ -66,6 +73,13 @@ type TicketListResponse struct {
 	Code int                           `json:"code" example:"200"`
 	Data []lotteryService.TicketDetail `json:"data"`
 	Time string                        `json:"time" example:"2026-03-16T10:00:00Z"`
+}
+
+type TicketPageResponse struct {
+	Flag bool                            `json:"flag" example:"true"`
+	Code int                             `json:"code" example:"200"`
+	Data lotteryService.TicketPageResult `json:"data"`
+	Time string                          `json:"time" example:"2026-03-16T10:00:00Z"`
 }
 
 type TicketDetailResponse struct {
