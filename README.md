@@ -199,6 +199,51 @@ docker compose up -d --build
 - 上传的彩票原图
 - 服务日志
 
+## Docker 镜像脚本
+
+仓库已提供一键构建和推送脚本：
+
+- [scripts/docker-build.ps1](scripts/docker-build.ps1)
+- [scripts/docker-push.ps1](scripts/docker-push.ps1)
+- [scripts/build-and-push.ps1](scripts/build-and-push.ps1)
+
+默认镜像名：
+
+```text
+ydfk/lottery
+```
+
+直接执行：
+
+```powershell
+.\scripts\build-and-push.ps1
+```
+
+只构建：
+
+```powershell
+.\scripts\docker-build.ps1
+```
+
+只推送：
+
+```powershell
+.\scripts\docker-push.ps1
+```
+
+支持通过环境变量覆盖镜像名和主标签：
+
+```powershell
+$env:DOCKER_IMAGE_NAME = "ydfk/lottery"
+$env:DOCKER_IMAGE_TAG = "latest"
+.\scripts\build-and-push.ps1
+```
+
+脚本会同时处理两个标签：
+
+- 主标签，例如 `latest`
+- 当前 Git 提交短 SHA 标签，例如 `a1b2c3d`
+
 ## 常用接口
 
 ### 开奖同步
