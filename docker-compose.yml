@@ -1,0 +1,15 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lottery-app
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      - "${LOTTERY_APP_PORT:-25610}:25610"
+    volumes:
+      - ${LOTTERY_CONFIG_DIR:-./backend/config}:/app/config:ro
+      - ${LOTTERY_DATA_DIR:-./backend/data}:/app/data
+      - ${LOTTERY_LOG_DIR:-./backend/log}:/app/log

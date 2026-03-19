@@ -1,9 +1,9 @@
 import type { FormEvent } from "react";
-import { ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { BrandLogo } from "@/components/lottery/brand-logo";
 
 interface AuthPanelProps {
   username: string;
@@ -29,14 +29,11 @@ export function AuthPanel(props: AuthPanelProps) {
       <div className="w-full max-w-md rounded-[2rem] border border-white/60 bg-[linear-gradient(135deg,rgba(15,23,42,0.96),rgba(37,99,235,0.9)_62%,rgba(12,74,110,0.82))] p-4 shadow-[0_24px_60px_rgba(15,23,42,0.18)] sm:p-5">
         <Card className="border-white/50 bg-white/94 backdrop-blur">
           <CardHeader className="space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="rounded-2xl bg-slate-900 p-3 text-white">
-                <ShieldCheck className="size-5" />
-              </div>
+            <div className="space-y-3">
+              <BrandLogo subtitle="你的彩票轨迹" />
               <div>
                 <Badge className="bg-slate-900 text-white hover:bg-slate-900">登录</Badge>
-                <CardTitle className="mt-3 text-slate-900">彩票管理系统</CardTitle>
-                <p className="mt-1 text-sm text-slate-500">管理票据、推荐号码和中奖记录</p>
+                <CardTitle className="mt-3 text-slate-900">记录每一次选号和兑奖结果</CardTitle>
               </div>
             </div>
           </CardHeader>

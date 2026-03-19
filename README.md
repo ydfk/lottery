@@ -141,3 +141,91 @@ vision:
 ```
 
 后端会把图片转成 Base64 后直接请求 PaddleOCR HTTP 接口；图片文件自动用 `fileType=1`，PDF 自动用 `fileType=0`。
+
+## Docker Compose 发布
+
+根目录已经提供单镜像发布方案：
+
+- [Dockerfile](F:/workSpace/lottery/Dockerfile)
+- [docker-compose.yml](F:/workSpace/lottery/docker-compose.yml)
+- [.env.example](F:/workSpace/lottery/.env.example)
+
+发布方式：
+
+- 一个镜像同时包含 `backend` 和 `frontend`
+- 前端构建产物会打进镜像，并由后端直接提供静态页面
+- 本地开发仍然按现在的前后端开发方式运行，不依赖 Docker
+
+### 启动
+
+先在根目录准备 Compose 环境变量文件：
+
+```bash
+cp .env.example .env
+```
+
+Windows PowerShell 可直接执行：
+
+```powershell
+Copy-Item .env.example .env
+```
+
+`.env` 只用于 `docker compose` 的挂载目录和端口，不是应用业务配置。应用本身仍然读取：
+
+- [backend/config/config.yaml](F:/workSpace/lottery/backend/config/config.yaml)
+- [backend/config/config.local.yaml](F:/workSpace/lottery/backend/config/config.local.yaml)
+
+在项目根目录执行：
+
+```bash
+docker compose up -d --build
+```
+
+默认端口：
+
+- 应用：`25610`
+
+访问地址：
+
+- 前端：[http://127.0.0.1:25610](http://127.0.0.1:25610)
+- Swagger：[http://127.0.0.1:25610/swagger/index.html](http://127.0.0.1:25610/swagger/index.html)
+
+### 容器外覆盖配置和数据库
+
+`docker-compose.yml` 已经把这些目录挂载到容器外：
+
+- `${LOTTERY_CONFIG_DIR:-./backend/config}` -> `/app/config`
+- `${LOTTERY_DATA_DIR:-./backend/data}` -> `/app/data`
+- `${LOTTERY_LOG_DIR:-./backend/log}` -> `/app/log`
+
+也就是说：
+
+- 数据库文件 `db.sqlite` 在容器外持久化
+- 上传的彩票图片也在容器外持久化
+- `config.yaml` / `config.local.yaml` 可以直接在宿主机修改后重启容器生效
+
+### 自定义挂载目录
+
+如果你不想直接用仓库里的 `backend/config`、`backend/data`、`backend/log`，可以直接修改根目录 `.env`：
+
+```bash
+LOTTERY_CONFIG_DIR=/srv/lottery/config
+LOTTERY_DATA_DIR=/srv/lottery/data
+LOTTERY_LOG_DIR=/srv/lottery/log
+LOTTERY_APP_PORT=25610
+```
+
+### 配置建议
+
+生产环境至少准备这些文件：
+
+- [backend/config/config.yaml](F:/workSpace/lottery/backend/config/config.yaml)
+- [backend/config/config.local.yaml](F:/workSpace/lottery/backend/config/config.local.yaml)
+
+其中敏感项建议放在 `config.local.yaml`：
+
+- `jisu.appKey`
+- `ai.baseURL`
+- `ai.apiKey`
+- `vision.baseURL`
+- `vision.apiKey`

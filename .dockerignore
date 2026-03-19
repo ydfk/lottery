@@ -1,0 +1,17 @@
+.git
+.gitignore
+.idea
+.vscode
+
+docs
+
+backend/.history
+backend/bin
+backend/data
+backend/log
+backend/tmp
+
+frontend/node_modules
+frontend/dist
+frontend/.turbo
+

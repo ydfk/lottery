@@ -17,3 +17,6 @@ frontend/.turbo/
 # 编辑器与缓存
 .idea/
 .vscode/
+
+# Docker Compose 本地环境变量
+.env

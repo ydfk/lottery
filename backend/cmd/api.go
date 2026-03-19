@@ -1,6 +1,10 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
+
 	"go-fiber-starter/internal/api/auth"
 	lotteryApi "go-fiber-starter/internal/api/lottery"
 	"go-fiber-starter/internal/middleware"
@@ -46,9 +50,30 @@ func api() {
 
 	auth.RegisterRoutes(api)
 	lotteryApi.RegisterRoutes(api)
+	registerFrontend(app)
 
 	if err := app.Listen(":" + config.Current.App.Port); err != nil {
 		logger.Fatal("启动服务器失败: %v", err)
 	}
 	logger.Info("服务器启动成功: http://127.0.0.1:%v ", config.Current.App.Port)
+}
+
+func registerFrontend(app *fiber.App) {
+	webRoot := filepath.Join(".", "web")
+	indexPath := filepath.Join(webRoot, "index.html")
+	if _, err := os.Stat(indexPath); err != nil {
+		return
+	}
+
+	app.Static("/", webRoot, fiber.Static{
+		Compress:  true,
+		ByteRange: true,
+	})
+
+	app.Use(func(c *fiber.Ctx) error {
+		if strings.HasPrefix(c.Path(), "/api") || strings.HasPrefix(c.Path(), "/swagger") || strings.HasPrefix(c.Path(), "/uploads") {
+			return fiber.ErrNotFound
+		}
+		return c.SendFile(indexPath)
+	})
 }
