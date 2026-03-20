@@ -262,6 +262,46 @@ $env:DOCKER_IMAGE_TAG = "latest"
 - 主标签，例如 `latest`
 - 当前 Git 提交短 SHA，例如 `a1b2c3d`
 
+## GitHub Actions 自动构建镜像
+
+仓库已增加 GitHub Actions 工作流：
+
+- [docker-image.yml](.github/workflows/docker-image.yml)
+
+默认行为：
+
+- `push` 到 `main`：自动校验、构建并推送 Docker 镜像
+- `push` Git 标签（如 `v1.0.0`）：自动构建并推送带标签镜像
+- `pull_request` 到 `main`：只校验和构建，不推送
+- `workflow_dispatch`：支持手动触发
+
+默认镜像地址：
+
+```text
+ghcr.io/ydfk/lottery
+```
+
+当前默认推送到 GitHub Container Registry，不再依赖 Docker Hub。
+
+默认情况下不需要额外配置 Docker 仓库账号密码，工作流直接使用 GitHub 提供的 `GITHUB_TOKEN` 推送到 GHCR。
+
+需要确认两点：
+
+- 仓库 Actions 有权限写入 packages
+- 目标仓库允许发布 GitHub Packages
+
+工作流会自动生成这些镜像标签：
+
+- `latest`：仅默认分支
+- `sha-<short commit>`：每次提交
+- `v*`：当你推送 Git 标签时
+
+镜像拉取示例：
+
+```bash
+docker pull ghcr.io/ydfk/lottery:latest
+```
+
 ## 常用接口
 
 ### 认证

@@ -262,6 +262,46 @@ The scripts generate:
 - a primary tag such as `latest`
 - a short Git SHA tag such as `a1b2c3d`
 
+## GitHub Actions Docker Automation
+
+The repository now includes a GitHub Actions workflow:
+
+- [docker-image.yml](.github/workflows/docker-image.yml)
+
+Default behavior:
+
+- `push` to `main`: verify, build, and push the Docker image
+- Git tag push such as `v1.0.0`: build and push a tagged image
+- `pull_request` to `main`: verify and build only, without pushing
+- `workflow_dispatch`: manual trigger support
+
+Default image:
+
+```text
+ghcr.io/ydfk/lottery
+```
+
+The workflow now pushes to GitHub Container Registry instead of Docker Hub.
+
+No extra container registry secret is required by default. The workflow uses GitHub's built-in `GITHUB_TOKEN` to push packages to GHCR.
+
+Make sure:
+
+- the workflow has permission to write packages
+- the repository is allowed to publish GitHub Packages
+
+The workflow automatically generates:
+
+- `latest` for the default branch
+- `sha-<short commit>` for each commit
+- `v*` tags when Git tags are pushed
+
+Pull example:
+
+```bash
+docker pull ghcr.io/ydfk/lottery:latest
+```
+
 ## Main APIs
 
 ### Auth
