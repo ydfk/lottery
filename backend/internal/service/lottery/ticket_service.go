@@ -174,6 +174,9 @@ func EvaluateTicket(ticketID string) error {
 	if len(ticket.Entries) == 0 {
 		return nil
 	}
+	if shouldDeferSettlement(ticket.LotteryCode, ticket.ManualDrawDate) {
+		return resetTicketPending(ticket.Id.String())
+	}
 
 	canonicalIssue := normalizeIssueByCode(ticket.LotteryCode, ticket.Issue)
 	if canonicalIssue != "" && canonicalIssue != ticket.Issue {
@@ -184,8 +187,15 @@ func EvaluateTicket(ticketID string) error {
 	}
 
 	draw := model.DrawResult{}
-	if err := db.DB.Preload("PrizeDetails").Where("lottery_code = ? AND issue IN ?", ticket.LotteryCode, issueAliases(ticket.LotteryCode, ticket.Issue)).First(&draw).Error; err != nil {
+	if err := db.DB.Preload("PrizeDetails").
+		Where("lottery_code = ? AND issue IN ?", ticket.LotteryCode, issueAliases(ticket.LotteryCode, ticket.Issue)).
+		Order("draw_date desc").
+		Order("issue desc").
+		First(&draw).Error; err != nil {
 		return nil
+	}
+	if shouldUseManualDrawDate(ticket.ManualDrawDate, draw.DrawDate) {
+		return resetTicketPending(ticket.Id.String())
 	}
 
 	prizeMap := make(map[string]float64, len(draw.PrizeDetails))
@@ -227,6 +237,12 @@ func RecheckTicket(ctx context.Context, ticketID string, code string, userID str
 	}
 	if err := query.First(&ticket, "id = ?", ticketID).Error; err != nil {
 		return nil, err
+	}
+	if shouldDeferSettlement(ticket.LotteryCode, ticket.ManualDrawDate) {
+		if err := resetTicketPending(ticket.Id.String()); err != nil {
+			return nil, err
+		}
+		return GetTicketDetail(ticket.Id.String(), userID)
 	}
 
 	ticketIssue := normalizeIssueByCode(ticket.LotteryCode, ticket.Issue)
@@ -364,7 +380,11 @@ func buildTicketDetail(ticket model.Ticket) *TicketDetail {
 	}
 
 	draw := model.DrawResult{}
-	if err := db.DB.Select("draw_date", "red_numbers", "blue_numbers").Where("lottery_code = ? AND issue IN ?", ticket.LotteryCode, issueAliases(ticket.LotteryCode, ticket.Issue)).First(&draw).Error; err == nil {
+	if err := db.DB.Select("draw_date", "red_numbers", "blue_numbers").
+		Where("lottery_code = ? AND issue IN ?", ticket.LotteryCode, issueAliases(ticket.LotteryCode, ticket.Issue)).
+		Order("draw_date desc").
+		Order("issue desc").
+		First(&draw).Error; err == nil && !shouldDeferSettlement(ticket.LotteryCode, ticket.ManualDrawDate) && !shouldUseManualDrawDate(ticket.ManualDrawDate, draw.DrawDate) {
 		drawDate := draw.DrawDate
 		detail.DrawDate = &drawDate
 		detail.DrawRedNumbers = draw.RedNumbers
@@ -384,6 +404,29 @@ func buildTicketDetail(ticket model.Ticket) *TicketDetail {
 	}
 
 	return detail
+}
+
+func resetTicketPending(ticketID string) error {
+	return db.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.TicketEntry{}).
+			Where("ticket_id = ?", ticketID).
+			Updates(map[string]any{
+				"is_winning":    false,
+				"prize_name":    "",
+				"prize_amount":  0,
+				"match_summary": "待开奖",
+			}).Error; err != nil {
+			return err
+		}
+
+		return tx.Model(&model.Ticket{}).
+			Where("id = ?", ticketID).
+			Updates(map[string]any{
+				"status":       TicketStatusPending,
+				"checked_at":   nil,
+				"prize_amount": 0,
+			}).Error
+	})
 }
 
 func buildTicketRecommendationDetail(recommendation model.Recommendation) *TicketRecommendationDetail {

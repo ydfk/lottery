@@ -228,6 +228,9 @@ func CreateTicket(ctx context.Context, input CreateTicketInput) (*TicketDetail, 
 		return nil, err
 	}
 
+	if shouldDeferSettlement(code, &input.DrawDate) {
+		return GetTicketDetail(ticketID, input.UserID)
+	}
 	ensureIssueDrawSynced(ctx, code, issue)
 	if shouldEvaluate {
 		if err := EvaluateTicket(ticketID); err != nil {

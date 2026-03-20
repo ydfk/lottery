@@ -55,6 +55,12 @@ func SyncLatestDraw(ctx context.Context, code string, issue string) (*SyncResult
 	if err != nil {
 		return nil, err
 	}
+	if issue != "" {
+		itemIssue := normalizeIssueByCode(code, extractString(item, "issueno", "issue"))
+		if itemIssue == "" || !containsString(issueAliases(code, issue), itemIssue) {
+			return nil, fmt.Errorf("第三方返回的开奖期号与请求期号不一致: 请求 %s，返回 %s", normalizeIssueByCode(code, issue), itemIssue)
+		}
+	}
 
 	saved, savedIssue, err := saveDrawItem(lotteryType, item)
 	if err != nil {

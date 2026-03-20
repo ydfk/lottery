@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"go-fiber-starter/pkg/config"
 )
@@ -359,6 +360,65 @@ func isDigits(value string) bool {
 		}
 	}
 	return value != ""
+}
+
+func normalizeDateOnly(value time.Time) time.Time {
+	localValue := value.In(time.Local)
+	year, month, day := localValue.Date()
+	return time.Date(year, month, day, 0, 0, 0, 0, time.Local)
+}
+
+func shouldDeferSettlement(code string, drawDate *time.Time) bool {
+	if drawDate == nil || drawDate.IsZero() {
+		return false
+	}
+
+	now := time.Now()
+	targetDate := normalizeDateOnly(*drawDate)
+	currentDate := normalizeDateOnly(now)
+	if targetDate.After(currentDate) {
+		return true
+	}
+	if !targetDate.Equal(currentDate) {
+		return false
+	}
+
+	definition, err := GetDefinition(code)
+	if err != nil || definition.DrawSchedule.Time == "" {
+		return false
+	}
+
+	scheduledClock, err := time.ParseInLocation("15:04", definition.DrawSchedule.Time, time.Local)
+	if err != nil {
+		return false
+	}
+
+	return now.Before(time.Date(
+		targetDate.Year(),
+		targetDate.Month(),
+		targetDate.Day(),
+		scheduledClock.Hour(),
+		scheduledClock.Minute(),
+		0,
+		0,
+		time.Local,
+	))
+}
+
+func shouldUseManualDrawDate(manualDrawDate *time.Time, officialDrawDate time.Time) bool {
+	if manualDrawDate == nil || manualDrawDate.IsZero() {
+		return false
+	}
+	return normalizeDateOnly(officialDrawDate).Before(normalizeDateOnly(*manualDrawDate))
+}
+
+func containsString(items []string, target string) bool {
+	for _, item := range items {
+		if item == target {
+			return true
+		}
+	}
+	return false
 }
 
 func max(a int, b int) int {
