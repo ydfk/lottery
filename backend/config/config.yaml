@@ -94,13 +94,13 @@ lotteries:
       # 是否启用定时推荐生成。
       enabled: true
       # 推荐生成 cron 表达式。
-      cron: "0 40 21 * * *"
+      cron: "0 0 23 * * *"
       # 推荐服务提供方，当前支持 openai-compatible。
       provider: "openai-compatible"
       # 每次生成的推荐注数，recommendations/generate 接口也会使用该值。
       count: 2
       # 推荐模型参考的历史开奖期数。
-      historyWindow: 30
+      historyWindow: 100
       # 推荐使用的 AI 模型名称。
       model: "gpt-5.4-nano"
       # 提示词版本号，便于后续迭代管理。
@@ -115,7 +115,7 @@ lotteries:
       # 是否启用定时开奖同步。
       enabled: true
       # 开奖同步 cron 表达式。
-      cron: "0 35 21,22 * * *"
+      cron: "0 0 22 * * *"
       # 每次手动补历史时默认同步多少期。
       historySize: 20
 
@@ -151,7 +151,7 @@ lotteries:
       # 是否启用定时推荐生成。
       enabled: true
       # 推荐生成 cron 表达式。
-      cron: "0 40 20 * * *"
+      cron: "0 0 23 * * *"
       # 推荐服务提供方，当前支持 openai-compatible。
       provider: "openai-compatible"
       # 每次生成的推荐注数，recommendations/generate 接口也会使用该值。
@@ -172,6 +172,6 @@ lotteries:
       # 是否启用定时开奖同步。
       enabled: true
       # 开奖同步 cron 表达式。
-      cron: "0 35 20,21 * * *"
+      cron: "0 0 22 * * *"
       # 每次手动补历史时默认同步多少期。
       historySize: 20

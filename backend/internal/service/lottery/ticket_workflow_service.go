@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -366,31 +365,6 @@ func buildTicketEntriesSignature(entries []ParsedEntry) string {
 func buildTicketEntriesHash(entries []ParsedEntry) string {
 	sum := sha256.Sum256([]byte(buildTicketEntriesSignature(entries)))
 	return hex.EncodeToString(sum[:])
-}
-
-func buildStoredTicketEntriesSignature(entries []model.TicketEntry) string {
-	sort.Slice(entries, func(left int, right int) bool {
-		if entries[left].Sequence == entries[right].Sequence {
-			return entries[left].CreatedAt.Before(entries[right].CreatedAt)
-		}
-		return entries[left].Sequence < entries[right].Sequence
-	})
-
-	signature := ""
-	for index, entry := range entries {
-		if index > 0 {
-			signature += "|"
-		}
-		signature += fmt.Sprintf(
-			"%d:%s:%s:%d:%t",
-			entry.Sequence,
-			entry.RedNumbers,
-			entry.BlueNumbers,
-			max(1, entry.Multiple),
-			entry.IsAdditional,
-		)
-	}
-	return signature
 }
 
 func getTicketUpload(userID string, code string, uploadID string) (model.TicketUpload, error) {
