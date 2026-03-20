@@ -79,15 +79,29 @@ type paddleOCRAttemptPlan struct {
 	MaxSide   int
 	Quality   int
 	Binarized bool
+	UseOrigin bool
+}
+
+type paddleOCRImageSource struct {
+	FileBytes []byte
+	Decoded   image.Image
+	Width     int
+	Height    int
 }
 
 var paddleOCRAttemptPlans = []paddleOCRAttemptPlan{
-	{Label: "compressed-large", MaxSide: 1800, Quality: 82, Binarized: false},
-	{Label: "compressed-medium", MaxSide: 1280, Quality: 76, Binarized: false},
+	{Label: "compressed-large", MaxSide: 1600, Quality: 80, Binarized: false},
 	{Label: "binarized-small", MaxSide: 960, Quality: 70, Binarized: true},
 }
 
+var paddleOCRWorkerSlots = make(chan struct{}, 1)
+
 func callPaddleOCR(ctx context.Context, imagePath string) ([]byte, error) {
+	if err := acquirePaddleOCRWorkerSlot(ctx); err != nil {
+		return nil, err
+	}
+	defer releasePaddleOCRWorkerSlot()
+
 	baseURL := strings.TrimSpace(config.Current.Vision.BaseURL)
 	if baseURL == "" {
 		return nil, fmt.Errorf("未配置 PaddleOCR 服务地址")
@@ -98,13 +112,14 @@ func callPaddleOCR(ctx context.Context, imagePath string) ([]byte, error) {
 		return nil, fmt.Errorf("读取待识别文件失败: %w", err)
 	}
 	fileType := detectPaddleOCRFileType(imagePath)
-	plans := buildPaddleOCRAttemptPlans(fileType)
+	source := buildPaddleOCRImageSource(fileType, fileBytes)
+	plans := buildPaddleOCRAttemptPlans(fileType, source)
 	perAttemptTimeout := time.Duration(max(20, max(10, config.Current.Vision.TimeoutSeconds)/len(plans))) * time.Second
 
 	var lastErr error
 	for index, plan := range plans {
 		attemptStartedAt := time.Now()
-		ocrBytes, imageMeta := preparePaddleOCRFile(imagePath, fileBytes, fileType, plan, index+1)
+		ocrBytes, imageMeta := preparePaddleOCRFile(source, fileType, plan, index+1)
 		requestPayload := paddleOCRRequest{
 			File:                      base64.StdEncoding.EncodeToString(ocrBytes),
 			FileType:                  fileType,
@@ -217,35 +232,34 @@ func buildPaddleOCRRequestLog(imagePath string, payload paddleOCRRequest, imageM
 	}
 }
 
-func preparePaddleOCRFile(imagePath string, fileBytes []byte, fileType int, plan paddleOCRAttemptPlan, attempt int) ([]byte, paddleOCRImageMeta) {
+func preparePaddleOCRFile(source paddleOCRImageSource, fileType int, plan paddleOCRAttemptPlan, attempt int) ([]byte, paddleOCRImageMeta) {
 	meta := paddleOCRImageMeta{
-		OriginalSize:  len(fileBytes),
-		ProcessedSize: len(fileBytes),
+		OriginalSize:  len(source.FileBytes),
+		ProcessedSize: len(source.FileBytes),
 		Attempt:       attempt,
 		AttemptLabel:  plan.Label,
 	}
 	if fileType == 0 {
-		return fileBytes, meta
+		return source.FileBytes, meta
 	}
-
-	decoded, _, err := image.Decode(bytes.NewReader(fileBytes))
-	if err != nil {
-		return fileBytes, meta
+	meta.OriginalWidth = source.Width
+	meta.OriginalHeight = source.Height
+	if plan.UseOrigin || source.Decoded == nil {
+		meta.ProcessedWidth = source.Width
+		meta.ProcessedHeight = source.Height
+		return source.FileBytes, meta
 	}
-
-	bounds := decoded.Bounds()
-	meta.OriginalWidth = bounds.Dx()
-	meta.OriginalHeight = bounds.Dy()
 	targetWidth, targetHeight := fitImageSize(meta.OriginalWidth, meta.OriginalHeight, plan.MaxSide)
 	meta.ProcessedWidth = targetWidth
 	meta.ProcessedHeight = targetHeight
 
 	canvas := image.NewRGBA(image.Rect(0, 0, targetWidth, targetHeight))
 	fillWhiteBackground(canvas)
+	bounds := source.Decoded.Bounds()
 	if targetWidth != meta.OriginalWidth || targetHeight != meta.OriginalHeight {
-		xdraw.CatmullRom.Scale(canvas, canvas.Bounds(), decoded, bounds, xdraw.Over, nil)
+		xdraw.ApproxBiLinear.Scale(canvas, canvas.Bounds(), source.Decoded, bounds, xdraw.Over, nil)
 	} else {
-		xdraw.Draw(canvas, canvas.Bounds(), decoded, bounds.Min, xdraw.Over)
+		xdraw.Draw(canvas, canvas.Bounds(), source.Decoded, bounds.Min, xdraw.Over)
 	}
 
 	if plan.Binarized {
@@ -255,25 +269,37 @@ func preparePaddleOCRFile(imagePath string, fileBytes []byte, fileType int, plan
 
 	buffer := bytes.NewBuffer(nil)
 	if err := jpeg.Encode(buffer, canvas, &jpeg.Options{Quality: max(40, plan.Quality)}); err != nil {
-		return fileBytes, meta
+		return source.FileBytes, meta
 	}
 
 	processedBytes := buffer.Bytes()
 	meta.ProcessedSize = len(processedBytes)
-	meta.WasCompressed = len(processedBytes) != len(fileBytes) || targetWidth != meta.OriginalWidth || targetHeight != meta.OriginalHeight
+	meta.WasCompressed = len(processedBytes) != len(source.FileBytes) || targetWidth != meta.OriginalWidth || targetHeight != meta.OriginalHeight
 	return processedBytes, meta
 }
 
-func buildPaddleOCRAttemptPlans(fileType int) []paddleOCRAttemptPlan {
+func buildPaddleOCRAttemptPlans(fileType int, source paddleOCRImageSource) []paddleOCRAttemptPlan {
 	if fileType == 0 {
 		return []paddleOCRAttemptPlan{{
 			Label:     "pdf-original",
 			MaxSide:   0,
 			Quality:   paddleOCRDefaultJPEGQuality,
 			Binarized: false,
+			UseOrigin: true,
 		}}
 	}
-	return paddleOCRAttemptPlans
+
+	plans := make([]paddleOCRAttemptPlan, 0, len(paddleOCRAttemptPlans)+1)
+	if source.Width > 0 && source.Height > 0 && source.Width <= 1600 && source.Height <= 1600 && len(source.FileBytes) <= 900*1024 {
+		plans = append(plans, paddleOCRAttemptPlan{
+			Label:     "original-direct",
+			MaxSide:   0,
+			Quality:   paddleOCRDefaultJPEGQuality,
+			Binarized: false,
+			UseOrigin: true,
+		})
+	}
+	return append(plans, paddleOCRAttemptPlans...)
 }
 
 func fitImageSize(width int, height int, maxSide int) (int, int) {
@@ -291,13 +317,7 @@ func fitImageSize(width int, height int, maxSide int) (int, int) {
 }
 
 func fillWhiteBackground(target *image.RGBA) {
-	bounds := target.Bounds()
-	white := color.RGBA{R: 255, G: 255, B: 255, A: 255}
-	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-		for x := bounds.Min.X; x < bounds.Max.X; x++ {
-			target.SetRGBA(x, y, white)
-		}
-	}
+	xdraw.Draw(target, target.Bounds(), &image.Uniform{C: color.White}, image.Point{}, xdraw.Src)
 }
 
 func applyBinaryThreshold(target *image.RGBA) {
@@ -361,4 +381,40 @@ func shouldRetryPaddleOCR(statusCode int, err error) bool {
 		return true
 	}
 	return statusCode >= http.StatusInternalServerError
+}
+
+func buildPaddleOCRImageSource(fileType int, fileBytes []byte) paddleOCRImageSource {
+	source := paddleOCRImageSource{
+		FileBytes: fileBytes,
+	}
+	if fileType == 0 {
+		return source
+	}
+
+	decoded, _, err := image.Decode(bytes.NewReader(fileBytes))
+	if err != nil {
+		return source
+	}
+
+	bounds := decoded.Bounds()
+	source.Decoded = decoded
+	source.Width = bounds.Dx()
+	source.Height = bounds.Dy()
+	return source
+}
+
+func acquirePaddleOCRWorkerSlot(ctx context.Context) error {
+	select {
+	case paddleOCRWorkerSlots <- struct{}{}:
+		return nil
+	case <-ctx.Done():
+		return fmt.Errorf("等待 OCR 处理资源失败: %w", ctx.Err())
+	}
+}
+
+func releasePaddleOCRWorkerSlot() {
+	select {
+	case <-paddleOCRWorkerSlots:
+	default:
+	}
 }
