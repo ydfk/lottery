@@ -177,7 +177,6 @@ export function RecordPanel(props: RecordPanelProps) {
                 className="hidden"
                 type="file"
                 accept="image/*"
-                capture="environment"
                 onChange={(event) => onSelectImage(event.target.files?.[0] || null)}
               />
             </label>

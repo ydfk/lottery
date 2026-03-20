@@ -1,10 +1,11 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition, type MouseEvent } from "react";
-import { ArrowDownWideNarrow, ChevronDown, SlidersHorizontal } from "lucide-react";
+import { ArrowDownWideNarrow, ChevronDown, ScanSearch, SlidersHorizontal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { DetailSheet } from "@/components/lottery/detail-sheet";
 import { NumberBalls } from "@/components/lottery/number-balls";
+import { RecommendationStealthSheet } from "@/components/lottery/recommendation-stealth-sheet";
 import { TicketCard } from "@/components/lottery/ticket-card";
 import {
   formatLotteryDrawDate,
@@ -76,16 +77,24 @@ function getRecommendationStatus(recommendation: Recommendation) {
 function RecommendationCard(props: {
   recommendation: Recommendation;
   onSelectRecommendation: (recommendationId: string) => void;
+  onOpenStealth: (recommendationId: string) => void;
 }) {
-  const { recommendation, onSelectRecommendation } = props;
+  const { recommendation, onSelectRecommendation, onOpenStealth } = props;
   const status = getRecommendationStatus(recommendation);
   const purchasedCount = recommendation.purchasedCount || 0;
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       className="rounded-[1.75rem] border border-white/70 bg-white/88 p-5 text-left shadow-[0_16px_40px_rgba(15,23,42,0.08)] transition hover:-translate-y-0.5 hover:shadow-[0_20px_48px_rgba(15,23,42,0.12)]"
       onClick={() => onSelectRecommendation(recommendation.id)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSelectRecommendation(recommendation.id);
+        }
+      }}
     >
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
@@ -94,7 +103,20 @@ function RecommendationCard(props: {
             <Badge variant="secondary">已购买 {purchasedCount} 次</Badge>
           ) : null}
         </div>
-        <Badge className={status.className}>{status.label}</Badge>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="inline-flex h-8 items-center gap-1 rounded-full border border-slate-200 bg-white px-3 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpenStealth(recommendation.id);
+            }}
+          >
+            <ScanSearch className="size-3.5" />
+            隐览
+          </button>
+          <Badge className={status.className}>{status.label}</Badge>
+        </div>
       </div>
 
       <div className="mt-3 text-xs text-slate-500">
@@ -109,7 +131,7 @@ function RecommendationCard(props: {
           </div>
         ))}
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -117,8 +139,9 @@ function RecommendationSection(props: {
   title: string;
   items: Recommendation[];
   onSelectRecommendation: (recommendationId: string) => void;
+  onOpenStealth: (recommendationId: string) => void;
 }) {
-  const { title, items, onSelectRecommendation } = props;
+  const { title, items, onSelectRecommendation, onOpenStealth } = props;
 
   if (items.length === 0) {
     return null;
@@ -137,6 +160,7 @@ function RecommendationSection(props: {
             key={recommendation.id}
             recommendation={recommendation}
             onSelectRecommendation={onSelectRecommendation}
+            onOpenStealth={onOpenStealth}
           />
         ))}
       </div>
@@ -161,6 +185,7 @@ export function RecommendationPanel(props: RecommendationPanelProps) {
   } = props;
   const loadMoreTriggerRef = useRef<HTMLDivElement | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [stealthRecommendationId, setStealthRecommendationId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const deferredFilters = useDeferredValue(filters);
   const hasActiveFilters = Boolean(
@@ -185,6 +210,10 @@ export function RecommendationPanel(props: RecommendationPanelProps) {
 
   const pendingRecommendations = recommendations.filter((item) => !item.checkedAt);
   const checkedRecommendations = recommendations.filter((item) => item.checkedAt);
+  const stealthRecommendation = useMemo(
+    () => recommendations.find((item) => item.id === stealthRecommendationId) ?? null,
+    [recommendations, stealthRecommendationId]
+  );
 
   useEffect(() => {
     const target = loadMoreTriggerRef.current;
@@ -343,6 +372,7 @@ export function RecommendationPanel(props: RecommendationPanelProps) {
                 title={statusFilterOptions.find((item) => item.value === filters.status)?.label || "推荐"}
                 items={recommendations}
                 onSelectRecommendation={(recommendationId) => onSelectRecommendation(recommendationId)}
+                onOpenStealth={(recommendationId) => setStealthRecommendationId(recommendationId)}
               />
             ) : (
               <div className="space-y-6">
@@ -350,11 +380,13 @@ export function RecommendationPanel(props: RecommendationPanelProps) {
                   title="待开奖"
                   items={pendingRecommendations}
                   onSelectRecommendation={(recommendationId) => onSelectRecommendation(recommendationId)}
+                  onOpenStealth={(recommendationId) => setStealthRecommendationId(recommendationId)}
                 />
                 <RecommendationSection
                   title="已开奖"
                   items={checkedRecommendations}
                   onSelectRecommendation={(recommendationId) => onSelectRecommendation(recommendationId)}
+                  onOpenStealth={(recommendationId) => setStealthRecommendationId(recommendationId)}
                 />
               </div>
             )}
@@ -480,6 +512,16 @@ export function RecommendationPanel(props: RecommendationPanelProps) {
           </div>
         ) : null}
       </DetailSheet>
+
+      <RecommendationStealthSheet
+        open={Boolean(stealthRecommendation)}
+        recommendation={stealthRecommendation}
+        onOpenChange={(open) => {
+          if (!open) {
+            setStealthRecommendationId(null);
+          }
+        }}
+      />
     </>
   );
 }
