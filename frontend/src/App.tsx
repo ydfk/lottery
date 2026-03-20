@@ -70,6 +70,13 @@ function buildRecommendationEntryText(recommendation: Recommendation) {
     .join("\n");
 }
 
+function calculateEntriesCost(entries: ParsedEntry[]) {
+  return entries.reduce((total, entry) => {
+    const perBetCost = entry.isAdditional ? 3 : 2;
+    return total + Math.max(1, entry.multiple) * perBetCost;
+  }, 0);
+}
+
 function parseEntryText(value: string, lotteryCode: string) {
   return value
     .split("\n")
@@ -134,6 +141,24 @@ function toggleEntryAdditionalText(value: string, index: number, lotteryCode: st
     .join("\n");
 }
 
+function changeEntryMultipleText(value: string, index: number, nextMultiple: number) {
+  const lines = value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return lines
+    .map((line, lineIndex) => {
+      if (lineIndex !== index) {
+        return line;
+      }
+
+      const baseLine = line.replace(/[（(]\s*\d+\s*[)）]\s*$/, "").trim();
+      return nextMultiple > 1 ? `${baseLine} (${nextMultiple})` : baseLine;
+    })
+    .join("\n");
+}
+
 function replaceRecommendation(
   items: Recommendation[],
   nextItem: Recommendation
@@ -185,6 +210,7 @@ export default function App() {
   const [issue, setIssue] = useState("");
   const [drawDate, setDrawDate] = useState("");
   const [costAmount, setCostAmount] = useState("");
+  const [costAmountEdited, setCostAmountEdited] = useState(false);
   const [notes, setNotes] = useState("");
   const [entryText, setEntryText] = useState("");
 
@@ -215,6 +241,7 @@ export default function App() {
     setIssue("");
     setDrawDate("");
     setCostAmount("");
+    setCostAmountEdited(false);
     setNotes("");
     setEntryText("");
   }
@@ -343,6 +370,20 @@ export default function App() {
     return () => URL.revokeObjectURL(objectUrl);
   }, [selectedImage]);
 
+  useEffect(() => {
+    if (costAmountEdited || !lotteryCode) {
+      return;
+    }
+
+    const entries = parseEntryText(entryText, lotteryCode);
+    if (entries.length === 0) {
+      setCostAmount("");
+      return;
+    }
+
+    setCostAmount(calculateEntriesCost(entries).toFixed(2));
+  }, [costAmountEdited, entryText, lotteryCode]);
+
   async function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!authUsername.trim() || !authPassword.trim()) {
@@ -403,8 +444,8 @@ export default function App() {
     setLotteryCode(recommendation.lotteryCode || "");
     setIssue(recommendation.issue || "");
     setDrawDate(formatLotteryDrawDate(recommendation.drawDate));
-    setCostAmount((recommendation.entries.length * 2).toFixed(2));
     setEntryText(buildRecommendationEntryText(recommendation));
+    setCostAmountEdited(false);
     setActiveTab("records");
     toast.success("已切换到记录页，接下来上传这条推荐的购买票据即可");
   }
@@ -453,6 +494,7 @@ export default function App() {
       setIssue(draft.issue || "");
       setDrawDate(draft.drawDate || "");
       setCostAmount(draft.costAmount > 0 ? draft.costAmount.toFixed(2) : "");
+      setCostAmountEdited(false);
       setEntryText(buildParsedEntryText(draft.entries, draft.lotteryCode || lotteryCode));
       toast.success("识别完成");
     } catch (error) {
@@ -463,29 +505,43 @@ export default function App() {
   }
 
   async function handleCreateTicket() {
-    if (!uploadedTicket) {
-      toast.error("请先识别彩票内容");
+    if (!selectedImage && !uploadedTicket) {
+      toast.error("请先选择彩票照片");
       return;
     }
 
     const entries = parseEntryText(entryText, lotteryCode);
-    if (entries.length === 0) {
-      toast.error("请至少确认一注号码");
-      return;
-    }
     if (!lotteryCode.trim()) {
       toast.error("请确认彩票类型");
+      return;
+    }
+    if (!issue.trim()) {
+      toast.error("请填写期号");
+      return;
+    }
+    if (!drawDate.trim()) {
+      toast.error("请填写开奖日期");
+      return;
+    }
+    if (entries.length === 0) {
+      toast.error("请至少填写一注号码");
+      return;
+    }
+    const manualCostAmount = Number(costAmount);
+    if (!(Number.isFinite(manualCostAmount) && manualCostAmount > 0)) {
+      toast.error("请填写正确的金额");
       return;
     }
 
     setSubmitPending(true);
     try {
-      const manualCostAmount = Number(costAmount);
+      const upload = uploadedTicket || (await uploadSelectedTicketImage());
       await createTicket({
         lotteryCode: lotteryCode || undefined,
-        uploadId: uploadedTicket.id,
+        uploadId: upload.id,
         recommendationId: purchaseRecommendation?.id,
         issue: issue || undefined,
+        drawDate: drawDate || undefined,
         purchasedAt: new Date().toISOString(),
         costAmount: Number.isFinite(manualCostAmount) && manualCostAmount > 0 ? manualCostAmount : undefined,
         notes: notes || undefined,
@@ -508,6 +564,23 @@ export default function App() {
 
   function handleToggleEntryAdditional(index: number) {
     setEntryText((current) => toggleEntryAdditionalText(current, index, lotteryCode));
+  }
+
+  function handleChangeEntryMultiple(index: number, nextMultiple: number) {
+    setEntryText((current) => changeEntryMultipleText(current, index, nextMultiple));
+  }
+
+  function handleChangeLotteryCode(value: string) {
+    setLotteryCode(value);
+    if (!costAmountEdited) {
+      const entries = parseEntryText(entryText, value);
+      setCostAmount(entries.length > 0 ? calculateEntriesCost(entries).toFixed(2) : "");
+    }
+  }
+
+  function handleChangeCostAmount(value: string) {
+    setCostAmount(value);
+    setCostAmountEdited(true);
   }
 
   async function handleRecheckTicket(ticketId: string) {
@@ -614,14 +687,15 @@ export default function App() {
             entryText={entryText}
             submitPending={submitPending}
             onSelectImage={handleSelectImage}
-            onLotteryCodeChange={setLotteryCode}
+            onLotteryCodeChange={handleChangeLotteryCode}
             onRecognize={() => void handleRecognizeTicket()}
             onIssueChange={setIssue}
             onDrawDateChange={setDrawDate}
-            onCostAmountChange={setCostAmount}
+            onCostAmountChange={handleChangeCostAmount}
             onNotesChange={setNotes}
             onEntryTextChange={setEntryText}
             onToggleEntryAdditional={handleToggleEntryAdditional}
+            onChangeEntryMultiple={handleChangeEntryMultiple}
             onCreateTicket={() => void handleCreateTicket()}
             onClearRecommendation={() => setPurchaseRecommendation(null)}
           />

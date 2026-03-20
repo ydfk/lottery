@@ -51,7 +51,8 @@ export interface Recommendation {
   entryCount?: number;
   winningCount?: number;
   isPurchased?: boolean;
-  purchasedTicket?: Ticket;
+  purchasedCount?: number;
+  purchasedTickets?: Ticket[];
 }
 
 export interface RecommendationFilters {
@@ -81,10 +82,29 @@ export interface TicketEntry {
   matchSummary: string;
 }
 
+export interface TicketRecommendationEntry {
+  id: string;
+  sequence: number;
+  redNumbers: string;
+  blueNumbers: string;
+  prizeAmount: number;
+  prizeName: string;
+}
+
+export interface TicketRecommendation {
+  id: string;
+  issue: string;
+  drawDate?: string;
+  summary: string;
+  createdAt: string;
+  entries: TicketRecommendationEntry[];
+}
+
 export interface Ticket {
   id: string;
   lotteryCode: string;
   recommendationId?: string;
+  recommendation?: TicketRecommendation;
   issue: string;
   status: string;
   costAmount: number;

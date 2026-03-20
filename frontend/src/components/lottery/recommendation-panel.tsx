@@ -3,12 +3,7 @@ import { ArrowDownWideNarrow, ChevronDown, SlidersHorizontal } from "lucide-reac
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { DetailSheet } from "@/components/lottery/detail-sheet";
 import { NumberBalls } from "@/components/lottery/number-balls";
 import { TicketCard } from "@/components/lottery/ticket-card";
 import {
@@ -84,6 +79,7 @@ function RecommendationCard(props: {
 }) {
   const { recommendation, onSelectRecommendation } = props;
   const status = getRecommendationStatus(recommendation);
+  const purchasedCount = recommendation.purchasedCount || 0;
 
   return (
     <button
@@ -92,7 +88,12 @@ function RecommendationCard(props: {
       onClick={() => onSelectRecommendation(recommendation.id)}
     >
       <div className="flex items-center justify-between gap-3">
-        <Badge variant="secondary">{getLotteryDisplayName(recommendation.lotteryCode)}</Badge>
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary">{getLotteryDisplayName(recommendation.lotteryCode)}</Badge>
+          {recommendation.isPurchased ? (
+            <Badge variant="secondary">已购买 {purchasedCount} 次</Badge>
+          ) : null}
+        </div>
         <Badge className={status.className}>{status.label}</Badge>
       </div>
 
@@ -384,97 +385,101 @@ export function RecommendationPanel(props: RecommendationPanelProps) {
         )}
       </div>
 
-      <Dialog
+      <DetailSheet
         open={Boolean(selectedRecommendation)}
+        title="推荐详情"
+        rightAction={
+          selectedRecommendation ? (
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-11 rounded-full px-3 text-sm text-slate-700"
+              onClick={() => onRecordPurchase(selectedRecommendation)}
+            >
+              {selectedRecommendation.isPurchased ? "续记" : "购买"}
+            </Button>
+          ) : undefined
+        }
         onOpenChange={(open) => onSelectRecommendation(open ? selectedRecommendation?.id ?? null : null)}
       >
-        <DialogContent className="max-h-[92vh] overflow-y-auto border-white/70 bg-[rgba(255,255,255,0.98)] p-0 sm:max-w-4xl">
-          <div className="p-6 sm:p-7">
-            {selectedRecommendation ? (
-              <div className="space-y-6">
-                <DialogHeader className="space-y-3 text-left">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="secondary">{getLotteryDisplayName(selectedRecommendation.lotteryCode)}</Badge>
-                    <Badge variant="secondary">
-                      第 {formatLotteryIssue(selectedRecommendation.lotteryCode, selectedRecommendation.issue)} 期
-                    </Badge>
-                    {selectedRecommendation.drawDate ? (
-                      <Badge variant="secondary">{formatLotteryDrawDate(selectedRecommendation.drawDate)} 开奖</Badge>
-                    ) : null}
-                    <Badge className={getRecommendationStatus(selectedRecommendation).className}>
-                      {getRecommendationStatus(selectedRecommendation).label}
-                    </Badge>
-                  </div>
-                  <DialogTitle className="text-2xl text-slate-950">
-                    {selectedRecommendation.summary || "推荐详情"}
-                  </DialogTitle>
-                </DialogHeader>
+        {selectedRecommendation ? (
+          <div className="space-y-6">
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="secondary">{getLotteryDisplayName(selectedRecommendation.lotteryCode)}</Badge>
+                <Badge variant="secondary">
+                  第 {formatLotteryIssue(selectedRecommendation.lotteryCode, selectedRecommendation.issue)} 期
+                </Badge>
+                {selectedRecommendation.drawDate ? (
+                  <Badge variant="secondary">{formatLotteryDrawDate(selectedRecommendation.drawDate)} 开奖</Badge>
+                ) : null}
+                <Badge className={getRecommendationStatus(selectedRecommendation).className}>
+                  {getRecommendationStatus(selectedRecommendation).label}
+                </Badge>
+              </div>
+              {selectedRecommendation.summary ? (
+                <h2 className="text-2xl font-semibold text-slate-950">
+                  {selectedRecommendation.summary}
+                </h2>
+              ) : null}
+            </div>
 
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[1.35rem] bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                  <span>共 {selectedRecommendation.entryCount || selectedRecommendation.entries.length} 注</span>
-                  <span>命中 {selectedRecommendation.winningCount || 0} 注</span>
-                  <span className="font-medium text-slate-900">
-                    奖金 {formatCurrency(selectedRecommendation.prizeAmount || 0)}
-                  </span>
-                </div>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[1.35rem] bg-slate-50 px-4 py-3 text-sm text-slate-600">
+              <span>共 {selectedRecommendation.entryCount || selectedRecommendation.entries.length} 注</span>
+              <span>命中 {selectedRecommendation.winningCount || 0} 注</span>
+              <span>购买 {selectedRecommendation.purchasedCount || 0} 次</span>
+              <span className="font-medium text-slate-900">
+                奖金 {formatCurrency(selectedRecommendation.prizeAmount || 0)}
+              </span>
+            </div>
 
-                <div className="space-y-3">
-                  {selectedRecommendation.entries.map((entry) => (
-                    <div
-                      key={entry.id}
-                      className="rounded-[1.35rem] border border-slate-200 bg-white px-4 py-3"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <NumberBalls
-                            redNumbers={entry.redNumbers}
-                            blueNumbers={entry.blueNumbers}
-                            compact
-                          />
-                        </div>
-                        <div className="shrink-0 text-right text-xs text-slate-500">
-                          <p>{entry.matchSummary || "待开奖"}</p>
-                          <p className="mt-1 font-semibold text-slate-900">
-                            {formatCurrency(entry.prizeAmount || 0)}
-                          </p>
-                        </div>
-                      </div>
-                      {entry.reason ? (
-                        <p className="mt-2 text-xs leading-5 text-slate-500">{entry.reason}</p>
-                      ) : null}
+            <div className="space-y-3">
+              {selectedRecommendation.entries.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="rounded-[1.35rem] border border-slate-200 bg-white px-4 py-3"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <NumberBalls
+                        redNumbers={entry.redNumbers}
+                        blueNumbers={entry.blueNumbers}
+                        compact
+                      />
                     </div>
-                  ))}
-                </div>
-
-                <div className="flex flex-wrap gap-3">
-                  {!selectedRecommendation.isPurchased ? (
-                    <Button
-                      type="button"
-                      className="rounded-2xl"
-                      onClick={() => onRecordPurchase(selectedRecommendation)}
-                    >
-                      记录已购买
-                    </Button>
+                    <div className="shrink-0 text-right text-xs text-slate-500">
+                      <p>{entry.matchSummary || "待开奖"}</p>
+                      <p className="mt-1 font-semibold text-slate-900">
+                        {formatCurrency(entry.prizeAmount || 0)}
+                      </p>
+                    </div>
+                  </div>
+                  {entry.reason ? (
+                    <p className="mt-2 text-xs leading-5 text-slate-500">{entry.reason}</p>
                   ) : null}
                 </div>
+              ))}
+            </div>
 
-                {detailPending ? (
-                  <Card className="border-white/60 bg-slate-50">
-                    <CardContent className="py-8 text-center text-sm text-slate-500">
-                      正在加载推荐详情...
-                    </CardContent>
-                  </Card>
-                ) : selectedRecommendation.purchasedTicket ? (
-                  <div className="space-y-3">
-                    <h3 className="text-base font-semibold text-slate-900">关联票据</h3>
-                    <TicketCard ticket={selectedRecommendation.purchasedTicket} />
-                  </div>
-                ) : null}
+            {detailPending ? (
+              <Card className="border-white/60 bg-slate-50">
+                <CardContent className="py-8 text-center text-sm text-slate-500">
+                  正在加载推荐详情...
+                </CardContent>
+              </Card>
+            ) : selectedRecommendation.purchasedTickets && selectedRecommendation.purchasedTickets.length > 0 ? (
+              <div className="space-y-3">
+                <h3 className="text-base font-semibold text-slate-900">购买记录</h3>
+                <div className="space-y-4">
+                  {selectedRecommendation.purchasedTickets.map((ticket) => (
+                    <TicketCard key={ticket.id} ticket={ticket} />
+                  ))}
+                </div>
               </div>
             ) : null}
           </div>
-        </DialogContent>
-      </Dialog>
+        ) : null}
+      </DetailSheet>
     </>
   );
 }

@@ -95,6 +95,8 @@ lotteries:
       enabled: true
       # 推荐生成 cron 表达式。
       cron: "0 40 21 * * *"
+      # 推荐服务提供方，当前支持 openai-compatible。
+      provider: "openai-compatible"
       # 每次生成的推荐注数，recommendations/generate 接口也会使用该值。
       count: 2
       # 推荐模型参考的历史开奖期数。
@@ -150,6 +152,8 @@ lotteries:
       enabled: true
       # 推荐生成 cron 表达式。
       cron: "0 40 20 * * *"
+      # 推荐服务提供方，当前支持 openai-compatible。
+      provider: "openai-compatible"
       # 每次生成的推荐注数，recommendations/generate 接口也会使用该值。
       count: 2
       # 推荐模型参考的历史开奖期数。

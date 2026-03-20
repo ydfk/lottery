@@ -23,6 +23,7 @@ const (
 type RecommendationSettings struct {
 	Enabled       bool
 	Cron          string
+	Provider      string
 	Count         int
 	HistoryWindow int
 	Model         string
@@ -78,6 +79,7 @@ func ListDefinitions() []Definition {
 			Recommendation: RecommendationSettings{
 				Enabled:       item.Recommendation.Enabled,
 				Cron:          item.Recommendation.Cron,
+				Provider:      resolveValue(item.Recommendation.Provider, ProviderOpenAICompatible),
 				Count:         item.Recommendation.Count,
 				HistoryWindow: item.Recommendation.HistoryWindow,
 				Model:         item.Recommendation.Model,
@@ -125,7 +127,7 @@ func SeedLotteryTypes() error {
 				BlueMin:                definition.BlueMin,
 				BlueMax:                definition.BlueMax,
 				RecommendationCount:    max(1, definition.Recommendation.Count),
-				RecommendationProvider: ProviderOpenAICompatible,
+				RecommendationProvider: resolveValue(definition.Recommendation.Provider, ProviderOpenAICompatible),
 				RecommendationModel:    definition.Recommendation.Model,
 				VisionProvider:         resolveValue(config.Current.Vision.Provider, ProviderPaddleOCR),
 				VisionModel:            resolveValue(config.Current.Vision.Model, "paddleocr"),
@@ -149,7 +151,7 @@ func SeedLotteryTypes() error {
 		item.BlueMin = definition.BlueMin
 		item.BlueMax = definition.BlueMax
 		item.RecommendationCount = max(1, definition.Recommendation.Count)
-		item.RecommendationProvider = ProviderOpenAICompatible
+		item.RecommendationProvider = resolveValue(definition.Recommendation.Provider, ProviderOpenAICompatible)
 		item.RecommendationModel = definition.Recommendation.Model
 		item.VisionProvider = resolveValue(config.Current.Vision.Provider, ProviderPaddleOCR)
 		item.VisionModel = resolveValue(config.Current.Vision.Model, "paddleocr")

@@ -10,6 +10,7 @@ import (
 
 type Recommendation struct {
 	base.BaseModel
+	UserID        *uuid.UUID            `gorm:"type:uuid;index" json:"-"`
 	LotteryCode   string                `gorm:"index;size:32" json:"lotteryCode"`
 	Issue         string                `gorm:"index;size:32" json:"issue"`
 	DrawDate      *time.Time            `json:"drawDate"`

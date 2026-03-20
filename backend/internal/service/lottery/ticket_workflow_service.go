@@ -2,44 +2,54 @@ package lottery
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	model "go-fiber-starter/internal/model/lottery"
 	"go-fiber-starter/pkg/db"
+	"go-fiber-starter/pkg/logger"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 const (
 	TicketUploadStatusUploaded   = "uploaded"
 	TicketUploadStatusRecognized = "recognized"
 	TicketUploadStatusFailed     = "failed"
+	TicketUploadStatusSaving     = "saving"
 	TicketUploadStatusSaved      = "saved"
 )
 
 var ErrDuplicateTicket = errors.New("相同票据已存在，不能重复录入")
 
 type UploadTicketImageInput struct {
+	UserID           string
 	Code             string
 	ImagePath        string
 	OriginalFilename string
 }
 
 type RecognizeUploadedTicketInput struct {
+	UserID   string
 	Code     string
 	UploadID string
 	OCRText  string
 }
 
 type CreateTicketInput struct {
+	UserID           string
 	Code             string
 	UploadID         string
 	RecommendationID string
 	Issue            string
+	DrawDate         time.Time
 	PurchasedAt      time.Time
 	CostAmount       float64
 	Notes            string
@@ -63,7 +73,13 @@ type TicketRecognitionDraft struct {
 }
 
 func UploadTicketImage(input UploadTicketImageInput) (*TicketUploadDetail, error) {
+	userUUID, err := parseRequiredUserID(input.UserID)
+	if err != nil {
+		return nil, err
+	}
+
 	upload := model.TicketUpload{
+		UserID:           &userUUID,
 		LotteryCode:      input.Code,
 		Status:           TicketUploadStatusUploaded,
 		OriginalFilename: input.OriginalFilename,
@@ -76,9 +92,12 @@ func UploadTicketImage(input UploadTicketImageInput) (*TicketUploadDetail, error
 }
 
 func RecognizeUploadedTicket(ctx context.Context, input RecognizeUploadedTicketInput) (*TicketRecognitionDraft, error) {
-	upload, err := getTicketUpload(input.Code, input.UploadID)
+	upload, err := getTicketUpload(input.UserID, input.Code, input.UploadID)
 	if err != nil {
 		return nil, err
+	}
+	if upload.Status == TicketUploadStatusSaved {
+		return nil, fmt.Errorf("这张图片已经入库，请重新上传新图片")
 	}
 
 	recognized, err := recognizeTicket(ctx, resolveTicketCode(input.Code, upload.LotteryCode), upload.ImagePath, input.OCRText)
@@ -115,89 +134,140 @@ func RecognizeUploadedTicket(ctx context.Context, input RecognizeUploadedTicketI
 }
 
 func CreateTicket(ctx context.Context, input CreateTicketInput) (*TicketDetail, error) {
-	upload, err := getTicketUpload(input.Code, input.UploadID)
+	if input.UploadID == "" {
+		return nil, fmt.Errorf("请先上传彩票图片")
+	}
+
+	recommendation, recommendationID, err := resolveRecommendation(input.UserID, input.Code, input.RecommendationID)
 	if err != nil {
 		return nil, err
 	}
-
-	recommendation, recommendationID, err := resolveRecommendation(input.Code, input.RecommendationID)
-	if err != nil {
-		return nil, err
-	}
-
-	code, err := resolveCreateTicketCode(input.Code, upload.LotteryCode, recommendation)
-	if err != nil {
-		return nil, err
-	}
-
-	definition, err := GetDefinition(code)
-	if err != nil {
-		return nil, err
-	}
-
-	entries := input.Entries
-	if len(entries) == 0 {
-		entries, err = getRecognizedEntries(upload)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	entries, err = normalizeParsedEntries(definition, entries)
-	if err != nil {
-		return nil, err
-	}
-
-	issue := input.Issue
-	if issue == "" {
-		issue = upload.RecognitionIssue
-	}
-	if issue == "" && recommendation != nil {
-		issue = recommendation.Issue
-	}
-	if issue == "" {
-		return nil, fmt.Errorf("未识别到期号，请手动补充期号后重试")
-	}
-	issue = normalizeIssueByCode(code, issue)
 
 	purchasedAt := input.PurchasedAt
 	if purchasedAt.IsZero() {
 		purchasedAt = time.Now()
 	}
 
-	if err := validateDuplicateTicket(code, issue, input.CostAmount, entries); err != nil {
-		return nil, err
-	}
+	ticketID := ""
+	code := ""
+	issue := ""
+	shouldEvaluate := false
 
-	ticket, err := createTicketRecord(code, recommendationID, issue, upload.ImagePath, upload.RecognizedText, purchasedAt, input.CostAmount, input.Notes, entries)
-	if err != nil {
-		return nil, err
-	}
+	if err := db.DB.Transaction(func(tx *gorm.DB) error {
+		upload, reserveErr := reserveTicketUpload(tx, input.UserID, input.Code, input.UploadID)
+		if reserveErr != nil {
+			return reserveErr
+		}
 
-	upload.LotteryCode = code
-	upload.Status = TicketUploadStatusSaved
-	if err := db.DB.Save(&upload).Error; err != nil {
+		code, reserveErr = resolveCreateTicketCode(input.Code, upload.LotteryCode, recommendation)
+		if reserveErr != nil {
+			return reserveErr
+		}
+
+		definition, definitionErr := GetDefinition(code)
+		if definitionErr != nil {
+			return definitionErr
+		}
+
+		entries := input.Entries
+		if len(entries) == 0 {
+			if upload.RecognitionPayload == "" {
+				return fmt.Errorf("请先识别号码，或手动填写完整号码后保存")
+			}
+			entries, reserveErr = getRecognizedEntries(upload)
+			if reserveErr != nil {
+				return reserveErr
+			}
+		}
+
+		if len(entries) > 0 {
+			entries, reserveErr = normalizeParsedEntries(definition, entries)
+			if reserveErr != nil {
+				return reserveErr
+			}
+		}
+
+		issue = input.Issue
+		if issue == "" {
+			issue = upload.RecognitionIssue
+		}
+		if issue == "" && recommendation != nil {
+			issue = recommendation.Issue
+		}
+		if issue == "" {
+			return fmt.Errorf("未识别到期号，请手动补充期号后重试")
+		}
+		issue = normalizeIssueByCode(code, issue)
+
+		if reserveErr = validateDuplicateTicket(tx, input.UserID, code, issue, entries); reserveErr != nil {
+			return reserveErr
+		}
+
+		ticket, createErr := createTicketRecord(tx, input.UserID, code, recommendationID, issue, input.DrawDate, upload.ImagePath, upload.RecognizedText, purchasedAt, input.CostAmount, input.Notes, entries)
+		if createErr != nil {
+			if isUniqueConstraintError(createErr) {
+				return ErrDuplicateTicket
+			}
+			return createErr
+		}
+
+		upload.LotteryCode = code
+		upload.Status = TicketUploadStatusSaved
+		if err := tx.Model(&model.TicketUpload{}).
+			Where("id = ? AND status = ?", upload.Id, TicketUploadStatusSaving).
+			Updates(map[string]any{
+				"lottery_code": upload.LotteryCode,
+				"status":       upload.Status,
+			}).Error; err != nil {
+			return err
+		}
+
+		ticketID = ticket.Id.String()
+		shouldEvaluate = len(entries) > 0
+		return nil
+	}); err != nil {
 		return nil, err
 	}
 
 	ensureIssueDrawSynced(ctx, code, issue)
-
-	if err := EvaluateTicket(ticket.Id.String()); err != nil {
-		return nil, err
+	if shouldEvaluate {
+		if err := EvaluateTicket(ticketID); err != nil {
+			logger.Warn("票据自动判奖失败 %s/%s: %v", code, ticketID, err)
+		}
 	}
-	return GetTicketDetail(ticket.Id.String())
+	return GetTicketDetail(ticketID, input.UserID)
 }
 
-func createTicketRecord(code string, recommendationID *uuid.UUID, issue string, imagePath string, recognizedText string, purchasedAt time.Time, costAmount float64, notes string, entries []ParsedEntry) (*model.Ticket, error) {
+func createTicketRecord(tx *gorm.DB, userID string, code string, recommendationID *uuid.UUID, issue string, drawDate time.Time, imagePath string, recognizedText string, purchasedAt time.Time, costAmount float64, notes string, entries []ParsedEntry) (*model.Ticket, error) {
+	userUUID, err := parseRequiredUserID(userID)
+	if err != nil {
+		return nil, err
+	}
+
 	totalCost := costAmount
 	if totalCost <= 0 {
 		totalCost = calculateEntriesCost(entries)
 	}
 
+	var manualDrawDate *time.Time
+	if !drawDate.IsZero() {
+		value := drawDate
+		manualDrawDate = &value
+	}
+
+	var entrySignature *string
+	if len(entries) > 0 {
+		signature := buildTicketEntriesHash(entries)
+		entrySignature = &signature
+	}
+
 	ticket := model.Ticket{
+		UserID:           &userUUID,
 		LotteryCode:      code,
 		RecommendationID: recommendationID,
 		Issue:            issue,
+		EntrySignature:   entrySignature,
+		ManualDrawDate:   manualDrawDate,
 		Source:           "upload",
 		ImagePath:        imagePath,
 		RecognizedText:   recognizedText,
@@ -206,7 +276,7 @@ func createTicketRecord(code string, recommendationID *uuid.UUID, issue string, 
 		PurchasedAt:      purchasedAt,
 		Notes:            notes,
 	}
-	if err := db.DB.Create(&ticket).Error; err != nil {
+	if err := tx.Create(&ticket).Error; err != nil {
 		return nil, err
 	}
 
@@ -223,7 +293,7 @@ func createTicketRecord(code string, recommendationID *uuid.UUID, issue string, 
 		})
 	}
 	if len(records) > 0 {
-		if err := db.DB.Create(&records).Error; err != nil {
+		if err := tx.Create(&records).Error; err != nil {
 			return nil, err
 		}
 	}
@@ -231,30 +301,48 @@ func createTicketRecord(code string, recommendationID *uuid.UUID, issue string, 
 	return &ticket, nil
 }
 
-func validateDuplicateTicket(code string, issue string, costAmount float64, entries []ParsedEntry) error {
-	candidates := make([]model.Ticket, 0)
-	if err := db.DB.Preload("Entries").Where("lottery_code = ? AND issue IN ?", code, issueAliases(code, issue)).Find(&candidates).Error; err != nil {
+func validateDuplicateTicket(tx *gorm.DB, userID string, code string, issue string, entries []ParsedEntry) error {
+	if len(entries) == 0 {
+		return nil
+	}
+
+	signature := buildTicketEntriesHash(entries)
+	var count int64
+	if err := currentUserScope(tx.Model(&model.Ticket{}), userID).
+		Where("lottery_code = ? AND issue IN ? AND entry_signature = ?", code, issueAliases(code, issue), signature).
+		Count(&count).Error; err != nil {
 		return err
 	}
-
-	targetCost := costAmount
-	if targetCost <= 0 {
-		targetCost = calculateEntriesCost(entries)
+	if count > 0 {
+		return ErrDuplicateTicket
 	}
-	targetSignature := buildTicketEntriesSignature(entries)
-	for _, candidate := range candidates {
-		if len(candidate.Entries) != len(entries) {
-			continue
-		}
-		if targetCost > 0 && candidate.CostAmount > 0 && !isSameAmount(candidate.CostAmount, targetCost) {
-			continue
-		}
-		if buildStoredTicketEntriesSignature(candidate.Entries) == targetSignature {
-			return ErrDuplicateTicket
-		}
-	}
-
 	return nil
+}
+
+func reserveTicketUpload(tx *gorm.DB, userID string, code string, uploadID string) (model.TicketUpload, error) {
+	upload, err := getTicketUploadWithDB(tx, userID, code, uploadID)
+	if err != nil {
+		return upload, err
+	}
+	if upload.Status == TicketUploadStatusSaved {
+		return upload, fmt.Errorf("这张图片已经入库，请勿重复保存")
+	}
+	if upload.Status == TicketUploadStatusSaving {
+		return upload, fmt.Errorf("这张图片正在处理中，请稍后重试")
+	}
+
+	result := currentUserScope(tx.Model(&model.TicketUpload{}), userID).
+		Where("id = ? AND status = ?", uploadID, upload.Status).
+		Update("status", TicketUploadStatusSaving)
+	if result.Error != nil {
+		return upload, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return upload, fmt.Errorf("这张图片正在处理中，请稍后重试")
+	}
+
+	upload.Status = TicketUploadStatusSaving
+	return upload, nil
 }
 
 func buildTicketEntriesSignature(entries []ParsedEntry) string {
@@ -273,6 +361,11 @@ func buildTicketEntriesSignature(entries []ParsedEntry) string {
 		)
 	}
 	return signature
+}
+
+func buildTicketEntriesHash(entries []ParsedEntry) string {
+	sum := sha256.Sum256([]byte(buildTicketEntriesSignature(entries)))
+	return hex.EncodeToString(sum[:])
 }
 
 func buildStoredTicketEntriesSignature(entries []model.TicketEntry) string {
@@ -300,22 +393,17 @@ func buildStoredTicketEntriesSignature(entries []model.TicketEntry) string {
 	return signature
 }
 
-func isSameAmount(left float64, right float64) bool {
-	delta := left - right
-	if delta < 0 {
-		delta = -delta
-	}
-	return delta < 0.0001
+func getTicketUpload(userID string, code string, uploadID string) (model.TicketUpload, error) {
+	return getTicketUploadWithDB(db.DB, userID, code, uploadID)
 }
 
-func getTicketUpload(code string, uploadID string) (model.TicketUpload, error) {
+func getTicketUploadWithDB(database *gorm.DB, userID string, code string, uploadID string) (model.TicketUpload, error) {
 	upload := model.TicketUpload{}
-	query := db.DB
-	if code != "" {
-		query = query.Where("lottery_code = ?", code)
-	}
-	if err := query.First(&upload, "id = ?", uploadID).Error; err != nil {
+	if err := currentUserScope(database, userID).First(&upload, "id = ?", uploadID).Error; err != nil {
 		return upload, err
+	}
+	if code != "" && upload.LotteryCode != "" && upload.LotteryCode != code {
+		return upload, fmt.Errorf("上传记录的彩票类型与当前录入类型不一致")
 	}
 	return upload, nil
 }
@@ -342,7 +430,7 @@ func getRecognizedEntries(upload model.TicketUpload) ([]ParsedEntry, error) {
 	return recognized.Entries, nil
 }
 
-func resolveRecommendation(code string, recommendationID string) (*model.Recommendation, *uuid.UUID, error) {
+func resolveRecommendation(userID string, code string, recommendationID string) (*model.Recommendation, *uuid.UUID, error) {
 	if recommendationID == "" {
 		return nil, nil, nil
 	}
@@ -353,7 +441,7 @@ func resolveRecommendation(code string, recommendationID string) (*model.Recomme
 	}
 
 	recommendation := model.Recommendation{}
-	query := db.DB
+	query := currentUserScope(db.DB, userID)
 	if code != "" {
 		query = query.Where("lottery_code = ?", code)
 	}
@@ -381,6 +469,14 @@ func resolveTicketCode(primary string, fallback string) string {
 		return primary
 	}
 	return fallback
+}
+
+func isUniqueConstraintError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := err.Error()
+	return strings.Contains(message, "UNIQUE constraint failed") || strings.Contains(message, "duplicate key value")
 }
 
 func ensureIssueDrawSynced(ctx context.Context, code string, issue string) {

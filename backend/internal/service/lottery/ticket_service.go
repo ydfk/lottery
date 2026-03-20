@@ -13,6 +13,7 @@ import (
 )
 
 type ScanTicketInput struct {
+	UserID      string
 	Code        string
 	Issue       string
 	ImagePath   string
@@ -23,13 +24,33 @@ type ScanTicketInput struct {
 
 type TicketDetail struct {
 	model.Ticket
-	ImageURL        string     `json:"imageUrl"`
-	DrawDate        *time.Time `json:"drawDate"`
-	DrawRedNumbers  string     `json:"drawRedNumbers"`
-	DrawBlueNumbers string     `json:"drawBlueNumbers"`
+	ImageURL        string                      `json:"imageUrl"`
+	DrawDate        *time.Time                  `json:"drawDate"`
+	DrawRedNumbers  string                      `json:"drawRedNumbers"`
+	DrawBlueNumbers string                      `json:"drawBlueNumbers"`
+	Recommendation  *TicketRecommendationDetail `json:"recommendation,omitempty"`
+}
+
+type TicketRecommendationDetail struct {
+	ID        string                      `json:"id"`
+	Issue     string                      `json:"issue"`
+	DrawDate  *time.Time                  `json:"drawDate,omitempty"`
+	Summary   string                      `json:"summary"`
+	Entries   []TicketRecommendationEntry `json:"entries"`
+	CreatedAt time.Time                   `json:"createdAt"`
+}
+
+type TicketRecommendationEntry struct {
+	ID          string  `json:"id"`
+	Sequence    int     `json:"sequence"`
+	RedNumbers  string  `json:"redNumbers"`
+	BlueNumbers string  `json:"blueNumbers"`
+	PrizeAmount float64 `json:"prizeAmount"`
+	PrizeName   string  `json:"prizeName"`
 }
 
 type TicketQueryOptions struct {
+	UserID      string
 	Page        int
 	PageSize    int
 	LotteryCode string
@@ -47,6 +68,7 @@ type TicketPageResult struct {
 
 func ScanTicket(ctx context.Context, input ScanTicketInput) (*TicketDetail, error) {
 	upload, err := UploadTicketImage(UploadTicketImageInput{
+		UserID:           input.UserID,
 		Code:             input.Code,
 		ImagePath:        input.ImagePath,
 		OriginalFilename: "",
@@ -56,6 +78,7 @@ func ScanTicket(ctx context.Context, input ScanTicketInput) (*TicketDetail, erro
 	}
 
 	recognized, err := RecognizeUploadedTicket(ctx, RecognizeUploadedTicketInput{
+		UserID:   input.UserID,
 		Code:     input.Code,
 		UploadID: upload.Id.String(),
 		OCRText:  input.OCRText,
@@ -65,6 +88,7 @@ func ScanTicket(ctx context.Context, input ScanTicketInput) (*TicketDetail, erro
 	}
 
 	return CreateTicket(ctx, CreateTicketInput{
+		UserID:      input.UserID,
 		Code:        input.Code,
 		UploadID:    upload.Id.String(),
 		Issue:       resolveValue(input.Issue, recognized.Issue),
@@ -147,6 +171,10 @@ func EvaluateTicket(ticketID string) error {
 	if err := db.DB.Preload("Entries").First(&ticket, "id = ?", ticketID).Error; err != nil {
 		return err
 	}
+	if len(ticket.Entries) == 0 {
+		return nil
+	}
+
 	canonicalIssue := normalizeIssueByCode(ticket.LotteryCode, ticket.Issue)
 	if canonicalIssue != "" && canonicalIssue != ticket.Issue {
 		ticket.Issue = canonicalIssue
@@ -191,9 +219,9 @@ func EvaluateTicket(ticketID string) error {
 	return db.DB.Omit("Entries").Save(&ticket).Error
 }
 
-func RecheckTicket(ctx context.Context, ticketID string, code string) (*TicketDetail, error) {
+func RecheckTicket(ctx context.Context, ticketID string, code string, userID string) (*TicketDetail, error) {
 	ticket := model.Ticket{}
-	query := db.DB.Preload("Entries")
+	query := currentUserScope(db.DB.Preload("Entries"), userID)
 	if code != "" {
 		query = query.Where("lottery_code = ?", code)
 	}
@@ -211,24 +239,24 @@ func RecheckTicket(ctx context.Context, ticketID string, code string) (*TicketDe
 	if err := EvaluateTicket(ticket.Id.String()); err != nil {
 		return nil, err
 	}
-	return GetTicketDetail(ticket.Id.String())
+	return GetTicketDetail(ticket.Id.String(), userID)
 }
 
-func GetTicketDetail(ticketID string) (*TicketDetail, error) {
+func GetTicketDetail(ticketID string, userID string) (*TicketDetail, error) {
 	ticket := model.Ticket{}
-	if err := db.DB.Preload("Entries").First(&ticket, "id = ?", ticketID).Error; err != nil {
+	if err := currentUserScope(db.DB.Preload("Entries"), userID).First(&ticket, "id = ?", ticketID).Error; err != nil {
 		return nil, err
 	}
 	return buildTicketDetail(ticket), nil
 }
 
-func ListTickets(code string, limit int) ([]TicketDetail, error) {
+func ListTickets(code string, limit int, userID string) ([]TicketDetail, error) {
 	if limit <= 0 {
 		limit = 20
 	}
 
 	tickets := make([]model.Ticket, 0)
-	if err := db.DB.Preload("Entries").Where("lottery_code = ?", code).Order("created_at desc").Limit(limit).Find(&tickets).Error; err != nil {
+	if err := currentUserScope(db.DB.Preload("Entries"), userID).Where("lottery_code = ?", code).Order("created_at desc").Limit(limit).Find(&tickets).Error; err != nil {
 		return nil, err
 	}
 
@@ -239,13 +267,13 @@ func ListTickets(code string, limit int) ([]TicketDetail, error) {
 	return result, nil
 }
 
-func ListAllTickets(limit int) ([]TicketDetail, error) {
+func ListAllTickets(limit int, userID string) ([]TicketDetail, error) {
 	if limit <= 0 {
 		limit = 20
 	}
 
 	tickets := make([]model.Ticket, 0)
-	if err := db.DB.Preload("Entries").Order("created_at desc").Limit(limit).Find(&tickets).Error; err != nil {
+	if err := currentUserScope(db.DB.Preload("Entries"), userID).Order("created_at desc").Limit(limit).Find(&tickets).Error; err != nil {
 		return nil, err
 	}
 
@@ -266,7 +294,7 @@ func QueryAllTickets(options TicketQueryOptions) (*TicketPageResult, error) {
 		pageSize = 50
 	}
 
-	query := db.DB.Model(&model.Ticket{})
+	query := currentUserScope(db.DB.Model(&model.Ticket{}), options.UserID)
 	if options.LotteryCode != "" {
 		query = query.Where("lottery_code = ?", options.LotteryCode)
 	}
@@ -280,7 +308,7 @@ func QueryAllTickets(options TicketQueryOptions) (*TicketPageResult, error) {
 	}
 
 	tickets := make([]model.Ticket, 0)
-	if err := db.DB.Preload("Entries").
+	if err := currentUserScope(db.DB.Preload("Entries"), options.UserID).
 		Scopes(applyTicketFilters(options), applyTicketSort(options.Sort)).
 		Offset((page - 1) * pageSize).
 		Limit(pageSize).
@@ -341,7 +369,42 @@ func buildTicketDetail(ticket model.Ticket) *TicketDetail {
 		detail.DrawDate = &drawDate
 		detail.DrawRedNumbers = draw.RedNumbers
 		detail.DrawBlueNumbers = draw.BlueNumbers
+	} else if ticket.ManualDrawDate != nil {
+		detail.DrawDate = ticket.ManualDrawDate
+	}
+	if ticket.RecommendationID != nil {
+		recommendation := model.Recommendation{}
+		query := db.DB.Preload("Entries").Where("id = ?", *ticket.RecommendationID)
+		if ticket.UserID != nil {
+			query = query.Where("user_id = ?", *ticket.UserID)
+		}
+		if err := query.First(&recommendation).Error; err == nil {
+			detail.Recommendation = buildTicketRecommendationDetail(recommendation)
+		}
 	}
 
 	return detail
+}
+
+func buildTicketRecommendationDetail(recommendation model.Recommendation) *TicketRecommendationDetail {
+	entries := make([]TicketRecommendationEntry, 0, len(recommendation.Entries))
+	for _, entry := range recommendation.Entries {
+		entries = append(entries, TicketRecommendationEntry{
+			ID:          entry.Id.String(),
+			Sequence:    entry.Sequence,
+			RedNumbers:  entry.RedNumbers,
+			BlueNumbers: entry.BlueNumbers,
+			PrizeAmount: entry.PrizeAmount,
+			PrizeName:   entry.PrizeName,
+		})
+	}
+
+	return &TicketRecommendationDetail{
+		ID:        recommendation.Id.String(),
+		Issue:     recommendation.Issue,
+		DrawDate:  recommendation.DrawDate,
+		Summary:   recommendation.Summary,
+		Entries:   entries,
+		CreatedAt: recommendation.CreatedAt,
+	}
 }

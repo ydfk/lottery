@@ -20,30 +20,30 @@ type DashboardStats struct {
 	TotalPrize   float64 `json:"totalPrize"`
 }
 
-func loadDashboardStats(code string) DashboardStats {
+func loadDashboardStats(code string, userID string) DashboardStats {
 	stats := DashboardStats{}
 	var totalTickets int64
 	var wonTickets int64
 
-	query := db.DB.Model(&model.Ticket{})
+	query := currentUserScope(db.DB.Model(&model.Ticket{}), userID)
 	if code != "" {
 		query = query.Where("lottery_code = ?", code)
 	}
 	query.Count(&totalTickets)
 
-	winQuery := db.DB.Model(&model.Ticket{}).Where("status = ?", TicketStatusWon)
+	winQuery := currentUserScope(db.DB.Model(&model.Ticket{}), userID).Where("status = ?", TicketStatusWon)
 	if code != "" {
 		winQuery = winQuery.Where("lottery_code = ?", code)
 	}
 	winQuery.Count(&wonTickets)
 
-	costQuery := db.DB.Model(&model.Ticket{})
+	costQuery := currentUserScope(db.DB.Model(&model.Ticket{}), userID)
 	if code != "" {
 		costQuery = costQuery.Where("lottery_code = ?", code)
 	}
 	costQuery.Select("COALESCE(sum(cost_amount), 0)").Scan(&stats.TotalCost)
 
-	prizeQuery := db.DB.Model(&model.Ticket{})
+	prizeQuery := currentUserScope(db.DB.Model(&model.Ticket{}), userID)
 	if code != "" {
 		prizeQuery = prizeQuery.Where("lottery_code = ?", code)
 	}
@@ -70,15 +70,15 @@ func ListLotteryTypes() ([]model.LotteryType, error) {
 	return items, nil
 }
 
-func GetLatestRecommendation(code string) (*model.Recommendation, error) {
+func GetLatestRecommendation(code string, userID string) (*model.Recommendation, error) {
 	item := model.Recommendation{}
-	if err := db.DB.Preload("Entries").Where("lottery_code = ?", code).Order("created_at desc").First(&item).Error; err != nil {
+	if err := currentUserScope(db.DB.Preload("Entries"), userID).Where("lottery_code = ?", code).Order("created_at desc").First(&item).Error; err != nil {
 		return nil, err
 	}
 	return &item, nil
 }
 
-func GetDashboard(code string) (*DashboardData, error) {
+func GetDashboard(code string, userID string) (*DashboardData, error) {
 	lotteryType, err := getLotteryType(code)
 	if err != nil {
 		return nil, err
@@ -91,12 +91,12 @@ func GetDashboard(code string) (*DashboardData, error) {
 	}
 
 	var latestRecommendation *model.Recommendation
-	recommendation, err := GetLatestRecommendation(code)
+	recommendation, err := GetLatestRecommendation(code, userID)
 	if err == nil {
 		latestRecommendation = recommendation
 	}
 
-	recentTickets, err := ListTickets(code, 10)
+	recentTickets, err := ListTickets(code, 10, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -106,13 +106,13 @@ func GetDashboard(code string) (*DashboardData, error) {
 		LatestDraw:           latestDraw,
 		LatestRecommendation: latestRecommendation,
 		RecentTickets:        recentTickets,
-		Stats:                loadDashboardStats(code),
+		Stats:                loadDashboardStats(code, userID),
 	}, nil
 }
 
-func GetGlobalDashboard() (*DashboardData, error) {
+func GetGlobalDashboard(userID string) (*DashboardData, error) {
 	return &DashboardData{
 		RecentTickets: make([]TicketDetail, 0),
-		Stats:         loadDashboardStats(""),
+		Stats:         loadDashboardStats("", userID),
 	}, nil
 }

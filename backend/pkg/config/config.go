@@ -83,6 +83,7 @@ type LotteryDrawScheduleConfig struct {
 type LotteryRecommendationConfig struct {
 	Enabled       bool   `mapstructure:"enabled"`
 	Cron          string `mapstructure:"cron"`
+	Provider      string `mapstructure:"provider"`
 	Count         int    `mapstructure:"count"`
 	HistoryWindow int    `mapstructure:"historyWindow"`
 	Model         string `mapstructure:"model"`

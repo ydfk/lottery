@@ -11,13 +11,15 @@ import (
 
 type RecommendationDetail struct {
 	model.Recommendation
-	EntryCount      int           `json:"entryCount"`
-	WinningCount    int           `json:"winningCount"`
-	IsPurchased     bool          `json:"isPurchased"`
-	PurchasedTicket *TicketDetail `json:"purchasedTicket,omitempty"`
+	EntryCount       int            `json:"entryCount"`
+	WinningCount     int            `json:"winningCount"`
+	IsPurchased      bool           `json:"isPurchased"`
+	PurchasedCount   int            `json:"purchasedCount"`
+	PurchasedTickets []TicketDetail `json:"purchasedTickets"`
 }
 
 type RecommendationQueryOptions struct {
+	UserID      string
 	Page        int
 	PageSize    int
 	LotteryCode string
@@ -33,19 +35,19 @@ type RecommendationPageResult struct {
 	HasMore  bool                   `json:"hasMore"`
 }
 
-func ListRecommendations(code string, limit int) ([]RecommendationDetail, error) {
+func ListRecommendations(code string, limit int, userID string) ([]RecommendationDetail, error) {
 	if limit <= 0 {
 		limit = 20
 	}
 
 	recommendations := make([]model.Recommendation, 0)
-	if err := db.DB.Preload("Entries").Where("lottery_code = ?", code).Order("created_at desc").Limit(limit).Find(&recommendations).Error; err != nil {
+	if err := currentUserScope(db.DB.Preload("Entries"), userID).Where("lottery_code = ?", code).Order("created_at desc").Limit(limit).Find(&recommendations).Error; err != nil {
 		return nil, err
 	}
 
 	result := make([]RecommendationDetail, 0, len(recommendations))
 	for _, recommendation := range recommendations {
-		detail, err := buildRecommendationDetail(recommendation)
+		detail, err := buildRecommendationDetail(recommendation, userID)
 		if err != nil {
 			return nil, err
 		}
@@ -54,19 +56,19 @@ func ListRecommendations(code string, limit int) ([]RecommendationDetail, error)
 	return result, nil
 }
 
-func ListAllRecommendations(limit int) ([]RecommendationDetail, error) {
+func ListAllRecommendations(limit int, userID string) ([]RecommendationDetail, error) {
 	if limit <= 0 {
 		limit = 20
 	}
 
 	recommendations := make([]model.Recommendation, 0)
-	if err := db.DB.Preload("Entries").Order("created_at desc").Limit(limit).Find(&recommendations).Error; err != nil {
+	if err := currentUserScope(db.DB.Preload("Entries"), userID).Order("created_at desc").Limit(limit).Find(&recommendations).Error; err != nil {
 		return nil, err
 	}
 
 	result := make([]RecommendationDetail, 0, len(recommendations))
 	for _, recommendation := range recommendations {
-		detail, err := buildRecommendationDetail(recommendation)
+		detail, err := buildRecommendationDetail(recommendation, userID)
 		if err != nil {
 			return nil, err
 		}
@@ -85,7 +87,7 @@ func QueryRecommendations(options RecommendationQueryOptions) (*RecommendationPa
 		pageSize = 50
 	}
 
-	query := applyRecommendationFilters(db.DB.Model(&model.Recommendation{}), options)
+	query := applyRecommendationFilters(currentUserScope(db.DB.Model(&model.Recommendation{}), options.UserID), options)
 
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
@@ -103,7 +105,7 @@ func QueryRecommendations(options RecommendationQueryOptions) (*RecommendationPa
 
 	items := make([]RecommendationDetail, 0, len(recommendations))
 	for _, recommendation := range recommendations {
-		detail, err := buildRecommendationDetail(recommendation)
+		detail, err := buildRecommendationDetail(recommendation, options.UserID)
 		if err != nil {
 			return nil, err
 		}
@@ -119,15 +121,15 @@ func QueryRecommendations(options RecommendationQueryOptions) (*RecommendationPa
 	}, nil
 }
 
-func GetRecommendationDetail(code string, recommendationID string) (*RecommendationDetail, error) {
+func GetRecommendationDetail(code string, recommendationID string, userID string) (*RecommendationDetail, error) {
 	recommendation := model.Recommendation{}
-	if err := db.DB.Preload("Entries").First(&recommendation, "id = ? AND lottery_code = ?", recommendationID, code).Error; err != nil {
+	if err := currentUserScope(db.DB.Preload("Entries"), userID).First(&recommendation, "id = ? AND lottery_code = ?", recommendationID, code).Error; err != nil {
 		return nil, err
 	}
-	return buildRecommendationDetail(recommendation)
+	return buildRecommendationDetail(recommendation, userID)
 }
 
-func buildRecommendationDetail(recommendation model.Recommendation) (*RecommendationDetail, error) {
+func buildRecommendationDetail(recommendation model.Recommendation, userID string) (*RecommendationDetail, error) {
 	detail := &RecommendationDetail{
 		Recommendation: recommendation,
 		EntryCount:     len(recommendation.Entries),
@@ -139,16 +141,17 @@ func buildRecommendationDetail(recommendation model.Recommendation) (*Recommenda
 		}
 	}
 
-	ticket := model.Ticket{}
-	err := db.DB.Preload("Entries").
+	tickets := make([]model.Ticket, 0)
+	err := currentUserScope(db.DB.Preload("Entries"), userID).
 		Where("lottery_code = ? AND recommendation_id = ?", recommendation.LotteryCode, recommendation.Id).
 		Order("created_at desc").
-		First(&ticket).Error
-	if err == nil {
+		Find(&tickets).Error
+	if err == nil && len(tickets) > 0 {
 		detail.IsPurchased = true
-		detail.PurchasedTicket = &TicketDetail{
-			Ticket:   ticket,
-			ImageURL: buildPublicImageURL(ticket.ImagePath),
+		detail.PurchasedCount = len(tickets)
+		detail.PurchasedTickets = make([]TicketDetail, 0, len(tickets))
+		for _, ticket := range tickets {
+			detail.PurchasedTickets = append(detail.PurchasedTickets, *buildTicketDetail(ticket))
 		}
 	}
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {

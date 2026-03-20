@@ -104,7 +104,12 @@ func normalizeRecommendationNumbers(items []RecommendationNumber, count int) []R
 	return items[:count]
 }
 
-func GenerateRecommendation(ctx context.Context, code string, count int) (*model.Recommendation, error) {
+func GenerateRecommendation(ctx context.Context, code string, count int, userID string) (*model.Recommendation, error) {
+	userUUID, err := parseRequiredUserID(userID)
+	if err != nil {
+		return nil, err
+	}
+
 	lotteryType, err := getLotteryType(code)
 	if err != nil {
 		return nil, err
@@ -130,7 +135,8 @@ func GenerateRecommendation(ctx context.Context, code string, count int) (*model
 	if err != nil {
 		return nil, err
 	}
-	provider := newRecommendationProvider(ProviderOpenAICompatible)
+	providerName := resolveValue(definition.Recommendation.Provider, ProviderOpenAICompatible)
+	provider := newRecommendationProvider(providerName)
 	if provider == nil {
 		return nil, fmt.Errorf("未配置可用的推荐模型提供方")
 	}
@@ -140,57 +146,75 @@ func GenerateRecommendation(ctx context.Context, code string, count int) (*model
 	}
 
 	recommendation := model.Recommendation{}
-	saveModeCreate := false
-	findErr := db.DB.Where("lottery_code = ? AND issue = ?", code, targetIssue).Order("created_at desc").First(&recommendation).Error
-	if errors.Is(findErr, gorm.ErrRecordNotFound) {
-		recommendation = model.Recommendation{
-			LotteryCode: code,
-			Issue:       targetIssue,
+	if err := db.DB.Transaction(func(tx *gorm.DB) error {
+		saveModeCreate := false
+		findErr := tx.Where("user_id = ? AND lottery_code = ? AND issue = ?", userUUID, code, targetIssue).Order("created_at desc").First(&recommendation).Error
+		if errors.Is(findErr, gorm.ErrRecordNotFound) {
+			recommendation = model.Recommendation{
+				UserID:      &userUUID,
+				LotteryCode: code,
+				Issue:       targetIssue,
+			}
+			saveModeCreate = true
+		} else if findErr != nil {
+			return findErr
 		}
-		saveModeCreate = true
-	} else if findErr != nil {
-		return nil, findErr
-	}
 
-	recommendation.DrawDate = &targetDrawDate
-	recommendation.Provider = ProviderOpenAICompatible
-	recommendation.Model = definition.Recommendation.Model
-	recommendation.Strategy = "history+ai"
-	recommendation.PromptVersion = definition.Recommendation.PromptVersion
-	recommendation.Summary = result.Summary
-	recommendation.Basis = result.Basis
-	recommendation.RawPayload = mustJSON(result)
-	recommendation.CheckedAt = nil
-	recommendation.PrizeAmount = 0
+		applyRecommendationSnapshot := func() {
+			recommendation.DrawDate = &targetDrawDate
+			recommendation.UserID = &userUUID
+			recommendation.Provider = providerName
+			recommendation.Model = definition.Recommendation.Model
+			recommendation.Strategy = "history+ai"
+			recommendation.PromptVersion = definition.Recommendation.PromptVersion
+			recommendation.Summary = result.Summary
+			recommendation.Basis = result.Basis
+			recommendation.RawPayload = mustJSON(result)
+			recommendation.CheckedAt = nil
+			recommendation.PrizeAmount = 0
+		}
+		applyRecommendationSnapshot()
 
-	if saveModeCreate {
-		if err := db.DB.Create(&recommendation).Error; err != nil {
-			return nil, err
+		if saveModeCreate {
+			if createErr := tx.Create(&recommendation).Error; createErr != nil {
+				if !isUniqueConstraintError(createErr) {
+					return createErr
+				}
+				if retryErr := tx.Where("user_id = ? AND lottery_code = ? AND issue = ?", userUUID, code, targetIssue).Order("created_at desc").First(&recommendation).Error; retryErr != nil {
+					return retryErr
+				}
+				applyRecommendationSnapshot()
+				if saveErr := tx.Omit("Entries").Save(&recommendation).Error; saveErr != nil {
+					return saveErr
+				}
+			}
+		} else {
+			if err := tx.Omit("Entries").Save(&recommendation).Error; err != nil {
+				return err
+			}
 		}
-	} else {
-		if err := db.DB.Omit("Entries").Save(&recommendation).Error; err != nil {
-			return nil, err
-		}
-		if err := db.DB.Where("recommendation_id = ?", recommendation.Id).Delete(&model.RecommendationEntry{}).Error; err != nil {
-			return nil, err
-		}
-	}
 
-	entries := make([]model.RecommendationEntry, 0, len(result.Numbers))
-	for index, item := range result.Numbers {
-		entries = append(entries, model.RecommendationEntry{
-			RecommendationID: recommendation.Id,
-			Sequence:         index + 1,
-			RedNumbers:       formatNumbers(item.Red),
-			BlueNumbers:      formatNumbers(item.Blue),
-			Confidence:       item.Confidence,
-			Reason:           item.Reason,
-		})
-	}
-	if len(entries) > 0 {
-		if err := db.DB.Create(&entries).Error; err != nil {
-			return nil, err
+		if err := tx.Where("recommendation_id = ?", recommendation.Id).Delete(&model.RecommendationEntry{}).Error; err != nil {
+			return err
 		}
+
+		entries := make([]model.RecommendationEntry, 0, len(result.Numbers))
+		for index, item := range result.Numbers {
+			entries = append(entries, model.RecommendationEntry{
+				RecommendationID: recommendation.Id,
+				Sequence:         index + 1,
+				RedNumbers:       formatNumbers(item.Red),
+				BlueNumbers:      formatNumbers(item.Blue),
+				Confidence:       item.Confidence,
+				Reason:           item.Reason,
+			})
+		}
+		if len(entries) == 0 {
+			return nil
+		}
+		return tx.Create(&entries).Error
+	}); err != nil {
+		return nil, err
 	}
 
 	if err := db.DB.Preload("Entries").First(&recommendation, "id = ?", recommendation.Id).Error; err != nil {

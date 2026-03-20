@@ -28,9 +28,15 @@ func startSyncLoop(ctx context.Context) {
 
 		if definition.Enabled && definition.Recommendation.Enabled && definition.Recommendation.Cron != "" {
 			_, err := scheduler.AddFunc(definition.Recommendation.Cron, func() {
-				if _, recommendationErr := GenerateRecommendation(ctx, code, 0); recommendationErr != nil {
-					logger.Error("定时生成推荐 %s 失败: %v", code, recommendationErr)
+				users, userErr := loadSchedulerUsers()
+				if userErr != nil {
+					logger.Error("加载推荐用户 %s 失败: %v", code, userErr)
 					return
+				}
+				for _, user := range users {
+					if _, recommendationErr := GenerateRecommendation(ctx, code, 0, user.Id.String()); recommendationErr != nil {
+						logger.Error("定时生成推荐 %s/%s 失败: %v", code, user.Username, recommendationErr)
+					}
 				}
 				logger.Info("已按计划生成 %s 推荐", code)
 			})

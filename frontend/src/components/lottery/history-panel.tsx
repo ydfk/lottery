@@ -3,13 +3,8 @@ import { format } from "date-fns";
 import { ArrowDownWideNarrow, ChevronDown, SlidersHorizontal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { DetailSheet } from "@/components/lottery/detail-sheet";
 import { NumberBalls } from "@/components/lottery/number-balls";
 import { TicketCard } from "@/components/lottery/ticket-card";
 import { formatLotteryIssue, getLotteryDisplayName, lotteryDisplayOptions } from "@/lib/lottery-display";
@@ -257,6 +252,9 @@ export function HistoryPanel(props: HistoryPanelProps) {
                   <div>
                     <div className="flex items-center gap-2">
                       <Badge variant="secondary">{getLotteryDisplayName(ticket.lotteryCode)}</Badge>
+                      <Badge variant="secondary">
+                        {ticket.recommendationId ? "推荐购买" : "手动录入"}
+                      </Badge>
                       <span
                         className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
                           statusClassMap[ticket.status] || "border-slate-200 bg-slate-100 text-slate-700"
@@ -335,31 +333,26 @@ export function HistoryPanel(props: HistoryPanelProps) {
         </Card>
       )}
 
-      <Dialog open={Boolean(selectedTicket)} onOpenChange={(open) => onSelectTicket(open ? selectedTicket : null)}>
-        <DialogContent className="max-h-[92vh] overflow-y-auto border-white/70 bg-[rgba(255,255,255,0.98)] p-0 sm:max-w-4xl">
-          <div className="p-6 sm:p-7">
-            {selectedTicket ? (
-              <>
-                <DialogHeader className="mb-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <DialogTitle>票据详情</DialogTitle>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      disabled={recheckPending}
-                      onClick={() => onRecheckTicket(selectedTicket.id)}
-                    >
-                      {recheckPending ? "判奖中..." : "重新判奖"}
-                    </Button>
-                  </div>
-                </DialogHeader>
-                <TicketCard ticket={selectedTicket} />
-              </>
-            ) : null}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <DetailSheet
+        open={Boolean(selectedTicket)}
+        title="票据详情"
+        rightAction={
+          selectedTicket ? (
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-11 rounded-full px-3 text-sm text-slate-700"
+              disabled={recheckPending}
+              onClick={() => onRecheckTicket(selectedTicket.id)}
+            >
+              {recheckPending ? "判奖中" : "重判"}
+            </Button>
+          ) : undefined
+        }
+        onOpenChange={(open) => onSelectTicket(open ? selectedTicket : null)}
+      >
+        {selectedTicket ? <TicketCard ticket={selectedTicket} /> : null}
+      </DetailSheet>
     </div>
   );
 }

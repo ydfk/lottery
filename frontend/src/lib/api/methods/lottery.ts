@@ -111,6 +111,7 @@ export function createTicket(body: {
   uploadId: string;
   recommendationId?: string;
   issue?: string;
+  drawDate?: string;
   purchasedAt?: string;
   costAmount?: number;
   notes?: string;
@@ -121,6 +122,7 @@ export function createTicket(body: {
     uploadId: string;
     recommendationId?: string;
     issue?: string;
+    drawDate?: string;
     purchasedAt?: string;
     costAmount?: number;
     notes?: string;

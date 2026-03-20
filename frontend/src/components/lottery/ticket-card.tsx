@@ -33,6 +33,9 @@ export function TicketCard({ ticket }: { ticket: Ticket }) {
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="secondary">{getLotteryDisplayName(ticket.lotteryCode)}</Badge>
+            <Badge variant="secondary">
+              {ticket.recommendationId ? "推荐购买" : "手动录入"}
+            </Badge>
             <span
               className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
                 statusClassMap[ticket.status] || "border-slate-200 bg-slate-100 text-slate-700"
@@ -79,6 +82,34 @@ export function TicketCard({ ticket }: { ticket: Ticket }) {
             </p>
           </div>
         </div>
+
+        {ticket.recommendation ? (
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary">关联推荐</Badge>
+              <span className="text-sm font-medium text-slate-700">
+                第 {formatLotteryIssue(ticket.lotteryCode, ticket.recommendation.issue)} 期
+                {ticket.recommendation.drawDate
+                  ? ` · ${format(new Date(ticket.recommendation.drawDate), "yyyy-MM-dd")}`
+                  : ""}
+              </span>
+            </div>
+            {ticket.recommendation.summary ? (
+              <p className="mt-2 text-sm text-slate-500">{ticket.recommendation.summary}</p>
+            ) : null}
+            <div className="mt-3 space-y-2">
+              {ticket.recommendation.entries.map((entry) => (
+                <div key={entry.id} className="rounded-2xl bg-white px-3 py-2">
+                  <NumberBalls
+                    redNumbers={entry.redNumbers}
+                    blueNumbers={entry.blueNumbers}
+                    compact
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         {ticket.imageUrl && (
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
@@ -136,6 +167,12 @@ export function TicketCard({ ticket }: { ticket: Ticket }) {
             </div>
           </div>
         ))}
+
+        {ticket.entries.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+            这条记录仅保存了票据原图附件，未识别号码。
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );
