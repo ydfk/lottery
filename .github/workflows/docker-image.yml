@@ -90,7 +90,8 @@ jobs:
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             echo "value=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
           else
-            echo "value=build-${GITHUB_RUN_NUMBER}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+            VERSION_TIME="$(TZ=Asia/Shanghai date +'%Y%m%d-%H%M%S')"
+            echo "value=${VERSION_TIME}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build and push Docker image

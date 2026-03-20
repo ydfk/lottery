@@ -1,112 +1,199 @@
+<div align="center">
+
 # 彩迹 Lottery
 
-移动优先的彩票管理、录票和推荐系统，适合个人长期记录双色球、大乐透等彩票购买与中奖情况。
+<p>
+  <strong>移动优先的彩票管理、录票、推荐与验奖系统</strong>
+</p>
 
-项目目标不是“预测开奖”，而是把推荐、录票、开奖同步、自动判奖、历史追踪整合到一个可持续维护的系统里。
+<p>
+  用一套完整、可扩展的工程化系统，管理每一次选号、每一张票据、每一期开奖与每一次中奖结果。
+</p>
 
-英文文档见 [README.en.md](README.en.md)。
+<p>
+  <a href="./README.en.md">English</a> ·
+  <a href="./docs/system-design.md">系统设计</a> ·
+  <a href="./backend/docs/swagger.yaml">Swagger</a>
+</p>
 
-设计文档见 [docs/system-design.md](docs/system-design.md)。
+<p>
+  <img src="https://img.shields.io/badge/Frontend-React%20%2B%20Vite-111827?style=flat-square" alt="Frontend" />
+  <img src="https://img.shields.io/badge/Backend-Go%20%2B%20Fiber-0F766E?style=flat-square" alt="Backend" />
+  <img src="https://img.shields.io/badge/Database-SQLite-1D4ED8?style=flat-square" alt="Database" />
+  <img src="https://img.shields.io/badge/OCR-PaddleOCR-7C3AED?style=flat-square" alt="OCR" />
+  <img src="https://img.shields.io/badge/Deploy-Single%20Docker%20Image-9A3412?style=flat-square" alt="Deploy" />
+</p>
 
-## 功能概览
+</div>
 
-- 配置驱动的多彩票类型支持，当前已实现 `福彩双色球`、`体彩大乐透`
-- 按 cron 定时生成 AI 推荐，并根据开奖日历推断目标期号与开奖日期
-- 按 cron 定时同步当期开奖，支持手动补历史开奖
-- 上传彩票原图、OCR 识别、手动校正、保存入库
-- 自动判奖、重新判奖、历史记录查询
-- 推荐与购买记录关联，一条推荐可挂多条购买记录
-- 移动端优先的前端界面，同时支持 Web 使用
-- 单镜像 Docker 发布
+---
+
+## 项目定位
+
+`彩迹` 不是一个“预测彩票”的噱头项目，而是一套围绕真实使用场景构建的系统：
+
+- 管理推荐号码
+- 记录购买票据
+- 同步官方开奖结果
+- 自动判断是否中奖与中奖金额
+- 长期沉淀个人购彩历史与数据统计
+
+它优先服务于移动端使用体验，同时保留完整的 Web 与 Docker 部署能力。
+
+## 为什么是这个项目
+
+大多数彩票类工具只做其中一段流程，例如：
+
+- 只看推荐，不记录购买
+- 只拍照识别，不做后续判奖
+- 只同步开奖结果，不沉淀个人历史
+
+`彩迹` 把这几段流程串成了一条完整闭环：
+
+1. 系统按配置定时生成推荐
+2. 用户基于推荐或手工选号购票
+3. 上传票据原图并 OCR 辅助录入
+4. 系统自动同步开奖结果
+5. 票据与推荐自动完成结算和归档
+
+## 核心特性
+
+### 推荐
+
+- 按彩种配置的 `cron` 自动生成推荐
+- 不同彩种支持不同模型、提示词、推荐数量、历史窗口
+- 根据开奖日历自动推断目标期号和开奖日期
+- 同一用户、同一彩种、同一期号重复生成时自动覆盖
+- 支持“隐览”全屏号码模式
+
+### 录票
+
+- 上传原图并永久保留
+- OCR 自动识别彩种、期号、开奖日期、号码、倍数、金额
+- OCR 仅做辅助填写，保存前可全部人工修正
+- 支持从推荐直接记录购买
+- 自动校验重复票据，避免重复入库
+
+### 开奖与判奖
+
+- 定时同步当期开奖结果
+- 支持手动补录历史开奖
+- 自动判奖、重新判奖
+- 支持双色球、大乐透不同规则
+- 大乐透支持追加投注识别与判奖逻辑
+
+### 账户与隔离
+
+- 推荐、上传记录、票据、统计都按用户隔离
+- 不同用户之间不会互相看到数据
+- 适合长期个人使用，也具备多用户扩展基础
 
 ## 当前支持的彩票
 
-| code | 名称 | 第三方 ID | 红/前区 | 蓝/后区 |
-| --- | --- | --- | --- | --- |
-| `ssq` | 福彩双色球 | `11` | `6 (1-33)` | `1 (1-16)` |
-| `dlt` | 体彩大乐透 | `13` | `5 (1-35)` | `2 (1-12)` |
+| Code | 名称 | 第三方 ID | 规则 |
+| --- | --- | --- | --- |
+| `ssq` | 福彩双色球 | `11` | 红球 `6 (1-33)`，蓝球 `1 (1-16)` |
+| `dlt` | 体彩大乐透 | `13` | 前区 `5 (1-35)`，后区 `2 (1-12)` |
 
-所有彩票规则、开奖日历、推荐模型、推荐数量、同步 cron 都从 [backend/config/config.yaml](backend/config/config.yaml) 读取。
+所有彩种能力都从配置读取，核心入口见：
 
-## 核心能力
+- [backend/config/config.yaml](./backend/config/config.yaml)
+- [backend/config/config.local.example.yaml](./backend/config/config.local.example.yaml)
 
-### 1. 推荐系统
+## 体验设计
 
-- 每种彩票可单独配置 `recommendation.cron`
-- 每种彩票可单独配置推荐模型、提示词、推荐数量、历史窗口
-- 根据彩种开奖日历自动推断推荐对应的期号与开奖日期
-- 同一用户、同一彩种、同一期号重复生成时自动覆盖
-- 支持推荐列表、详情、购买记录关联、隐蔽号码全屏展示
+前端围绕手机使用做了收敛，当前主页面只有 4 个一级入口：
 
-### 2. 票据记录
+- `看板`：账户信息、核心统计、版本号
+- `推荐`：推荐列表、分组、筛选、详情、购买关联
+- `记录`：上传、识别、修正、保存的一体化流程
+- `历史`：简洁卡片、筛选排序、动态分页、详情与重新判奖
 
-- 上传彩票原图并保留图片附件
-- OCR 自动提取彩种、期号、开奖日期、号码、倍数、金额
-- 识别结果可人工修改，OCR 只做辅助填写
-- 支持从推荐直接录入购买记录
-- 自动检测重复票据，避免重复录入
-- 同一上传记录只能成功入库一次
+整体原则是：
 
-### 3. 开奖同步与判奖
+- 减少解释性噪音
+- 优先信息密度
+- 保证单手操作
+- 保留“快速隐藏”的查看方式
 
-- 当期开奖同步使用 `query` 接口
-- 历史开奖补录使用 `history` 接口
-- 同步开奖结果后自动结算相关票据和推荐
-- 支持手动重新判奖
+## 系统架构
 
-### 4. 数据隔离
+```mermaid
+flowchart LR
+  A["GitHub Actions / Docker"] --> B["Frontend (React + Vite)"]
+  A --> C["Backend (Go + Fiber)"]
+  C --> D["SQLite"]
+  C --> E["PaddleOCR HTTP"]
+  C --> F["Jisu API"]
+  C --> G["OpenAI-Compatible API"]
+  B --> C
+```
 
-- 所有推荐、上传记录、票据、统计均按当前登录用户隔离
-- 不同用户之间不会互相看到历史、推荐与购买记录
+### 后端职责
+
+- 彩种配置加载
+- 推荐任务调度
+- 开奖同步
+- OCR 接入与文本解析
+- 票据入库与重复校验
+- 自动判奖与重新判奖
+- Swagger 与静态前端托管
+
+### 前端职责
+
+- 移动优先的业务界面
+- 推荐、录票、历史等主流程操作
+- 图片上传、识别编辑、详情展示
+- 版本显示与部署结果确认
 
 ## 技术栈
 
-- 前端：React + Vite + TypeScript
-- 后端：Go + Fiber + GORM
-- 数据库：SQLite
-- OCR：PaddleOCR HTTP 服务
-- 推荐模型：OpenAI Compatible API
-- 开奖数据：极速数据 API
+| 层 | 技术 |
+| --- | --- |
+| Frontend | React, Vite, TypeScript |
+| Backend | Go, Fiber, GORM |
+| Database | SQLite |
+| OCR | PaddleOCR HTTP 服务 |
+| AI Recommendation | OpenAI-Compatible API |
+| Draw Data | 极速数据 API |
+| Deploy | Single Docker Image + Docker Compose |
 
-## 项目结构
+## 目录结构
 
 ```text
 .
-├─ backend/                Go Fiber 后端
-│  ├─ cmd/                 服务启动入口
-│  ├─ config/              YAML 配置
-│  ├─ docs/                Swagger 产物
+├─ backend/
+│  ├─ cmd/                 # 服务启动入口
+│  ├─ config/              # YAML 配置
+│  ├─ docs/                # Swagger 生成产物
 │  ├─ internal/
-│  │  ├─ api/              HTTP 接口
-│  │  ├─ model/            数据模型
-│  │  └─ service/lottery/  彩票核心业务
-│  └─ pkg/                 配置、数据库、日志等基础模块
-├─ frontend/               React 前端
-├─ docs/                   设计文档
-├─ scripts/                Docker 构建与推送脚本
-├─ Dockerfile              单镜像构建文件
-├─ docker-compose.yml      部署编排
-└─ .env.example            Compose 环境变量示例
+│  │  ├─ api/              # HTTP 接口
+│  │  ├─ model/            # 数据模型
+│  │  └─ service/lottery/  # 彩票领域核心逻辑
+│  └─ pkg/                 # 配置、数据库、日志等基础设施
+├─ frontend/               # React 前端
+├─ docs/                   # 架构与设计文档
+├─ scripts/                # Docker 构建与推送脚本
+├─ Dockerfile              # 单镜像构建
+├─ docker-compose.yml      # 部署编排
+└─ .env.example            # Compose 环境变量示例
 ```
 
-## 本地开发
+## 快速开始
 
-本地开发不需要 Docker，前后端直接运行即可。
+### 本地开发
 
-### 1. 准备配置
+本地开发不依赖 Docker。
 
-后端采用双层 YAML 配置：
+#### 1. 准备配置
 
-1. [backend/config/config.yaml](backend/config/config.yaml)
-2. `backend/config/config.local.yaml`
-
-先复制一份本地覆盖配置：
+复制本地配置：
 
 ```powershell
 Copy-Item backend/config/config.local.example.yaml backend/config/config.local.yaml
 ```
 
-至少需要补这些关键配置：
+至少需要补这些关键项：
 
 - `jwt.secret`
 - `jisu.appKey`
@@ -115,7 +202,7 @@ Copy-Item backend/config/config.local.example.yaml backend/config/config.local.y
 - `vision.baseURL`
 - `vision.apiKey`
 
-### 2. 启动后端
+#### 2. 启动后端
 
 ```powershell
 cd backend
@@ -127,7 +214,7 @@ go run ./cmd
 - API: [http://127.0.0.1:25610](http://127.0.0.1:25610)
 - Swagger: [http://127.0.0.1:25610/swagger/index.html](http://127.0.0.1:25610/swagger/index.html)
 
-### 3. 启动前端
+#### 3. 启动前端
 
 ```powershell
 cd frontend
@@ -139,42 +226,9 @@ pnpm dev
 
 - Frontend: [http://127.0.0.1:3000](http://127.0.0.1:3000)
 
-## 配置说明
-
-### 业务配置
-
-业务配置只使用 YAML：
-
-- [backend/config/config.yaml](backend/config/config.yaml)
-- `backend/config/config.local.yaml`
-
-每种彩票都可以独立配置：
-
-- 启用状态
-- 基础号码规则
-- 官方开奖日历
-- 推荐生成 cron
-- 推荐模型与提示词
-- 推荐数量
-- 开奖同步 cron
-- 历史同步默认期数
-
-### Docker 发布配置
-
-根目录 `.env` 只服务于 `docker compose`，不参与业务配置。
-
-示例文件见 [\.env.example](.env.example)。
-
-可用变量：
-
-- `LOTTERY_APP_PORT`
-- `LOTTERY_CONFIG_DIR`
-- `LOTTERY_DATA_DIR`
-- `LOTTERY_LOG_DIR`
-
 ## Docker 部署
 
-项目当前采用“整个项目单镜像”的部署方式。
+项目采用“整个系统单镜像”的发布方式。
 
 镜像中包含：
 
@@ -182,7 +236,7 @@ pnpm dev
 - Swagger 文档
 - 已构建的前端静态资源
 
-前端静态资源由后端直接托管，不再依赖额外的 Caddy 或 Nginx 容器。
+前端静态资源由后端直接托管，不依赖额外的静态站点容器。
 
 ### 1. 准备 Compose 环境变量
 
@@ -196,111 +250,50 @@ Copy-Item .env.example .env
 docker compose up -d --build
 ```
 
-默认访问地址：
+默认访问：
 
 - App: [http://127.0.0.1:25610](http://127.0.0.1:25610)
 - Swagger: [http://127.0.0.1:25610/swagger/index.html](http://127.0.0.1:25610/swagger/index.html)
 
-### 3. 宿主机持久化目录
+### 3. 宿主机持久化
 
-默认挂载如下：
+默认挂载：
 
 - `./backend/config -> /app/config`
 - `./backend/data -> /app/data`
 - `./backend/log -> /app/log`
 
-因此以下内容都可以在容器外覆盖和持久化：
+这意味着以下内容都可以在容器外保留和覆盖：
 
 - `config.yaml`
 - `config.local.yaml`
 - SQLite 数据库文件
-- 上传的彩票图片
+- 上传的彩票原图
 - 服务日志
 
-## Docker 镜像脚本
+## 自动构建镜像
 
-仓库提供了 PowerShell 构建与推送脚本：
+仓库已经集成 GitHub Actions：
 
-- [scripts/docker-build.ps1](scripts/docker-build.ps1)
-- [scripts/docker-push.ps1](scripts/docker-push.ps1)
-- [scripts/build-and-push.ps1](scripts/build-and-push.ps1)
-
-默认镜像名：
-
-```text
-ydfk/lottery
-```
-
-一键构建并推送：
-
-```powershell
-.\scripts\build-and-push.ps1
-```
-
-只构建：
-
-```powershell
-.\scripts\docker-build.ps1
-```
-
-只推送：
-
-```powershell
-.\scripts\docker-push.ps1
-```
-
-可以通过环境变量覆盖镜像名与标签：
-
-```powershell
-$env:DOCKER_IMAGE_NAME = "ydfk/lottery"
-$env:DOCKER_IMAGE_TAG = "latest"
-.\scripts\build-and-push.ps1
-```
-
-脚本会同时打两个标签：
-
-- 主标签，例如 `latest`
-- 当前 Git 提交短 SHA，例如 `a1b2c3d`
-
-## GitHub Actions 自动构建镜像
-
-仓库已增加 GitHub Actions 工作流：
-
-- [docker-image.yml](.github/workflows/docker-image.yml)
+- [docker-image.yml](./.github/workflows/docker-image.yml)
 
 默认行为：
 
-- `push` 到 `main`：自动校验、构建并推送 Docker 镜像
-- `push` Git 标签（如 `v1.0.0`）：自动构建并推送带标签镜像
-- `pull_request` 到 `main`：只校验和构建，不推送
+- `push main`：自动校验、构建并推送镜像
+- `push tag`：自动构建并推送版本镜像
+- `pull_request`：只校验和构建，不推送
 - `workflow_dispatch`：支持手动触发
 
-默认镜像地址：
+镜像仓库：
 
 ```text
 ghcr.io/ydfk/lottery
 ```
 
-当前默认推送到 GitHub Container Registry，不再依赖 Docker Hub。
+前端版本号会随镜像构建自动更新：
 
-默认情况下不需要额外配置 Docker 仓库账号密码，工作流直接使用 GitHub 提供的 `GITHUB_TOKEN` 推送到 GHCR。
-
-需要确认两点：
-
-- 仓库 Actions 有权限写入 packages
-- 目标仓库允许发布 GitHub Packages
-
-工作流会自动生成这些镜像标签：
-
-- `latest`：仅默认分支
-- `sha-<short commit>`：每次提交
-- `v*`：当你推送 Git 标签时
-
-镜像拉取示例：
-
-```bash
-docker pull ghcr.io/ydfk/lottery:latest
-```
+- `main` 分支：`YYYYMMDD-HHMMSS-<short sha>`
+- Git 标签：直接显示标签名
 
 ## 常用接口
 
@@ -333,14 +326,14 @@ docker pull ghcr.io/ydfk/lottery:latest
 
 ## 测试与构建
 
-后端：
+### 后端
 
 ```powershell
 cd backend
 go test ./...
 ```
 
-前端：
+### 前端
 
 ```powershell
 cd frontend
@@ -348,9 +341,23 @@ pnpm build
 pnpm test:run
 ```
 
-## 清理说明
+## 适合谁使用
 
-仓库中已经移除了早期不再使用的录票拆分页面和部分遗留组件，当前代码以实际运行路径为准，避免同时维护两套旧流程。
+如果你希望有这样一套系统，这个项目会很适合：
+
+- 想长期记录自己的彩票购买与中奖历史
+- 想把“推荐、购票、判奖”做成一条完整链路
+- 想用 OCR 辅助录票，但又保留人工校正能力
+- 想以 Docker 方式稳定部署到自己的服务器
+- 想继续扩展更多彩种、更多推荐模型、更多统计维度
+
+## 后续方向
+
+- 更多彩种扩展
+- 更细的推荐效果分析
+- 更丰富的中奖统计维度
+- 更稳的 OCR 识别与资源控制
+- 更完整的包描述、截图和演示材料
 
 ## GitHub
 
@@ -360,7 +367,7 @@ pnpm test:run
 git@github.com:ydfk/lottery.git
 ```
 
-如果本地还没有设置远程仓库：
+如果本地还没有远程仓库：
 
 ```powershell
 git remote add origin git@github.com:ydfk/lottery.git

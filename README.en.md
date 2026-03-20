@@ -296,6 +296,11 @@ The workflow automatically generates:
 - `sha-<short commit>` for each commit
 - `v*` tags when Git tags are pushed
 
+Frontend version display format:
+
+- default branch image: `YYYYMMDD-HHMMSS-<short sha>`, generated in `Asia/Shanghai`
+- tag image: the Git tag itself
+
 Pull example:
 
 ```bash
