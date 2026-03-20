@@ -3,6 +3,8 @@
 FROM node:22-alpine AS frontend-builder
 
 WORKDIR /app/frontend
+ARG APP_VERSION=dev-local
+ENV VITE_APP_VERSION=$APP_VERSION
 
 RUN corepack enable
 

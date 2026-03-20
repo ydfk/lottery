@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { BrandLogo } from "@/components/lottery/brand-logo";
+import { APP_VERSION_LABEL } from "@/lib/app-meta";
 
 interface AuthPanelProps {
   username: string;
@@ -56,6 +57,7 @@ export function AuthPanel(props: AuthPanelProps) {
                 {pending ? "登录中..." : "登录"}
               </Button>
             </form>
+            <p className="mt-4 text-center text-xs text-slate-400">{APP_VERSION_LABEL}</p>
           </CardContent>
         </Card>
       </div>

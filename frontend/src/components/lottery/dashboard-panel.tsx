@@ -2,6 +2,7 @@ import { LogOut, User2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { APP_VERSION_LABEL } from "@/lib/app-meta";
 import type { AuthUser } from "@/types/auth";
 import type { DashboardData } from "@/types/lottery";
 
@@ -31,7 +32,7 @@ export function DashboardPanel({ currentUser, dashboard, onLogout }: DashboardPa
               </div>
               <div className="min-w-0">
                 <p className="truncate text-lg font-semibold">{currentUser.username}</p>
-                <p className="mt-1 text-sm text-white/70">已登录</p>
+                <p className="mt-1 text-sm text-white/70">已登录 · {APP_VERSION_LABEL}</p>
               </div>
             </div>
           </div>
