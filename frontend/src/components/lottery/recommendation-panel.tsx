@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { DetailSheet } from "@/components/lottery/detail-sheet";
-import { NumberBalls } from "@/components/lottery/number-balls";
+import { HitNumberBalls, NumberBalls } from "@/components/lottery/number-balls";
 import { RecommendationStealthSheet } from "@/components/lottery/recommendation-stealth-sheet";
 import { TicketCard } from "@/components/lottery/ticket-card";
 import {
@@ -74,6 +74,28 @@ function getRecommendationStatus(recommendation: Recommendation) {
   };
 }
 
+function getRecommendationStatusText(recommendation: Recommendation) {
+  const status = getRecommendationStatus(recommendation);
+  if (!recommendation.checkedAt) {
+    return status.label;
+  }
+  if ((recommendation.prizeAmount || 0) > 0) {
+    return `${status.label} · ${formatCurrency(recommendation.prizeAmount || 0)}`;
+  }
+  return status.label;
+}
+
+function getRecommendationPurchaseText(recommendation: Recommendation) {
+  const purchasedCount = recommendation.purchasedCount || 0;
+  if (purchasedCount <= 0) {
+    return "未购买";
+  }
+  if (purchasedCount === 1) {
+    return "已购买 1 次";
+  }
+  return `已购买 ${purchasedCount} 次`;
+}
+
 function RecommendationCard(props: {
   recommendation: Recommendation;
   onSelectRecommendation: (recommendationId: string) => void;
@@ -81,7 +103,6 @@ function RecommendationCard(props: {
 }) {
   const { recommendation, onSelectRecommendation, onOpenStealth } = props;
   const status = getRecommendationStatus(recommendation);
-  const purchasedCount = recommendation.purchasedCount || 0;
 
   return (
     <div
@@ -100,7 +121,7 @@ function RecommendationCard(props: {
         <div className="flex items-center gap-2">
           <Badge variant="secondary">{getLotteryDisplayName(recommendation.lotteryCode)}</Badge>
           {recommendation.isPurchased ? (
-            <Badge variant="secondary">已购买 {purchasedCount} 次</Badge>
+            <Badge variant="secondary">{getRecommendationPurchaseText(recommendation)}</Badge>
           ) : null}
         </div>
         <div className="flex items-center gap-2">
@@ -122,6 +143,14 @@ function RecommendationCard(props: {
       <div className="mt-3 text-xs text-slate-500">
         第 {formatLotteryIssue(recommendation.lotteryCode, recommendation.issue)} 期
         {recommendation.drawDate ? ` · ${formatLotteryDrawDate(recommendation.drawDate)} 开奖` : ""}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[1.1rem] bg-slate-50 px-4 py-3 text-sm">
+        <span className="font-medium text-slate-900">{getRecommendationStatusText(recommendation)}</span>
+        <span className="text-slate-500">{getRecommendationPurchaseText(recommendation)}</span>
+        {recommendation.checkedAt ? (
+          <span className="text-slate-500">命中 {getWinningCount(recommendation)} 注</span>
+        ) : null}
       </div>
 
       <div className="mt-4 space-y-3">
@@ -448,6 +477,9 @@ export function RecommendationPanel(props: RecommendationPanelProps) {
                 <Badge className={getRecommendationStatus(selectedRecommendation).className}>
                   {getRecommendationStatus(selectedRecommendation).label}
                 </Badge>
+                {selectedRecommendation.isPurchased ? (
+                  <Badge variant="secondary">{getRecommendationPurchaseText(selectedRecommendation)}</Badge>
+                ) : null}
               </div>
               {selectedRecommendation.summary ? (
                 <h2 className="text-2xl font-semibold text-slate-950">
@@ -457,12 +489,35 @@ export function RecommendationPanel(props: RecommendationPanelProps) {
             </div>
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[1.35rem] bg-slate-50 px-4 py-3 text-sm text-slate-600">
+              <span className="font-medium text-slate-900">{getRecommendationStatusText(selectedRecommendation)}</span>
               <span>共 {selectedRecommendation.entryCount || selectedRecommendation.entries.length} 注</span>
               <span>命中 {selectedRecommendation.winningCount || 0} 注</span>
-              <span>购买 {selectedRecommendation.purchasedCount || 0} 次</span>
+              <span>{getRecommendationPurchaseText(selectedRecommendation)}</span>
               <span className="font-medium text-slate-900">
-                奖金 {formatCurrency(selectedRecommendation.prizeAmount || 0)}
+                总奖金 {formatCurrency(selectedRecommendation.prizeAmount || 0)}
               </span>
+            </div>
+
+            <div className="rounded-[1.35rem] border border-slate-200 bg-white px-4 py-4">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-medium text-slate-700">开奖号码</span>
+                {selectedRecommendation.checkedAt ? (
+                  <span className="text-xs text-slate-500">已开奖</span>
+                ) : (
+                  <span className="text-xs text-slate-400">待开奖</span>
+                )}
+              </div>
+              <div className="mt-3">
+                {selectedRecommendation.drawRedNumbers && selectedRecommendation.drawBlueNumbers ? (
+                  <NumberBalls
+                    redNumbers={selectedRecommendation.drawRedNumbers}
+                    blueNumbers={selectedRecommendation.drawBlueNumbers}
+                    compact
+                  />
+                ) : (
+                  <p className="text-sm text-slate-400">暂未同步到开奖号码</p>
+                )}
+              </div>
             </div>
 
             <div className="space-y-3">
@@ -471,20 +526,24 @@ export function RecommendationPanel(props: RecommendationPanelProps) {
                   key={entry.id}
                   className="rounded-[1.35rem] border border-slate-200 bg-white px-4 py-3"
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <NumberBalls
-                        redNumbers={entry.redNumbers}
-                        blueNumbers={entry.blueNumbers}
-                        compact
-                      />
-                    </div>
-                    <div className="shrink-0 text-right text-xs text-slate-500">
-                      <p>{entry.matchSummary || "待开奖"}</p>
-                      <p className="mt-1 font-semibold text-slate-900">
-                        {formatCurrency(entry.prizeAmount || 0)}
-                      </p>
-                    </div>
+                  <div className="flex items-center justify-between gap-3 text-sm font-medium text-slate-600">
+                    <span>第 {entry.sequence} 注</span>
+                    <span>{entry.prizeName || (selectedRecommendation.checkedAt ? "未命中奖级" : "待开奖")}</span>
+                  </div>
+                  <div className="mt-3">
+                    <HitNumberBalls
+                      redNumbers={entry.redNumbers}
+                      blueNumbers={entry.blueNumbers}
+                      drawRedNumbers={selectedRecommendation.drawRedNumbers}
+                      drawBlueNumbers={selectedRecommendation.drawBlueNumbers}
+                      compact
+                    />
+                  </div>
+                  <div className="mt-3 flex items-center justify-between text-sm">
+                    <span className="text-slate-500">{entry.matchSummary || "待开奖"}</span>
+                    <span className="font-semibold text-slate-900">
+                      {formatCurrency(entry.prizeAmount || 0)}
+                    </span>
                   </div>
                   {entry.reason ? (
                     <p className="mt-2 text-xs leading-5 text-slate-500">{entry.reason}</p>

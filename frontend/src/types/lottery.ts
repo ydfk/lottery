@@ -38,6 +38,8 @@ export interface Recommendation {
   lotteryCode: string;
   issue: string;
   drawDate?: string;
+  drawRedNumbers?: string;
+  drawBlueNumbers?: string;
   provider: string;
   model: string;
   strategy: string;
@@ -168,6 +170,8 @@ export interface DashboardStats {
   wonTickets: number;
   totalCost: number;
   totalPrize: number;
+  totalRecommendations: number;
+  purchasedRecommendations: number;
 }
 
 export interface DashboardData {

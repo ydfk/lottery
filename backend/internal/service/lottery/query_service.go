@@ -14,10 +14,12 @@ type DashboardData struct {
 }
 
 type DashboardStats struct {
-	TotalTickets int     `json:"totalTickets"`
-	WonTickets   int     `json:"wonTickets"`
-	TotalCost    float64 `json:"totalCost"`
-	TotalPrize   float64 `json:"totalPrize"`
+	TotalTickets             int     `json:"totalTickets"`
+	WonTickets               int     `json:"wonTickets"`
+	TotalCost                float64 `json:"totalCost"`
+	TotalPrize               float64 `json:"totalPrize"`
+	TotalRecommendations     int     `json:"totalRecommendations"`
+	PurchasedRecommendations int     `json:"purchasedRecommendations"`
 }
 
 func loadDashboardStats(code string, userID string) DashboardStats {
@@ -51,7 +53,35 @@ func loadDashboardStats(code string, userID string) DashboardStats {
 
 	stats.TotalTickets = int(totalTickets)
 	stats.WonTickets = int(wonTickets)
+	stats.TotalRecommendations = loadRecommendationCount(code, userID)
+	stats.PurchasedRecommendations = loadPurchasedRecommendationCount(code, userID)
 	return stats
+}
+
+func loadRecommendationCount(code string, userID string) int {
+	query := currentUserScope(db.DB.Model(&model.Recommendation{}), userID)
+	if code != "" {
+		query = query.Where("lottery_code = ?", code)
+	}
+
+	var count int64
+	if err := query.Count(&count).Error; err != nil {
+		return 0
+	}
+	return int(count)
+}
+
+func loadPurchasedRecommendationCount(code string, userID string) int {
+	query := currentUserScope(db.DB.Model(&model.Ticket{}), userID).Where("recommendation_id IS NOT NULL")
+	if code != "" {
+		query = query.Where("lottery_code = ?", code)
+	}
+
+	var count int64
+	if err := query.Distinct("recommendation_id").Count(&count).Error; err != nil {
+		return 0
+	}
+	return int(count)
 }
 
 func getLotteryType(code string) (model.LotteryType, error) {

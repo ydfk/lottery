@@ -10,12 +10,27 @@ func Bootstrap() error {
 	if err := SeedLotteryTypes(); err != nil {
 		return err
 	}
+	if err := repairLotteryState(); err != nil {
+		return err
+	}
 
 	if hasScheduledLotteries() {
 		go startSyncLoop(context.Background())
 		logger.Info("彩票定时任务已启动")
 	}
 
+	return nil
+}
+
+func repairLotteryState() error {
+	for _, definition := range ListDefinitions() {
+		if !definition.Enabled {
+			continue
+		}
+		if err := EvaluatePendingTickets(definition.Code); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

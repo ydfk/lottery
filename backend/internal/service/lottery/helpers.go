@@ -405,13 +405,6 @@ func shouldDeferSettlement(code string, drawDate *time.Time) bool {
 	))
 }
 
-func shouldUseManualDrawDate(manualDrawDate *time.Time, officialDrawDate time.Time) bool {
-	if manualDrawDate == nil || manualDrawDate.IsZero() {
-		return false
-	}
-	return normalizeDateOnly(officialDrawDate).Before(normalizeDateOnly(*manualDrawDate))
-}
-
 func containsString(items []string, target string) bool {
 	for _, item := range items {
 		if item == target {

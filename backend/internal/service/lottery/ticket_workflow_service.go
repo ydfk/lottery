@@ -198,11 +198,13 @@ func CreateTicket(ctx context.Context, input CreateTicketInput) (*TicketDetail, 
 		}
 		issue = normalizeIssueByCode(code, issue)
 
+		drawDate := input.DrawDate
+
 		if reserveErr = validateDuplicateTicket(tx, input.UserID, code, issue, entries); reserveErr != nil {
 			return reserveErr
 		}
 
-		ticket, createErr := createTicketRecord(tx, input.UserID, code, recommendationID, issue, input.DrawDate, upload.ImagePath, upload.RecognizedText, purchasedAt, input.CostAmount, input.Notes, entries)
+		ticket, createErr := createTicketRecord(tx, input.UserID, code, recommendationID, issue, drawDate, upload.ImagePath, upload.RecognizedText, purchasedAt, input.CostAmount, input.Notes, entries)
 		if createErr != nil {
 			if isUniqueConstraintError(createErr) {
 				return ErrDuplicateTicket
@@ -223,6 +225,7 @@ func CreateTicket(ctx context.Context, input CreateTicketInput) (*TicketDetail, 
 
 		ticketID = ticket.Id.String()
 		shouldEvaluate = len(entries) > 0
+		input.DrawDate = drawDate
 		return nil
 	}); err != nil {
 		return nil, err

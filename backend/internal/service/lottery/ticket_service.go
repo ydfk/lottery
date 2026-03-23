@@ -2,6 +2,7 @@ package lottery
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -174,9 +175,6 @@ func EvaluateTicket(ticketID string) error {
 	if len(ticket.Entries) == 0 {
 		return nil
 	}
-	if shouldDeferSettlement(ticket.LotteryCode, ticket.ManualDrawDate) {
-		return resetTicketPending(ticket.Id.String())
-	}
 
 	canonicalIssue := normalizeIssueByCode(ticket.LotteryCode, ticket.Issue)
 	if canonicalIssue != "" && canonicalIssue != ticket.Issue {
@@ -186,16 +184,15 @@ func EvaluateTicket(ticketID string) error {
 		}
 	}
 
-	draw := model.DrawResult{}
-	if err := db.DB.Preload("PrizeDetails").
-		Where("lottery_code = ? AND issue IN ?", ticket.LotteryCode, issueAliases(ticket.LotteryCode, ticket.Issue)).
-		Order("draw_date desc").
-		Order("issue desc").
-		First(&draw).Error; err != nil {
+	draw, err := findSettlementDraw(ticket.LotteryCode, ticket.Issue)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		if shouldDeferSettlement(ticket.LotteryCode, ticket.ManualDrawDate) {
+			return resetTicketPending(ticket.Id.String())
+		}
 		return nil
 	}
-	if shouldUseManualDrawDate(ticket.ManualDrawDate, draw.DrawDate) {
-		return resetTicketPending(ticket.Id.String())
+	if err != nil {
+		return err
 	}
 
 	prizeMap := make(map[string]float64, len(draw.PrizeDetails))
@@ -206,7 +203,7 @@ func EvaluateTicket(ticketID string) error {
 	totalPrize := 0.0
 	hasWinning := false
 	for _, entry := range ticket.Entries {
-		result := JudgeNumbers(ticket.LotteryCode, entry.RedNumbers, entry.BlueNumbers, entry.IsAdditional, draw, prizeMap)
+		result := JudgeNumbers(ticket.LotteryCode, entry.RedNumbers, entry.BlueNumbers, entry.IsAdditional, *draw, prizeMap)
 		entry.IsWinning = result.IsWinning
 		entry.PrizeName = result.PrizeName
 		entry.PrizeAmount = result.PrizeAmount * float64(max(1, entry.Multiple))
@@ -238,18 +235,22 @@ func RecheckTicket(ctx context.Context, ticketID string, code string, userID str
 	if err := query.First(&ticket, "id = ?", ticketID).Error; err != nil {
 		return nil, err
 	}
-	if shouldDeferSettlement(ticket.LotteryCode, ticket.ManualDrawDate) {
-		if err := resetTicketPending(ticket.Id.String()); err != nil {
-			return nil, err
-		}
-		return GetTicketDetail(ticket.Id.String(), userID)
-	}
 
 	ticketIssue := normalizeIssueByCode(ticket.LotteryCode, ticket.Issue)
 	if ticketIssue == "" {
 		return nil, fmt.Errorf("票据期号不能为空")
 	}
-	if _, err := SyncLatestDraw(ctx, ticket.LotteryCode, ticketIssue); err != nil {
+	if _, err := findSettlementDraw(ticket.LotteryCode, ticketIssue); errors.Is(err, gorm.ErrRecordNotFound) {
+		if shouldDeferSettlement(ticket.LotteryCode, ticket.ManualDrawDate) {
+			if resetErr := resetTicketPending(ticket.Id.String()); resetErr != nil {
+				return nil, resetErr
+			}
+			return GetTicketDetail(ticket.Id.String(), userID)
+		}
+		if _, syncErr := SyncLatestDraw(ctx, ticket.LotteryCode, ticketIssue); syncErr != nil {
+			return nil, syncErr
+		}
+	} else if err != nil {
 		return nil, err
 	}
 	if err := EvaluateTicket(ticket.Id.String()); err != nil {
@@ -379,13 +380,11 @@ func buildTicketDetail(ticket model.Ticket) *TicketDetail {
 		ImageURL: buildPublicImageURL(ticket.ImagePath),
 	}
 
-	draw := model.DrawResult{}
-	if err := db.DB.Select("draw_date", "red_numbers", "blue_numbers").
-		Where("lottery_code = ? AND issue IN ?", ticket.LotteryCode, issueAliases(ticket.LotteryCode, ticket.Issue)).
-		Order("draw_date desc").
-		Order("issue desc").
-		First(&draw).Error; err == nil && !shouldDeferSettlement(ticket.LotteryCode, ticket.ManualDrawDate) && !shouldUseManualDrawDate(ticket.ManualDrawDate, draw.DrawDate) {
+	if draw, err := findTicketDisplayDraw(ticket.LotteryCode, ticket.Issue); err == nil {
 		drawDate := draw.DrawDate
+		if ticket.ManualDrawDate != nil && !ticket.ManualDrawDate.IsZero() {
+			drawDate = *ticket.ManualDrawDate
+		}
 		detail.DrawDate = &drawDate
 		detail.DrawRedNumbers = draw.RedNumbers
 		detail.DrawBlueNumbers = draw.BlueNumbers
@@ -404,6 +403,30 @@ func buildTicketDetail(ticket model.Ticket) *TicketDetail {
 	}
 
 	return detail
+}
+
+func findSettlementDraw(code string, issue string) (*model.DrawResult, error) {
+	draw := model.DrawResult{}
+	if err := db.DB.Preload("PrizeDetails").
+		Where("lottery_code = ? AND issue IN ?", code, issueAliases(code, issue)).
+		Order("created_at desc").
+		Order("issue desc").
+		First(&draw).Error; err != nil {
+		return nil, err
+	}
+	return &draw, nil
+}
+
+func findTicketDisplayDraw(code string, issue string) (*model.DrawResult, error) {
+	draw := model.DrawResult{}
+	if err := db.DB.Select("issue", "draw_date", "red_numbers", "blue_numbers").
+		Where("lottery_code = ? AND issue IN ?", code, issueAliases(code, issue)).
+		Order("created_at desc").
+		Order("issue desc").
+		First(&draw).Error; err != nil {
+		return nil, err
+	}
+	return &draw, nil
 }
 
 func resetTicketPending(ticketID string) error {

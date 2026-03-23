@@ -11,6 +11,8 @@ import (
 
 type RecommendationDetail struct {
 	model.Recommendation
+	DrawRedNumbers   string         `json:"drawRedNumbers"`
+	DrawBlueNumbers  string         `json:"drawBlueNumbers"`
 	EntryCount       int            `json:"entryCount"`
 	WinningCount     int            `json:"winningCount"`
 	IsPurchased      bool           `json:"isPurchased"`
@@ -155,6 +157,17 @@ func buildRecommendationDetail(recommendation model.Recommendation, userID strin
 		}
 	}
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
+	draw := model.DrawResult{}
+	if err := db.DB.Select("red_numbers", "blue_numbers").
+		Where("lottery_code = ? AND issue = ?", recommendation.LotteryCode, recommendation.Issue).
+		Order("created_at desc").
+		First(&draw).Error; err == nil {
+		detail.DrawRedNumbers = draw.RedNumbers
+		detail.DrawBlueNumbers = draw.BlueNumbers
+	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
 
