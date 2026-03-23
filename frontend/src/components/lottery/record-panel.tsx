@@ -163,14 +163,14 @@ export function RecordPanel(props: RecordPanelProps) {
 
       <Card className="border-white/60 bg-white/85 shadow-[0_20px_50px_rgba(15,23,42,0.08)] backdrop-blur">
         <CardContent className="space-y-5">
-          <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-            <label className="flex min-h-80 cursor-pointer flex-col items-center justify-center rounded-[1.75rem] border border-dashed border-slate-300 bg-slate-50 p-5 text-center">
+          <div className="grid gap-3 lg:grid-cols-[0.88fr_1.12fr]">
+            <label className="flex min-h-52 cursor-pointer flex-col items-center justify-center rounded-[1.6rem] border border-dashed border-slate-300 bg-slate-50 p-4 text-center">
               {previewUrl ? (
-                <img src={previewUrl} alt="彩票预览" className="h-72 w-full rounded-2xl object-cover" />
+                <img src={previewUrl} alt="彩票预览" className="h-44 w-full rounded-2xl object-cover" />
               ) : (
                 <>
-                  <ImageUp className="size-10 text-slate-400" />
-                  <p className="mt-4 text-base font-medium text-slate-700">点击拍照或上传彩票原图</p>
+                  <ImageUp className="size-8 text-slate-400" />
+                  <p className="mt-2 text-sm font-medium text-slate-700">点击拍照或上传彩票原图</p>
                 </>
               )}
               <input
@@ -181,9 +181,9 @@ export function RecordPanel(props: RecordPanelProps) {
               />
             </label>
 
-            <div className="space-y-4 rounded-[1.75rem] bg-slate-50 p-5">
+            <div className="space-y-3 rounded-[1.6rem] bg-slate-50 p-4">
               {selectedImage && (
-                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-600">
                   {selectedImage.name}
                 </div>
               )}
@@ -191,7 +191,7 @@ export function RecordPanel(props: RecordPanelProps) {
               <div className="grid gap-3 sm:grid-cols-1">
                 <Button
                   type="button"
-                  className="h-12 rounded-2xl"
+                  className="h-11 rounded-2xl"
                   disabled={(!selectedImage && !uploadedTicket) || recognizeBusy}
                   onClick={onRecognize}
                 >
@@ -213,57 +213,61 @@ export function RecordPanel(props: RecordPanelProps) {
             </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">彩票类型</label>
-              <select
-                className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
-                value={lotteryCode}
-                onChange={(event) => onLotteryCodeChange(event.target.value)}
-              >
-                <option value="">请选择</option>
-                {lotteryDisplayOptions.map((item) => (
-                  <option key={item.code} value={item.code}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">彩票类型</label>
+                <select
+                  className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+                  value={lotteryCode}
+                  onChange={(event) => onLotteryCodeChange(event.target.value)}
+                >
+                  <option value="">请选择</option>
+                  {lotteryDisplayOptions.map((item) => (
+                    <option key={item.code} value={item.code}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">期号</label>
+                <Input value={issue} onChange={(event) => onIssueChange(event.target.value)} />
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">期号</label>
-              <Input value={issue} onChange={(event) => onIssueChange(event.target.value)} />
-            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">开奖日期</label>
+                <Input type="date" value={drawDate} onChange={(event) => onDrawDateChange(event.target.value)} />
+              </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">开奖日期</label>
-              <Input type="date" value={drawDate} onChange={(event) => onDrawDateChange(event.target.value)} />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">金额</label>
-              <Input
-                type="number"
-                step="0.01"
-                value={costAmount}
-                onChange={(event) => onCostAmountChange(event.target.value)}
-              />
-              <p className="text-xs text-slate-400">会按号码、倍数和追加自动计算，也可手动修改。</p>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">金额</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={costAmount}
+                  onChange={(event) => onCostAmountChange(event.target.value)}
+                />
+                <p className="text-xs text-slate-400">会按号码、倍数和追加自动计算，也可手动修改。</p>
+              </div>
             </div>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="grid gap-3 lg:grid-cols-[1.08fr_0.92fr]">
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">号码</label>
               <Textarea
-                className="min-h-56 bg-white"
+                className="min-h-36 bg-white"
                 value={entryText}
                 placeholder="每行一注，例如 01,02,03,04,05,06+07 (2)"
                 onChange={(event) => onEntryTextChange(event.target.value)}
               />
             </div>
 
-            <div className="space-y-4 rounded-[1.75rem] bg-slate-50 p-5">
+            <div className="space-y-3 rounded-[1.6rem] bg-slate-50 p-4">
               <div className="space-y-3">
                 {previewEntries.length > 0 ? (
                   previewEntries.map((entry, index) => (
@@ -307,7 +311,7 @@ export function RecordPanel(props: RecordPanelProps) {
                     </div>
                   ))
                 ) : (
-                  <div className="rounded-[1.25rem] border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-sm text-slate-500">
+                  <div className="rounded-[1.25rem] border border-dashed border-slate-300 bg-white px-4 py-4 text-center text-sm text-slate-500">
                     识别后在这里预览号码
                   </div>
                 )}

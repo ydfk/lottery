@@ -100,8 +100,9 @@ function RecommendationCard(props: {
   recommendation: Recommendation;
   onSelectRecommendation: (recommendationId: string) => void;
   onOpenStealth: (recommendationId: string) => void;
+  onRecordPurchase: (recommendation: Recommendation) => void;
 }) {
-  const { recommendation, onSelectRecommendation, onOpenStealth } = props;
+  const { recommendation, onSelectRecommendation, onOpenStealth, onRecordPurchase } = props;
   const status = getRecommendationStatus(recommendation);
 
   return (
@@ -127,6 +128,16 @@ function RecommendationCard(props: {
         <div className="flex items-center gap-2">
           <button
             type="button"
+            className="inline-flex h-8 items-center rounded-full border border-slate-200 bg-white px-3 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+            onClick={(event) => {
+              event.stopPropagation();
+              onRecordPurchase(recommendation);
+            }}
+          >
+            {recommendation.isPurchased ? "续购" : "购买"}
+          </button>
+          <button
+            type="button"
             className="inline-flex h-8 items-center gap-1 rounded-full border border-slate-200 bg-white px-3 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
             onClick={(event) => {
               event.stopPropagation();
@@ -136,13 +147,13 @@ function RecommendationCard(props: {
             <ScanSearch className="size-3.5" />
             隐览
           </button>
-          <Badge className={status.className}>{status.label}</Badge>
         </div>
       </div>
 
-      <div className="mt-3 text-xs text-slate-500">
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
         第 {formatLotteryIssue(recommendation.lotteryCode, recommendation.issue)} 期
         {recommendation.drawDate ? ` · ${formatLotteryDrawDate(recommendation.drawDate)} 开奖` : ""}
+        <span className={`rounded-full px-2 py-0.5 ${status.className}`}>{status.label}</span>
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[1.1rem] bg-slate-50 px-4 py-3 text-sm">
@@ -169,8 +180,9 @@ function RecommendationSection(props: {
   items: Recommendation[];
   onSelectRecommendation: (recommendationId: string) => void;
   onOpenStealth: (recommendationId: string) => void;
+  onRecordPurchase: (recommendation: Recommendation) => void;
 }) {
-  const { title, items, onSelectRecommendation, onOpenStealth } = props;
+  const { title, items, onSelectRecommendation, onOpenStealth, onRecordPurchase } = props;
 
   if (items.length === 0) {
     return null;
@@ -190,6 +202,7 @@ function RecommendationSection(props: {
             recommendation={recommendation}
             onSelectRecommendation={onSelectRecommendation}
             onOpenStealth={onOpenStealth}
+            onRecordPurchase={onRecordPurchase}
           />
         ))}
       </div>
@@ -402,6 +415,7 @@ export function RecommendationPanel(props: RecommendationPanelProps) {
                 items={recommendations}
                 onSelectRecommendation={(recommendationId) => onSelectRecommendation(recommendationId)}
                 onOpenStealth={(recommendationId) => setStealthRecommendationId(recommendationId)}
+                onRecordPurchase={onRecordPurchase}
               />
             ) : (
               <div className="space-y-6">
@@ -410,12 +424,14 @@ export function RecommendationPanel(props: RecommendationPanelProps) {
                   items={pendingRecommendations}
                   onSelectRecommendation={(recommendationId) => onSelectRecommendation(recommendationId)}
                   onOpenStealth={(recommendationId) => setStealthRecommendationId(recommendationId)}
+                  onRecordPurchase={onRecordPurchase}
                 />
                 <RecommendationSection
                   title="已开奖"
                   items={checkedRecommendations}
                   onSelectRecommendation={(recommendationId) => onSelectRecommendation(recommendationId)}
                   onOpenStealth={(recommendationId) => setStealthRecommendationId(recommendationId)}
+                  onRecordPurchase={onRecordPurchase}
                 />
               </div>
             )}
