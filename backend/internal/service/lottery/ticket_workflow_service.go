@@ -204,7 +204,7 @@ func CreateTicket(ctx context.Context, input CreateTicketInput) (*TicketDetail, 
 			return reserveErr
 		}
 
-		ticket, createErr := createTicketRecord(tx, input.UserID, code, recommendationID, issue, drawDate, upload.ImagePath, upload.RecognizedText, purchasedAt, input.CostAmount, input.Notes, entries)
+		ticket, createErr := createTicketRecord(tx, input.UserID, code, recommendationID, issue, drawDate, "upload", upload.ImagePath, upload.RecognizedText, purchasedAt, input.CostAmount, input.Notes, entries)
 		if createErr != nil {
 			if isUniqueConstraintError(createErr) {
 				return ErrDuplicateTicket
@@ -243,7 +243,7 @@ func CreateTicket(ctx context.Context, input CreateTicketInput) (*TicketDetail, 
 	return GetTicketDetail(ticketID, input.UserID)
 }
 
-func createTicketRecord(tx *gorm.DB, userID string, code string, recommendationID *uuid.UUID, issue string, drawDate time.Time, imagePath string, recognizedText string, purchasedAt time.Time, costAmount float64, notes string, entries []ParsedEntry) (*model.Ticket, error) {
+func createTicketRecord(tx *gorm.DB, userID string, code string, recommendationID *uuid.UUID, issue string, drawDate time.Time, source string, imagePath string, recognizedText string, purchasedAt time.Time, costAmount float64, notes string, entries []ParsedEntry) (*model.Ticket, error) {
 	userUUID, err := parseRequiredUserID(userID)
 	if err != nil {
 		return nil, err
@@ -273,7 +273,7 @@ func createTicketRecord(tx *gorm.DB, userID string, code string, recommendationI
 		Issue:            issue,
 		EntrySignature:   entrySignature,
 		ManualDrawDate:   manualDrawDate,
-		Source:           "upload",
+		Source:           resolveValue(source, "upload"),
 		ImagePath:        imagePath,
 		RecognizedText:   recognizedText,
 		Status:           TicketStatusPending,

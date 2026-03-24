@@ -10,6 +10,7 @@ func RegisterRoutes(router fiber.Router) {
 	group.Post("/draws/sync-history", SyncMultipleDraws)
 	group.Get("/tickets/history", ListTicketHistory)
 	group.Get("/tickets", ListAllTickets)
+	group.Post("/tickets/import", ImportTickets)
 	group.Delete("/tickets/:ticketId", DeleteGenericTicket)
 	group.Post("/tickets/:ticketId/recheck", RecheckGenericTicket)
 	group.Post("/tickets/upload-image", UploadGenericTicketImage)
