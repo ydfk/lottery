@@ -180,10 +180,8 @@ func findRecommendationDisplayDraw(code string, issue string, draw *model.DrawRe
 		return err
 	}
 	for _, item := range items {
-		if !isUnfinalDrawResult(item) {
-			*draw = item
-			return nil
-		}
+		*draw = item
+		return nil
 	}
 	return gorm.ErrRecordNotFound
 }

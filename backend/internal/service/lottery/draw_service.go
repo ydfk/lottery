@@ -281,12 +281,6 @@ func saveDrawItem(lotteryType model.LotteryType, item map[string]any, options sa
 	}
 
 	issue := normalizeIssueByCode(lotteryType.Code, resolveValue(options.ExpectedIssue, extractString(item, "issueno", "issue")))
-	if !isFinalDrawPayload(item) {
-		if cleanupErr := cleanupUnfinalDrawByIssue(lotteryType.Code, issue); cleanupErr != nil {
-			return false, issue, cleanupErr
-		}
-		return false, issue, nil
-	}
 
 	redNumbers, blueNumbers := parseDrawNumbers(lotteryType, item)
 	if issue == "" || redNumbers == "" || blueNumbers == "" {
@@ -449,7 +443,7 @@ func cleanupUnfinalDrawByIssue(code string, issue string) error {
 }
 
 func isUnfinalDrawResult(draw model.DrawResult) bool {
-	return strings.Contains(draw.RawPayload, `"prize":false`)
+	return false
 }
 
 func normalizePrizeName(value string) string {

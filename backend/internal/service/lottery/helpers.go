@@ -415,14 +415,6 @@ func containsString(items []string, target string) bool {
 }
 
 func isFinalDrawPayload(item map[string]any) bool {
-	value, exists := item["prize"]
-	if !exists {
-		return true
-	}
-	finalFlag, ok := value.(bool)
-	if ok {
-		return finalFlag
-	}
 	return true
 }
 

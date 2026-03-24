@@ -189,7 +189,13 @@ func EvaluateTicket(ticketID string) error {
 		if shouldDeferSettlement(ticket.LotteryCode, ticket.ManualDrawDate) {
 			return resetTicketPending(ticket.Id.String())
 		}
-		return nil
+		if _, syncErr := SyncLatestDraw(context.Background(), ticket.LotteryCode, ticket.Issue); syncErr != nil {
+			return nil
+		}
+		draw, err = findSettlementDraw(ticket.LotteryCode, ticket.Issue)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
 	}
 	if err != nil {
 		return err
@@ -415,9 +421,7 @@ func findSettlementDraw(code string, issue string) (*model.DrawResult, error) {
 		return nil, err
 	}
 	for _, draw := range draws {
-		if !isUnfinalDrawResult(draw) {
-			return &draw, nil
-		}
+		return &draw, nil
 	}
 	return nil, gorm.ErrRecordNotFound
 }
@@ -432,9 +436,7 @@ func findTicketDisplayDraw(code string, issue string) (*model.DrawResult, error)
 		return nil, err
 	}
 	for _, draw := range draws {
-		if !isUnfinalDrawResult(draw) {
-			return &draw, nil
-		}
+		return &draw, nil
 	}
 	return nil, gorm.ErrRecordNotFound
 }

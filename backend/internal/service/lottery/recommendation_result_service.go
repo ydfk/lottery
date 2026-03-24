@@ -1,6 +1,7 @@
 package lottery
 
 import (
+	"context"
 	"time"
 
 	model "go-fiber-starter/internal/model/lottery"
@@ -20,9 +21,17 @@ func EvaluateRecommendationsByIssue(code string, issue string) error {
 
 	draw := model.DrawResult{}
 	if err := findRecommendationSettlementDraw(code, issue, &draw); err != nil {
+		if _, syncErr := SyncLatestDraw(context.Background(), code, issue); syncErr == nil {
+			if retryErr := findRecommendationSettlementDraw(code, issue, &draw); retryErr == nil {
+				return evaluateRecommendationsWithDraw(recommendations, code, draw)
+			}
+		}
 		return nil
 	}
+	return evaluateRecommendationsWithDraw(recommendations, code, draw)
+}
 
+func evaluateRecommendationsWithDraw(recommendations []model.Recommendation, code string, draw model.DrawResult) error {
 	prizeMap := make(map[string]float64, len(draw.PrizeDetails))
 	for _, prize := range draw.PrizeDetails {
 		prizeMap[normalizePrizeName(prize.PrizeName)] = prize.SingleBonus
@@ -62,10 +71,8 @@ func findRecommendationSettlementDraw(code string, issue string, draw *model.Dra
 		return err
 	}
 	for _, item := range items {
-		if !isUnfinalDrawResult(item) {
-			*draw = item
-			return nil
-		}
+		*draw = item
+		return nil
 	}
 	return gorm.ErrRecordNotFound
 }

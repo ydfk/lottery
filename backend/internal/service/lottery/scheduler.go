@@ -15,11 +15,16 @@ func startSyncLoop(ctx context.Context) {
 		code := definition.Code
 		if definition.Enabled && definition.Sync.Enabled && definition.Sync.Cron != "" {
 			_, err := scheduler.AddFunc(definition.Sync.Cron, func() {
-				if _, syncErr := SyncLatestDraw(ctx, code, ""); syncErr != nil {
+				result, syncErr := SyncLatestDraw(ctx, code, "")
+				if syncErr != nil {
 					logger.Error("定时同步 %s 失败: %v", code, syncErr)
 					return
 				}
-				logger.Info("已按计划同步 %s 当期开奖", code)
+				if result != nil && result.SyncedCount > 0 {
+					logger.Info("已按计划同步 %s 当期开奖", code)
+					return
+				}
+				logger.Info("已检查 %s 当期开奖，当前暂无可入库号码", code)
 			})
 			if err != nil {
 				logger.Warn("忽略非法同步 cron 配置 %s: %v", code, err)
