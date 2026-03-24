@@ -5,6 +5,17 @@
 jisu:
   appKey: "your-jisu-app-key"
 
+# PostgreSQL 示例，按需覆盖。
+database:
+  driver: "postgres"
+  host: "127.0.0.1"
+  port: 5432
+  user: "postgres"
+  password: "your-postgres-password"
+  name: "lottery"
+  sslMode: "disable"
+  timeZone: "Asia/Shanghai"
+
 # AI 推荐模型连接配置。
 ai:
   # OpenAI 兼容接口基础地址，例如 https://host/v1。

@@ -28,7 +28,18 @@ type JwtConfig struct {
 }
 
 type DatabaseConfig struct {
-	Path string `mapstructure:"path"`
+	Driver       string `mapstructure:"driver"`
+	Path         string `mapstructure:"path"`
+	DSN          string `mapstructure:"dsn"`
+	Host         string `mapstructure:"host"`
+	Port         int    `mapstructure:"port"`
+	User         string `mapstructure:"user"`
+	Password     string `mapstructure:"password"`
+	Name         string `mapstructure:"name"`
+	SSLMode      string `mapstructure:"sslMode"`
+	TimeZone     string `mapstructure:"timeZone"`
+	MaxIdleConns int    `mapstructure:"maxIdleConns"`
+	MaxOpenConns int    `mapstructure:"maxOpenConns"`
 }
 
 type StorageConfig struct {

@@ -14,8 +14,30 @@ jwt:
 
 # 数据存储配置。
 database:
+  # 数据库驱动，支持 sqlite / postgres。
+  driver: "sqlite"
   # SQLite 数据库文件路径。
   path: "data/db.sqlite"
+  # PostgreSQL 连接串，填写后优先使用。
+  dsn: ""
+  # PostgreSQL 主机地址。
+  host: "127.0.0.1"
+  # PostgreSQL 端口。
+  port: 5432
+  # PostgreSQL 用户名。
+  user: "postgres"
+  # PostgreSQL 密码，建议放在 config.local.yaml 中覆盖。
+  password: ""
+  # PostgreSQL 数据库名。
+  name: "lottery"
+  # PostgreSQL SSL 模式。
+  sslMode: "disable"
+  # PostgreSQL 时区。
+  timeZone: "Asia/Shanghai"
+  # 数据库最大空闲连接数，0 表示使用驱动默认值。
+  maxIdleConns: 0
+  # 数据库最大打开连接数，0 表示使用驱动默认值。
+  maxOpenConns: 0
 
 # 本地文件存储配置。
 storage:
@@ -129,7 +151,7 @@ lotteries:
     # 是否启用该彩种。
     enabled: true
     # 第三方开奖接口对应的彩票 ID。
-    remoteLotteryId: "13"
+    remoteLotteryId: "14"
     # 前区号码数量。
     redCount: 5
     # 后区号码数量。

@@ -60,13 +60,13 @@ func backfillLotteryUserOwnership() error {
 	}
 
 	userID := users[0].Id
-	if err := DB.Model(&lotteryModel.TicketUpload{}).Where("user_id IS NULL OR user_id = ''").Update("user_id", userID).Error; err != nil {
+	if err := DB.Model(&lotteryModel.TicketUpload{}).Where("user_id IS NULL").Update("user_id", userID).Error; err != nil {
 		return err
 	}
-	if err := DB.Model(&lotteryModel.Ticket{}).Where("user_id IS NULL OR user_id = ''").Update("user_id", userID).Error; err != nil {
+	if err := DB.Model(&lotteryModel.Ticket{}).Where("user_id IS NULL").Update("user_id", userID).Error; err != nil {
 		return err
 	}
-	return DB.Model(&lotteryModel.Recommendation{}).Where("user_id IS NULL OR user_id = ''").Update("user_id", userID).Error
+	return DB.Model(&lotteryModel.Recommendation{}).Where("user_id IS NULL").Update("user_id", userID).Error
 }
 
 func cleanupDuplicateTicketEntries() error {
@@ -228,11 +228,4 @@ func dereferenceString(value *string) string {
 		return ""
 	}
 	return *value
-}
-
-func maxInt(left int, right int) int {
-	if left > right {
-		return left
-	}
-	return right
 }
