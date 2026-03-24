@@ -260,7 +260,10 @@ func GenerateRecommendation(c *fiber.Ctx) error {
 // @Failure 500 {object} ErrorResponse
 // @Router /lotteries/{code}/draws/sync [post]
 func SyncDraws(c *fiber.Ctx) error {
-	request := parseSyncDrawRequest(c)
+	request, err := parseSyncDrawRequest(c)
+	if err != nil {
+		return response.Error(c, err.Error(), fiber.StatusBadRequest)
+	}
 	data, err := lotteryService.SyncLatestDraw(c.Context(), c.Params("code"), request.Issue)
 	if err != nil {
 		return err
@@ -280,7 +283,10 @@ func SyncDraws(c *fiber.Ctx) error {
 // @Failure 500 {object} ErrorResponse
 // @Router /lotteries/{code}/draws/sync-history [post]
 func SyncDrawHistory(c *fiber.Ctx) error {
-	request := parseSyncDrawRequest(c)
+	request, err := parseSyncDrawRequest(c)
+	if err != nil {
+		return response.Error(c, err.Error(), fiber.StatusBadRequest)
+	}
 	data, err := lotteryService.SyncDrawHistory(c.Context(), c.Params("code"), lotteryService.SyncOptions{
 		Issue: request.Issue,
 		Start: request.Start,
@@ -303,7 +309,10 @@ func SyncDrawHistory(c *fiber.Ctx) error {
 // @Failure 500 {object} ErrorResponse
 // @Router /lotteries/draws/sync-history [post]
 func SyncMultipleDraws(c *fiber.Ctx) error {
-	request := parseSyncDrawRequest(c)
+	request, err := parseSyncDrawRequest(c)
+	if err != nil {
+		return response.Error(c, err.Error(), fiber.StatusBadRequest)
+	}
 	data, err := lotteryService.SyncMultipleDraws(c.Context(), request.LotteryCodes, lotteryService.SyncOptions{
 		Issue: request.Issue,
 		Start: request.Start,
@@ -807,7 +816,7 @@ func firstNonEmpty(value string, fallback string) string {
 	return fallback
 }
 
-func parseSyncDrawRequest(c *fiber.Ctx) SyncDrawRequest {
+func parseSyncDrawRequest(c *fiber.Ctx) (SyncDrawRequest, error) {
 	request := SyncDrawRequest{
 		Issue: c.Query("issue"),
 		Start: parseIntValue(c.Query("start"), 0),
@@ -830,10 +839,10 @@ func parseSyncDrawRequest(c *fiber.Ctx) SyncDrawRequest {
 				request.LotteryCodes = parsed.LotteryCodes
 			}
 		} else if err := c.BodyParser(&request); err != nil {
-			return request
+			return request, fmt.Errorf("请求体不是合法 JSON，请检查逗号和引号格式")
 		}
 	} else if err := c.BodyParser(&request); err != nil {
-		return request
+		return request, fmt.Errorf("请求参数解析失败")
 	}
 
 	if request.Count <= 0 {
@@ -842,7 +851,7 @@ func parseSyncDrawRequest(c *fiber.Ctx) SyncDrawRequest {
 	if request.Start < 0 {
 		request.Start = 0
 	}
-	return request
+	return request, nil
 }
 
 func parseIntValue(value string, fallback int) int {
