@@ -27,9 +27,10 @@ type jisuResponse struct {
 }
 
 type SyncResult struct {
-	LotteryCode string `json:"lotteryCode"`
-	Issue       string `json:"issue,omitempty"`
-	SyncedCount int    `json:"syncedCount"`
+	LotteryCode    string `json:"lotteryCode"`
+	Issue          string `json:"issue,omitempty"`
+	RequestedCount int    `json:"requestedCount"`
+	SyncedCount    int    `json:"syncedCount"`
 }
 
 type SyncOptions struct {
@@ -88,8 +89,9 @@ func SyncLatestDraw(ctx context.Context, code string, issue string) (*SyncResult
 	}
 
 	result := &SyncResult{
-		LotteryCode: code,
-		Issue:       savedIssue,
+		LotteryCode:    code,
+		Issue:          savedIssue,
+		RequestedCount: 1,
 	}
 	if saved {
 		result.SyncedCount = 1
@@ -153,8 +155,9 @@ func SyncDrawHistory(ctx context.Context, code string, options SyncOptions) (*Sy
 	}
 
 	return &SyncResult{
-		LotteryCode: code,
-		SyncedCount: syncedCount,
+		LotteryCode:    code,
+		RequestedCount: count,
+		SyncedCount:    syncedCount,
 	}, nil
 }
 

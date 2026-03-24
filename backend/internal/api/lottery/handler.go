@@ -1,6 +1,7 @@
 package lottery
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"mime/multipart"
@@ -812,9 +813,29 @@ func parseSyncDrawRequest(c *fiber.Ctx) SyncDrawRequest {
 		Start: parseIntValue(c.Query("start"), 0),
 		Count: parseIntValue(c.Query("count"), 100),
 	}
-	if err := c.BodyParser(&request); err != nil {
+
+	if len(c.Body()) > 0 {
+		parsed := SyncDrawRequest{}
+		if err := json.Unmarshal(c.Body(), &parsed); err == nil {
+			if parsed.Issue != "" {
+				request.Issue = parsed.Issue
+			}
+			if parsed.Start != 0 {
+				request.Start = parsed.Start
+			}
+			if parsed.Count != 0 {
+				request.Count = parsed.Count
+			}
+			if len(parsed.LotteryCodes) > 0 {
+				request.LotteryCodes = parsed.LotteryCodes
+			}
+		} else if err := c.BodyParser(&request); err != nil {
+			return request
+		}
+	} else if err := c.BodyParser(&request); err != nil {
 		return request
 	}
+
 	if request.Count <= 0 {
 		request.Count = 100
 	}
