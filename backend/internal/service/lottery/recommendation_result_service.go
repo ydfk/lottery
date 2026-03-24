@@ -5,6 +5,8 @@ import (
 
 	model "go-fiber-starter/internal/model/lottery"
 	"go-fiber-starter/pkg/db"
+
+	"gorm.io/gorm"
 )
 
 func EvaluateRecommendationsByIssue(code string, issue string) error {
@@ -17,7 +19,7 @@ func EvaluateRecommendationsByIssue(code string, issue string) error {
 	}
 
 	draw := model.DrawResult{}
-	if err := db.DB.Preload("PrizeDetails").Where("lottery_code = ? AND issue = ?", code, issue).First(&draw).Error; err != nil {
+	if err := findRecommendationSettlementDraw(code, issue, &draw); err != nil {
 		return nil
 	}
 
@@ -48,5 +50,54 @@ func EvaluateRecommendationsByIssue(code string, issue string) error {
 		}
 	}
 
+	return nil
+}
+
+func findRecommendationSettlementDraw(code string, issue string, draw *model.DrawResult) error {
+	items := make([]model.DrawResult, 0)
+	if err := db.DB.Preload("PrizeDetails").
+		Where("lottery_code = ? AND issue = ?", code, issue).
+		Order("created_at desc").
+		Find(&items).Error; err != nil {
+		return err
+	}
+	for _, item := range items {
+		if !isUnfinalDrawResult(item) {
+			*draw = item
+			return nil
+		}
+	}
+	return gorm.ErrRecordNotFound
+}
+
+func resetRecommendationsPendingByIssueWithDB(tx *gorm.DB, code string, issue string) error {
+	recommendations := make([]model.Recommendation, 0)
+	if err := tx.Preload("Entries").Where("lottery_code = ? AND issue IN ?", code, issueAliases(code, issue)).Find(&recommendations).Error; err != nil {
+		return err
+	}
+
+	for _, recommendation := range recommendations {
+		for _, entry := range recommendation.Entries {
+			if err := tx.Model(&model.RecommendationEntry{}).
+				Where("id = ?", entry.Id).
+				Updates(map[string]any{
+					"is_winning":    false,
+					"prize_name":    "",
+					"prize_amount":  0,
+					"match_summary": "待开奖",
+				}).Error; err != nil {
+				return err
+			}
+		}
+
+		if err := tx.Model(&model.Recommendation{}).
+			Where("id = ?", recommendation.Id).
+			Updates(map[string]any{
+				"checked_at":   nil,
+				"prize_amount": 0,
+			}).Error; err != nil {
+			return err
+		}
+	}
 	return nil
 }

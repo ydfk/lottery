@@ -220,10 +220,14 @@ definitions:
     type: object
   go-fiber-starter_internal_service_lottery.DashboardStats:
     properties:
+      purchasedRecommendations:
+        type: integer
       totalCost:
         type: number
       totalPrize:
         type: number
+      totalRecommendations:
+        type: integer
       totalTickets:
         type: integer
       wonTickets:
@@ -253,7 +257,11 @@ definitions:
       createdAt:
         description: 指定为自动创建时间
         type: string
+      drawBlueNumbers:
+        type: string
       drawDate:
+        type: string
+      drawRedNumbers:
         type: string
       entries:
         items:
@@ -277,8 +285,12 @@ definitions:
         type: string
       provider:
         type: string
-      purchasedTicket:
-        $ref: '#/definitions/go-fiber-starter_internal_service_lottery.TicketDetail'
+      purchasedCount:
+        type: integer
+      purchasedTickets:
+        items:
+          $ref: '#/definitions/go-fiber-starter_internal_service_lottery.TicketDetail'
+        type: array
       rawPayload:
         type: string
       strategy:
@@ -344,6 +356,8 @@ definitions:
         type: string
       lotteryCode:
         type: string
+      manualDrawDate:
+        type: string
       notes:
         type: string
       prizeAmount:
@@ -352,6 +366,8 @@ definitions:
         type: string
       recognizedText:
         type: string
+      recommendation:
+        $ref: '#/definitions/go-fiber-starter_internal_service_lottery.TicketRecommendationDetail'
       recommendationId:
         type: string
       source:
@@ -397,6 +413,38 @@ definitions:
         type: string
       upload:
         $ref: '#/definitions/go-fiber-starter_internal_service_lottery.TicketUploadDetail'
+    type: object
+  go-fiber-starter_internal_service_lottery.TicketRecommendationDetail:
+    properties:
+      createdAt:
+        type: string
+      drawDate:
+        type: string
+      entries:
+        items:
+          $ref: '#/definitions/go-fiber-starter_internal_service_lottery.TicketRecommendationEntry'
+        type: array
+      id:
+        type: string
+      issue:
+        type: string
+      summary:
+        type: string
+    type: object
+  go-fiber-starter_internal_service_lottery.TicketRecommendationEntry:
+    properties:
+      blueNumbers:
+        type: string
+      id:
+        type: string
+      prizeAmount:
+        type: number
+      prizeName:
+        type: string
+      redNumbers:
+        type: string
+      sequence:
+        type: integer
     type: object
   go-fiber-starter_internal_service_lottery.TicketUploadDetail:
     properties:
@@ -525,6 +573,8 @@ definitions:
     properties:
       costAmount:
         type: number
+      drawDate:
+        type: string
       entries:
         items:
           $ref: '#/definitions/internal_api_lottery.CreateTicketEntryRequest'
@@ -549,6 +599,21 @@ definitions:
         type: integer
       data:
         $ref: '#/definitions/go-fiber-starter_internal_service_lottery.DashboardData'
+      flag:
+        example: true
+        type: boolean
+      time:
+        example: "2026-03-16T10:00:00Z"
+        type: string
+    type: object
+  internal_api_lottery.DeleteResponse:
+    properties:
+      code:
+        example: 200
+        type: integer
+      data:
+        additionalProperties: {}
+        type: object
       flag:
         example: true
         type: boolean
@@ -967,6 +1032,35 @@ paths:
       tags:
       - lottery
   /lotteries/{code}/recommendations/{recommendationId}:
+    delete:
+      description: 删除推荐记录及推荐明细，并解除与购买记录的关联，不删除已录入票据
+      parameters:
+      - description: 彩票编码，如 ssq、dlt
+        in: path
+        name: code
+        required: true
+        type: string
+      - description: 推荐记录 ID
+        in: path
+        name: recommendationId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_api_lottery.DeleteResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_api_lottery.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 删除推荐记录
+      tags:
+      - lottery
     get:
       description: 返回指定推荐记录的完整号码、命中情况和购买关联信息
       parameters:
@@ -1395,6 +1489,31 @@ paths:
       security:
       - BearerAuth: []
       summary: 通用票据入库并判奖
+      tags:
+      - lottery
+  /lotteries/tickets/{ticketId}:
+    delete:
+      description: 删除票据、票据明细，以及关联的上传记录和可清理的原图文件
+      parameters:
+      - description: 票据 ID
+        in: path
+        name: ticketId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_api_lottery.DeleteResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_api_lottery.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 删除票据记录
       tags:
       - lottery
   /lotteries/tickets/{ticketId}/recheck:

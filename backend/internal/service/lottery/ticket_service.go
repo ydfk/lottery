@@ -406,27 +406,71 @@ func buildTicketDetail(ticket model.Ticket) *TicketDetail {
 }
 
 func findSettlementDraw(code string, issue string) (*model.DrawResult, error) {
-	draw := model.DrawResult{}
+	draws := make([]model.DrawResult, 0)
 	if err := db.DB.Preload("PrizeDetails").
 		Where("lottery_code = ? AND issue IN ?", code, issueAliases(code, issue)).
 		Order("created_at desc").
 		Order("issue desc").
-		First(&draw).Error; err != nil {
+		Find(&draws).Error; err != nil {
 		return nil, err
 	}
-	return &draw, nil
+	for _, draw := range draws {
+		if !isUnfinalDrawResult(draw) {
+			return &draw, nil
+		}
+	}
+	return nil, gorm.ErrRecordNotFound
 }
 
 func findTicketDisplayDraw(code string, issue string) (*model.DrawResult, error) {
-	draw := model.DrawResult{}
-	if err := db.DB.Select("issue", "draw_date", "red_numbers", "blue_numbers").
+	draws := make([]model.DrawResult, 0)
+	if err := db.DB.Select("id", "issue", "draw_date", "red_numbers", "blue_numbers", "raw_payload").
 		Where("lottery_code = ? AND issue IN ?", code, issueAliases(code, issue)).
 		Order("created_at desc").
 		Order("issue desc").
-		First(&draw).Error; err != nil {
+		Find(&draws).Error; err != nil {
 		return nil, err
 	}
-	return &draw, nil
+	for _, draw := range draws {
+		if !isUnfinalDrawResult(draw) {
+			return &draw, nil
+		}
+	}
+	return nil, gorm.ErrRecordNotFound
+}
+
+func resetTicketsPendingByIssueWithDB(tx *gorm.DB, code string, issue string) error {
+	tickets := make([]model.Ticket, 0)
+	if err := tx.Where("lottery_code = ? AND issue IN ?", code, issueAliases(code, issue)).Find(&tickets).Error; err != nil {
+		return err
+	}
+	for _, ticket := range tickets {
+		if err := resetTicketPendingWithDB(tx, ticket.Id.String()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func resetTicketPendingWithDB(tx *gorm.DB, ticketID string) error {
+	if err := tx.Model(&model.TicketEntry{}).
+		Where("ticket_id = ?", ticketID).
+		Updates(map[string]any{
+			"is_winning":    false,
+			"prize_name":    "",
+			"prize_amount":  0,
+			"match_summary": "待开奖",
+		}).Error; err != nil {
+		return err
+	}
+
+	return tx.Model(&model.Ticket{}).
+		Where("id = ?", ticketID).
+		Updates(map[string]any{
+			"status":       TicketStatusPending,
+			"checked_at":   nil,
+			"prize_amount": 0,
+		}).Error
 }
 
 func resetTicketPending(ticketID string) error {

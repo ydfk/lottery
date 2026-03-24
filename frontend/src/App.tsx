@@ -10,10 +10,13 @@ import { getStoredToken } from "@/lib/api/client";
 import { getProfile, loginAndStoreToken, logout } from "@/lib/api/methods/auth";
 import {
   createTicket,
+  deleteRecommendation,
+  deleteTicket,
   formatParsedEntry,
   getDashboard,
   getRecommendationDetail,
   getRecommendations,
+  generateRecommendation,
   getTicketHistory,
   recheckTicket,
   recognizeTicket,
@@ -184,6 +187,8 @@ export default function App() {
   const [recognizePending, setRecognizePending] = useState(false);
   const [submitPending, setSubmitPending] = useState(false);
   const [recheckPending, setRecheckPending] = useState(false);
+  const [deletePending, setDeletePending] = useState(false);
+  const [generatingLotteryCode, setGeneratingLotteryCode] = useState("");
   const [recommendationLoading, setRecommendationLoading] = useState(false);
   const [recommendationLoadingMore, setRecommendationLoadingMore] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -597,6 +602,74 @@ export default function App() {
     }
   }
 
+  async function handleDeleteTicket(ticket: TicketRecord) {
+    if (!window.confirm(`确认删除第 ${ticket.issue} 期的这条记录吗？相关号码、上传图片记录会一并删除。`)) {
+      return;
+    }
+
+    setDeletePending(true);
+    try {
+      await deleteTicket(ticket.id);
+      setSelectedHistoryTicket(null);
+      if (selectedRecommendation?.id && ticket.recommendationId === selectedRecommendation.id) {
+        setSelectedRecommendation(null);
+      }
+      toast.success("记录已删除");
+      await loadData(false);
+    } catch (error) {
+      handleRequestError(error, "删除记录失败");
+    } finally {
+      setDeletePending(false);
+    }
+  }
+
+  async function handleDeleteRecommendation(recommendation: Recommendation) {
+    if (
+      !window.confirm(
+        `确认删除第 ${recommendation.issue} 期推荐吗？已录入的购买记录会保留，但不再关联这条推荐。`
+      )
+    ) {
+      return;
+    }
+
+    setDeletePending(true);
+    try {
+      await deleteRecommendation(recommendation.lotteryCode, recommendation.id);
+      setSelectedRecommendation(null);
+      if (purchaseRecommendation?.id === recommendation.id) {
+        setPurchaseRecommendation(null);
+      }
+      toast.success("推荐已删除，购买记录已保留");
+      await loadData(false);
+    } catch (error) {
+      handleRequestError(error, "删除推荐失败");
+    } finally {
+      setDeletePending(false);
+    }
+  }
+
+  async function handleGenerateRecommendation(lotteryCode: string) {
+    setGeneratingLotteryCode(lotteryCode);
+    try {
+      const recommendation = await generateRecommendation(lotteryCode);
+      const nextFilters = DEFAULT_RECOMMENDATION_FILTERS;
+      const [dashboardData, detail] = await Promise.all([
+        getDashboard(),
+        getRecommendationDetail(lotteryCode, recommendation.id),
+      ]);
+      setDashboard(dashboardData);
+      setRecommendationFilters(nextFilters);
+      await loadRecommendations(1, false, nextFilters);
+      setSelectedRecommendation(detail);
+      setActiveTab("recommendation");
+      toast.success(`${recommendation.lotteryCode === "dlt" ? "大乐透" : "双色球"}推荐已生成`);
+    } catch (error) {
+      handleRequestError(error, "生成推荐失败");
+    } finally {
+      setGeneratingLotteryCode("");
+    }
+  }
+
   function handleHistoryFilterChange(nextFilters: TicketHistoryFilters) {
     setHistoryFilters(nextFilters);
     setSelectedHistoryTicket(null);
@@ -650,7 +723,13 @@ export default function App() {
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.84),rgba(241,245,249,0.9)_40%,rgba(226,232,240,1))] pb-28">
       <div className="mx-auto w-full max-w-6xl px-4 pb-10 pt-4 sm:px-6">
         {activeTab === "dashboard" && (
-          <DashboardPanel currentUser={currentUser} dashboard={dashboard} onLogout={handleLogout} />
+          <DashboardPanel
+            currentUser={currentUser}
+            dashboard={dashboard}
+            generatingLotteryCode={generatingLotteryCode}
+            onGenerateRecommendation={(lotteryCode) => void handleGenerateRecommendation(lotteryCode)}
+            onLogout={handleLogout}
+          />
         )}
 
         {activeTab === "recommendation" && (
@@ -663,10 +742,12 @@ export default function App() {
             total={recommendationTotal}
             selectedRecommendation={selectedRecommendation}
             detailPending={detailPending}
+            deletePending={deletePending}
             onFiltersChange={handleRecommendationFilterChange}
             onLoadMore={handleLoadMoreRecommendations}
             onSelectRecommendation={(recommendationId) => void handleOpenRecommendation(recommendationId)}
             onRecordPurchase={handleRecordPurchase}
+            onDeleteRecommendation={(recommendation) => void handleDeleteRecommendation(recommendation)}
           />
         )}
 
@@ -711,10 +792,12 @@ export default function App() {
             total={historyTotal}
             selectedTicket={selectedHistoryTicket}
             recheckPending={recheckPending}
+            deletePending={deletePending}
             onFiltersChange={handleHistoryFilterChange}
             onLoadMore={handleLoadMoreHistory}
             onSelectTicket={setSelectedHistoryTicket}
             onRecheckTicket={(ticketId) => void handleRecheckTicket(ticketId)}
+            onDeleteTicket={(ticket) => void handleDeleteTicket(ticket)}
           />
         )}
       </div>

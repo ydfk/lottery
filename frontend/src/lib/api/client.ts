@@ -41,6 +41,14 @@ export async function apiPost<T, B = unknown>(url: string, body?: B): Promise<T>
   return parseResponse<T>(response);
 }
 
+export async function apiDelete<T>(url: string): Promise<T> {
+  const response = await fetch(url, {
+    method: "DELETE",
+    headers: getRequestHeaders(),
+  });
+  return parseResponse<T>(response);
+}
+
 export function getStoredToken() {
   return localStorage.getItem(TOKEN_KEY) || "";
 }

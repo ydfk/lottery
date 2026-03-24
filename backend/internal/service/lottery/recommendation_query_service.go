@@ -161,10 +161,7 @@ func buildRecommendationDetail(recommendation model.Recommendation, userID strin
 	}
 
 	draw := model.DrawResult{}
-	if err := db.DB.Select("red_numbers", "blue_numbers").
-		Where("lottery_code = ? AND issue = ?", recommendation.LotteryCode, recommendation.Issue).
-		Order("created_at desc").
-		First(&draw).Error; err == nil {
+	if err := findRecommendationDisplayDraw(recommendation.LotteryCode, recommendation.Issue, &draw); err == nil {
 		detail.DrawRedNumbers = draw.RedNumbers
 		detail.DrawBlueNumbers = draw.BlueNumbers
 	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -172,6 +169,23 @@ func buildRecommendationDetail(recommendation model.Recommendation, userID strin
 	}
 
 	return detail, nil
+}
+
+func findRecommendationDisplayDraw(code string, issue string, draw *model.DrawResult) error {
+	items := make([]model.DrawResult, 0)
+	if err := db.DB.Select("id", "red_numbers", "blue_numbers", "raw_payload").
+		Where("lottery_code = ? AND issue = ?", code, issue).
+		Order("created_at desc").
+		Find(&items).Error; err != nil {
+		return err
+	}
+	for _, item := range items {
+		if !isUnfinalDrawResult(item) {
+			*draw = item
+			return nil
+		}
+	}
+	return gorm.ErrRecordNotFound
 }
 
 func applyRecommendationFilters(query *gorm.DB, options RecommendationQueryOptions) *gorm.DB {

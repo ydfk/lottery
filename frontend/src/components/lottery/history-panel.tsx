@@ -31,10 +31,12 @@ interface HistoryPanelProps {
   total: number;
   selectedTicket: Ticket | null;
   recheckPending: boolean;
+  deletePending: boolean;
   onFiltersChange: (filters: TicketHistoryFilters) => void;
   onLoadMore: () => void;
   onSelectTicket: (ticket: Ticket | null) => void;
   onRecheckTicket: (ticketId: string) => void;
+  onDeleteTicket: (ticket: Ticket) => void;
 }
 
 const statusFilterOptions = [
@@ -61,10 +63,12 @@ export function HistoryPanel(props: HistoryPanelProps) {
     total,
     selectedTicket,
     recheckPending,
+    deletePending,
     onFiltersChange,
     onLoadMore,
     onSelectTicket,
     onRecheckTicket,
+    onDeleteTicket,
   } = props;
   const loadMoreTriggerRef = useRef<HTMLDivElement | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -338,15 +342,26 @@ export function HistoryPanel(props: HistoryPanelProps) {
         title="票据详情"
         rightAction={
           selectedTicket ? (
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-11 rounded-full px-3 text-sm text-slate-700"
-              disabled={recheckPending}
-              onClick={() => onRecheckTicket(selectedTicket.id)}
-            >
-              {recheckPending ? "判奖中" : "重判"}
-            </Button>
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-11 rounded-full px-3 text-sm text-slate-700"
+                disabled={recheckPending || deletePending}
+                onClick={() => onRecheckTicket(selectedTicket.id)}
+              >
+                {recheckPending ? "判奖中" : "重判"}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-11 rounded-full px-3 text-sm text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                disabled={deletePending || recheckPending}
+                onClick={() => onDeleteTicket(selectedTicket)}
+              >
+                {deletePending ? "删除中" : "删除"}
+              </Button>
+            </>
           ) : undefined
         }
         onOpenChange={(open) => onSelectTicket(open ? selectedTicket : null)}

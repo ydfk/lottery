@@ -528,6 +528,46 @@
                 }
             }
         },
+        "/lotteries/tickets/{ticketId}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "删除票据、票据明细，以及关联的上传记录和可清理的原图文件",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "lottery"
+                ],
+                "summary": "删除票据记录",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "票据 ID",
+                        "name": "ticketId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api_lottery.DeleteResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api_lottery.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/lotteries/tickets/{ticketId}/recheck": {
             "post": {
                 "security": [
@@ -875,6 +915,51 @@
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/internal_api_lottery.RecommendationDetailResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api_lottery.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "删除推荐记录及推荐明细，并解除与购买记录的关联，不删除已录入票据",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "lottery"
+                ],
+                "summary": "删除推荐记录",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "彩票编码，如 ssq、dlt",
+                        "name": "code",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "推荐记录 ID",
+                        "name": "recommendationId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api_lottery.DeleteResponse"
                         }
                     },
                     "500": {
@@ -1550,11 +1635,17 @@
         "go-fiber-starter_internal_service_lottery.DashboardStats": {
             "type": "object",
             "properties": {
+                "purchasedRecommendations": {
+                    "type": "integer"
+                },
                 "totalCost": {
                     "type": "number"
                 },
                 "totalPrize": {
                     "type": "number"
+                },
+                "totalRecommendations": {
+                    "type": "integer"
                 },
                 "totalTickets": {
                     "type": "integer"
@@ -1600,7 +1691,13 @@
                     "description": "指定为自动创建时间",
                     "type": "string"
                 },
+                "drawBlueNumbers": {
+                    "type": "string"
+                },
                 "drawDate": {
+                    "type": "string"
+                },
+                "drawRedNumbers": {
                     "type": "string"
                 },
                 "entries": {
@@ -1636,8 +1733,14 @@
                 "provider": {
                     "type": "string"
                 },
-                "purchasedTicket": {
-                    "$ref": "#/definitions/go-fiber-starter_internal_service_lottery.TicketDetail"
+                "purchasedCount": {
+                    "type": "integer"
+                },
+                "purchasedTickets": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/go-fiber-starter_internal_service_lottery.TicketDetail"
+                    }
                 },
                 "rawPayload": {
                     "type": "string"
@@ -1737,6 +1840,9 @@
                 "lotteryCode": {
                     "type": "string"
                 },
+                "manualDrawDate": {
+                    "type": "string"
+                },
                 "notes": {
                     "type": "string"
                 },
@@ -1748,6 +1854,9 @@
                 },
                 "recognizedText": {
                     "type": "string"
+                },
+                "recommendation": {
+                    "$ref": "#/definitions/go-fiber-starter_internal_service_lottery.TicketRecommendationDetail"
                 },
                 "recommendationId": {
                     "type": "string"
@@ -1816,6 +1925,55 @@
                 },
                 "upload": {
                     "$ref": "#/definitions/go-fiber-starter_internal_service_lottery.TicketUploadDetail"
+                }
+            }
+        },
+        "go-fiber-starter_internal_service_lottery.TicketRecommendationDetail": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "drawDate": {
+                    "type": "string"
+                },
+                "entries": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/go-fiber-starter_internal_service_lottery.TicketRecommendationEntry"
+                    }
+                },
+                "id": {
+                    "type": "string"
+                },
+                "issue": {
+                    "type": "string"
+                },
+                "summary": {
+                    "type": "string"
+                }
+            }
+        },
+        "go-fiber-starter_internal_service_lottery.TicketRecommendationEntry": {
+            "type": "object",
+            "properties": {
+                "blueNumbers": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "prizeAmount": {
+                    "type": "number"
+                },
+                "prizeName": {
+                    "type": "string"
+                },
+                "redNumbers": {
+                    "type": "string"
+                },
+                "sequence": {
+                    "type": "integer"
                 }
             }
         },
@@ -2004,6 +2162,9 @@
                 "costAmount": {
                     "type": "number"
                 },
+                "drawDate": {
+                    "type": "string"
+                },
                 "entries": {
                     "type": "array",
                     "items": {
@@ -2039,6 +2200,27 @@
                 },
                 "data": {
                     "$ref": "#/definitions/go-fiber-starter_internal_service_lottery.DashboardData"
+                },
+                "flag": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "time": {
+                    "type": "string",
+                    "example": "2026-03-16T10:00:00Z"
+                }
+            }
+        },
+        "internal_api_lottery.DeleteResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer",
+                    "example": 200
+                },
+                "data": {
+                    "type": "object",
+                    "additionalProperties": {}
                 },
                 "flag": {
                     "type": "boolean",

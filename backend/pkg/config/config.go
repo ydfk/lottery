@@ -76,8 +76,10 @@ type LotteryConfig struct {
 }
 
 type LotteryDrawScheduleConfig struct {
-	Weekdays []int  `mapstructure:"weekdays"`
-	Time     string `mapstructure:"time"`
+	Weekdays    []int  `mapstructure:"weekdays"`
+	Time        string `mapstructure:"time"`
+	AnchorIssue string `mapstructure:"anchorIssue"`
+	AnchorDate  string `mapstructure:"anchorDate"`
 }
 
 type LotteryRecommendationConfig struct {

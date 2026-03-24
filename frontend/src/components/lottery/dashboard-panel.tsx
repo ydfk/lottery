@@ -9,6 +9,8 @@ import type { DashboardData } from "@/types/lottery";
 interface DashboardPanelProps {
   currentUser: AuthUser;
   dashboard: DashboardData | null;
+  generatingLotteryCode?: string;
+  onGenerateRecommendation: (lotteryCode: string) => void;
   onLogout: () => void;
 }
 
@@ -16,7 +18,13 @@ function formatCurrency(value: number) {
   return `¥ ${value.toFixed(2)}`;
 }
 
-export function DashboardPanel({ currentUser, dashboard, onLogout }: DashboardPanelProps) {
+export function DashboardPanel({
+  currentUser,
+  dashboard,
+  generatingLotteryCode,
+  onGenerateRecommendation,
+  onLogout,
+}: DashboardPanelProps) {
   const stats = dashboard?.stats;
 
   const statItems = [
@@ -73,6 +81,25 @@ export function DashboardPanel({ currentUser, dashboard, onLogout }: DashboardPa
             ))}
           </CardContent>
         </Card>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <Button
+            type="button"
+            className="h-11 rounded-2xl bg-white text-slate-900 hover:bg-white/90"
+            disabled={generatingLotteryCode === "ssq"}
+            onClick={() => onGenerateRecommendation("ssq")}
+          >
+            {generatingLotteryCode === "ssq" ? "生成中..." : "生成双色球推荐"}
+          </Button>
+          <Button
+            type="button"
+            className="h-11 rounded-2xl bg-white/12 text-white hover:bg-white/16"
+            disabled={generatingLotteryCode === "dlt"}
+            onClick={() => onGenerateRecommendation("dlt")}
+          >
+            {generatingLotteryCode === "dlt" ? "生成中..." : "生成大乐透推荐"}
+          </Button>
+        </div>
       </section>
     </div>
   );

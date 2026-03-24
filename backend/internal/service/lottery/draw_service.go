@@ -42,13 +42,27 @@ type BatchSyncResult struct {
 	Results []SyncResult `json:"results"`
 }
 
+type saveDrawOptions struct {
+	ExpectedIssue    string
+	ExpectedDrawDate time.Time
+}
+
 func SyncLatestDraw(ctx context.Context, code string, issue string) (*SyncResult, error) {
 	lotteryType, err := getLotteryType(code)
 	if err != nil {
 		return nil, err
 	}
+	definition, err := GetDefinition(code)
+	if err != nil {
+		return nil, err
+	}
 	if config.Current.Jisu.AppKey == "" {
 		return nil, fmt.Errorf("未配置极速数据 appkey")
+	}
+
+	expectedIssue, expectedDrawDate, err := resolveLatestSyncTarget(definition, issue)
+	if err != nil {
+		return nil, err
 	}
 
 	item, err := fetchLatestDraw(ctx, lotteryType, issue)
@@ -57,12 +71,15 @@ func SyncLatestDraw(ctx context.Context, code string, issue string) (*SyncResult
 	}
 	if issue != "" {
 		itemIssue := normalizeIssueByCode(code, extractString(item, "issueno", "issue"))
-		if itemIssue == "" || !containsString(issueAliases(code, issue), itemIssue) {
-			return nil, fmt.Errorf("第三方返回的开奖期号与请求期号不一致: 请求 %s，返回 %s", normalizeIssueByCode(code, issue), itemIssue)
+		if itemIssue != "" && expectedIssue != "" && !containsString(issueAliases(code, expectedIssue), itemIssue) {
+			return nil, fmt.Errorf("第三方返回的开奖期号与请求期号不一致: 请求 %s，返回 %s", expectedIssue, itemIssue)
 		}
 	}
 
-	saved, savedIssue, err := saveDrawItem(lotteryType, item)
+	saved, savedIssue, err := saveDrawItem(lotteryType, item, saveDrawOptions{
+		ExpectedIssue:    expectedIssue,
+		ExpectedDrawDate: expectedDrawDate,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +126,7 @@ func SyncDrawHistory(ctx context.Context, code string, options SyncOptions) (*Sy
 		}
 
 		for _, item := range items {
-			saved, issue, saveErr := saveDrawItem(lotteryType, item)
+			saved, issue, saveErr := saveDrawItem(lotteryType, item, saveDrawOptions{})
 			if saveErr != nil {
 				return nil, saveErr
 			}
@@ -254,15 +271,27 @@ func requestJisu(ctx context.Context, requestURL string) (*jisuResponse, error) 
 	return &parsed, nil
 }
 
-func saveDrawItem(lotteryType model.LotteryType, item map[string]any) (bool, string, error) {
-	issue := extractString(item, "issueno", "issue")
+func saveDrawItem(lotteryType model.LotteryType, item map[string]any, options saveDrawOptions) (bool, string, error) {
+	definition, err := GetDefinition(lotteryType.Code)
+	if err != nil {
+		return false, "", err
+	}
+
+	issue := normalizeIssueByCode(lotteryType.Code, resolveValue(options.ExpectedIssue, extractString(item, "issueno", "issue")))
+	if !isFinalDrawPayload(item) {
+		if cleanupErr := cleanupUnfinalDrawByIssue(lotteryType.Code, issue); cleanupErr != nil {
+			return false, issue, cleanupErr
+		}
+		return false, issue, nil
+	}
+
 	redNumbers, blueNumbers := parseDrawNumbers(lotteryType, item)
 	if issue == "" || redNumbers == "" || blueNumbers == "" {
 		return false, "", nil
 	}
 
 	draw := model.DrawResult{}
-	err := db.DB.Where("lottery_code = ? AND issue = ?", lotteryType.Code, issue).First(&draw).Error
+	err = db.DB.Where("lottery_code = ? AND issue = ?", lotteryType.Code, issue).First(&draw).Error
 	isCreate := false
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		draw = model.DrawResult{
@@ -274,7 +303,7 @@ func saveDrawItem(lotteryType model.LotteryType, item map[string]any) (bool, str
 		return false, "", err
 	}
 
-	draw.DrawDate = parseDrawDate(extractString(item, "opendate", "awardtime", "drawdate"))
+	draw.DrawDate = resolveDrawDateForSave(definition, issue, options.ExpectedDrawDate, parseDrawDate(extractString(item, "opendate", "awardtime", "drawdate")))
 	draw.RedNumbers = redNumbers
 	draw.BlueNumbers = blueNumbers
 	draw.SaleAmount = parseFloat(item["saleamount"])
@@ -383,6 +412,43 @@ func settleByIssue(code string, issue string) error {
 	return EvaluateRecommendationsByIssue(code, issue)
 }
 
+func cleanupUnfinalDrawByIssue(code string, issue string) error {
+	if issue == "" {
+		return nil
+	}
+
+	return db.DB.Transaction(func(tx *gorm.DB) error {
+		draws := make([]model.DrawResult, 0)
+		if err := tx.Where("lottery_code = ? AND issue IN ?", code, issueAliases(code, issue)).Find(&draws).Error; err != nil {
+			return err
+		}
+		drawIDs := make([]uuid.UUID, 0, len(draws))
+		for _, draw := range draws {
+			if !isUnfinalDrawResult(draw) {
+				continue
+			}
+			drawIDs = append(drawIDs, draw.Id)
+		}
+		if len(drawIDs) == 0 {
+			return nil
+		}
+		if err := tx.Where("draw_result_id IN ?", drawIDs).Delete(&model.DrawPrize{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("id IN ?", drawIDs).Delete(&model.DrawResult{}).Error; err != nil {
+			return err
+		}
+		if err := resetTicketsPendingByIssueWithDB(tx, code, issue); err != nil {
+			return err
+		}
+		return resetRecommendationsPendingByIssueWithDB(tx, code, issue)
+	})
+}
+
+func isUnfinalDrawResult(draw model.DrawResult) bool {
+	return strings.Contains(draw.RawPayload, `"prize":false`)
+}
+
 func normalizePrizeName(value string) string {
 	switch value {
 	case "1", "一等奖":
@@ -421,7 +487,48 @@ func parseDrawDate(value string) time.Time {
 			return timestamp
 		}
 	}
-	return time.Now()
+	return time.Time{}
+}
+
+func resolveLatestSyncTarget(definition Definition, requestedIssue string) (string, time.Time, error) {
+	canonicalIssue := normalizeIssueByCode(definition.Code, requestedIssue)
+	if canonicalIssue != "" {
+		drawDate, ok, err := resolveLocalDrawByIssue(definition, canonicalIssue)
+		if err != nil {
+			return "", time.Time{}, err
+		}
+		if ok {
+			return canonicalIssue, drawDate, nil
+		}
+		return canonicalIssue, time.Time{}, nil
+	}
+
+	issue, drawDate, ok, err := resolveLatestLocalDraw(definition, time.Now())
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	if ok {
+		return issue, drawDate, nil
+	}
+	return "", time.Time{}, nil
+}
+
+func resolveDrawDateForSave(definition Definition, issue string, expectedDrawDate time.Time, providerDrawDate time.Time) time.Time {
+	if !expectedDrawDate.IsZero() {
+		return expectedDrawDate
+	}
+
+	if issue != "" {
+		localDrawDate, ok, err := resolveLocalDrawByIssue(definition, issue)
+		if err == nil && ok {
+			return localDrawDate
+		}
+	}
+
+	if !providerDrawDate.IsZero() {
+		return providerDrawDate
+	}
+	return time.Time{}
 }
 
 func min(a int, b int) int {

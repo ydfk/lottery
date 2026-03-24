@@ -21,7 +21,7 @@ export function DetailSheet(props: DetailSheetProps) {
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-slate-950/35 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
         <DialogPrimitive.Content className="fixed inset-0 z-50 outline-none">
           <div className="mx-auto flex h-full max-w-4xl flex-col bg-[rgba(248,250,252,0.98)] shadow-[0_20px_60px_rgba(15,23,42,0.18)]">
-            <header className="sticky top-0 z-10 grid grid-cols-[72px_1fr_72px] items-center border-b border-slate-200/80 bg-white/92 px-3 py-2 backdrop-blur">
+            <header className="sticky top-0 z-10 grid grid-cols-[56px_1fr_auto] items-center gap-2 border-b border-slate-200/80 bg-white/92 px-3 py-2 backdrop-blur">
               <Button
                 type="button"
                 variant="ghost"
@@ -34,7 +34,7 @@ export function DetailSheet(props: DetailSheetProps) {
               <DialogPrimitive.Title className="truncate px-2 text-center text-base font-semibold text-slate-950">
                 {title}
               </DialogPrimitive.Title>
-              <div className={cn("flex min-w-0 justify-end", !rightAction && "opacity-0")}>
+              <div className={cn("flex min-w-0 items-center justify-end gap-2", !rightAction && "opacity-0")}>
                 {rightAction || (
                   <span className="inline-flex h-11 min-w-11 items-center justify-center">占位</span>
                 )}

@@ -24,10 +24,12 @@ interface RecommendationPanelProps {
   total: number;
   selectedRecommendation: Recommendation | null;
   detailPending: boolean;
+  deletePending: boolean;
   onFiltersChange: (filters: RecommendationFilters) => void;
   onLoadMore: () => void;
   onSelectRecommendation: (recommendationId: string | null) => void;
   onRecordPurchase: (recommendation: Recommendation) => void;
+  onDeleteRecommendation: (recommendation: Recommendation) => void;
 }
 
 const statusFilterOptions = [
@@ -220,10 +222,12 @@ export function RecommendationPanel(props: RecommendationPanelProps) {
     total,
     selectedRecommendation,
     detailPending,
+    deletePending,
     onFiltersChange,
     onLoadMore,
     onSelectRecommendation,
     onRecordPurchase,
+    onDeleteRecommendation,
   } = props;
   const loadMoreTriggerRef = useRef<HTMLDivElement | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -467,14 +471,26 @@ export function RecommendationPanel(props: RecommendationPanelProps) {
         title="推荐详情"
         rightAction={
           selectedRecommendation ? (
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-11 rounded-full px-3 text-sm text-slate-700"
-              onClick={() => onRecordPurchase(selectedRecommendation)}
-            >
-              {selectedRecommendation.isPurchased ? "续记" : "购买"}
-            </Button>
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-11 rounded-full px-3 text-sm text-slate-700"
+                disabled={deletePending}
+                onClick={() => onRecordPurchase(selectedRecommendation)}
+              >
+                {selectedRecommendation.isPurchased ? "续记" : "购买"}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-11 rounded-full px-3 text-sm text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                disabled={deletePending}
+                onClick={() => onDeleteRecommendation(selectedRecommendation)}
+              >
+                {deletePending ? "删除中" : "删除"}
+              </Button>
+            </>
           ) : undefined
         }
         onOpenChange={(open) => onSelectRecommendation(open ? selectedRecommendation?.id ?? null : null)}

@@ -131,7 +131,7 @@ func GenerateRecommendation(ctx context.Context, code string, count int, userID 
 	if definition.Recommendation.Model == "" {
 		return nil, fmt.Errorf("%s 未配置推荐模型", definition.Name)
 	}
-	targetIssue, targetDrawDate, err := buildRecommendationPlan(definition, history, time.Now())
+	targetIssue, targetDrawDate, err := planRecommendationTarget(definition, history, time.Now())
 	if err != nil {
 		return nil, err
 	}

@@ -32,8 +32,10 @@ type RecommendationSettings struct {
 }
 
 type DrawScheduleSettings struct {
-	Weekdays []int
-	Time     string
+	Weekdays    []int
+	Time        string
+	AnchorIssue string
+	AnchorDate  string
 }
 
 type SyncSettings struct {
@@ -73,8 +75,10 @@ func ListDefinitions() []Definition {
 			BlueMin:         item.BlueMin,
 			BlueMax:         item.BlueMax,
 			DrawSchedule: DrawScheduleSettings{
-				Weekdays: append([]int(nil), item.DrawSchedule.Weekdays...),
-				Time:     item.DrawSchedule.Time,
+				Weekdays:    append([]int(nil), item.DrawSchedule.Weekdays...),
+				Time:        item.DrawSchedule.Time,
+				AnchorIssue: item.DrawSchedule.AnchorIssue,
+				AnchorDate:  item.DrawSchedule.AnchorDate,
 			},
 			Recommendation: RecommendationSettings{
 				Enabled:       item.Recommendation.Enabled,

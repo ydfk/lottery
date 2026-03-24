@@ -27,6 +27,9 @@ func repairLotteryState() error {
 		if !definition.Enabled {
 			continue
 		}
+		if err := normalizeLocalScheduleDates(definition); err != nil {
+			return err
+		}
 		if err := EvaluatePendingTickets(definition.Code); err != nil {
 			return err
 		}

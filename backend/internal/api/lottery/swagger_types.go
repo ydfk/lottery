@@ -102,3 +102,10 @@ type TicketRecognitionResponse struct {
 	Data lotteryService.TicketRecognitionDraft `json:"data"`
 	Time string                                `json:"time" example:"2026-03-16T10:00:00Z"`
 }
+
+type DeleteResponse struct {
+	Flag bool           `json:"flag" example:"true"`
+	Code int            `json:"code" example:"200"`
+	Data map[string]any `json:"data"`
+	Time string         `json:"time" example:"2026-03-16T10:00:00Z"`
+}

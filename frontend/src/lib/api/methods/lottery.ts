@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from "../client";
+import { apiDelete, apiGet, apiPost } from "../client";
 import type {
   DashboardData,
   ParsedEntry,
@@ -87,8 +87,8 @@ export function getRecommendationDetail(lotteryCode: string, recommendationId: s
   return apiGet<Recommendation>(`/api/lotteries/${lotteryCode}/recommendations/${recommendationId}`);
 }
 
-export function generateRecommendation() {
-  return apiPost<Recommendation>(`/api/lotteries/${LOTTERY_CODE}/recommendations/generate`);
+export function generateRecommendation(lotteryCode: string) {
+  return apiPost<Recommendation>(`/api/lotteries/${lotteryCode}/recommendations/generate`);
 }
 
 export function syncDraws() {
@@ -132,6 +132,14 @@ export function createTicket(body: {
 
 export function recheckTicket(ticketId: string) {
   return apiPost<Ticket>(`/api/lotteries/tickets/${ticketId}/recheck`);
+}
+
+export function deleteTicket(ticketId: string) {
+  return apiDelete<{ deleted: boolean }>(`/api/lotteries/tickets/${ticketId}`);
+}
+
+export function deleteRecommendation(lotteryCode: string, recommendationId: string) {
+  return apiDelete<{ deleted: boolean }>(`/api/lotteries/${lotteryCode}/recommendations/${recommendationId}`);
 }
 
 export function scanTicket(formData: FormData) {

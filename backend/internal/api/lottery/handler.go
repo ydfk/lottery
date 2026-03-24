@@ -205,6 +205,27 @@ func GetRecommendationDetail(c *fiber.Ctx) error {
 	return response.Success(c, data)
 }
 
+// @Summary 删除推荐记录
+// @Description 删除推荐记录及推荐明细，并解除与购买记录的关联，不删除已录入票据
+// @Tags lottery
+// @Produce json
+// @Security BearerAuth
+// @Param code path string true "彩票编码，如 ssq、dlt"
+// @Param recommendationId path string true "推荐记录 ID"
+// @Success 200 {object} DeleteResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /lotteries/{code}/recommendations/{recommendationId} [delete]
+func DeleteRecommendation(c *fiber.Ctx) error {
+	userID, err := currentUserID(c)
+	if err != nil {
+		return err
+	}
+	if err := lotteryService.DeleteRecommendation(c.Params("code"), c.Params("recommendationId"), userID); err != nil {
+		return err
+	}
+	return response.Success(c, fiber.Map{"deleted": true})
+}
+
 // @Summary 生成推荐号码
 // @Description 按当前彩票配置的 AI 模型和提示词生成推荐号码
 // @Tags lottery
@@ -413,6 +434,26 @@ func RecheckGenericTicket(c *fiber.Ctx) error {
 		return err
 	}
 	return response.Success(c, data)
+}
+
+// @Summary 删除票据记录
+// @Description 删除票据、票据明细，以及关联的上传记录和可清理的原图文件
+// @Tags lottery
+// @Produce json
+// @Security BearerAuth
+// @Param ticketId path string true "票据 ID"
+// @Success 200 {object} DeleteResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /lotteries/tickets/{ticketId} [delete]
+func DeleteGenericTicket(c *fiber.Ctx) error {
+	userID, err := currentUserID(c)
+	if err != nil {
+		return err
+	}
+	if err := lotteryService.DeleteTicket(c.Params("ticketId"), userID); err != nil {
+		return err
+	}
+	return response.Success(c, fiber.Map{"deleted": true})
 }
 
 // @Summary 上传彩票原图
