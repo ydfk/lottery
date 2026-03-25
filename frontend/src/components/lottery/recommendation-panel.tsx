@@ -8,6 +8,7 @@ import { HitNumberBalls, NumberBalls } from "@/components/lottery/number-balls";
 import { RecommendationStealthSheet } from "@/components/lottery/recommendation-stealth-sheet";
 import { TicketCard } from "@/components/lottery/ticket-card";
 import {
+  formatLotteryDateTime,
   formatLotteryDrawDate,
   formatLotteryIssue,
   getLotteryDisplayName,
@@ -152,10 +153,17 @@ function RecommendationCard(props: {
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
-        第 {formatLotteryIssue(recommendation.lotteryCode, recommendation.issue)} 期
-        {recommendation.drawDate ? ` · ${formatLotteryDrawDate(recommendation.drawDate)} 开奖` : ""}
-        <span className={`rounded-full px-2 py-0.5 ${status.className}`}>{status.label}</span>
+      <div className="mt-3 space-y-1.5 text-xs text-slate-500">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span>第 {formatLotteryIssue(recommendation.lotteryCode, recommendation.issue)} 期</span>
+          {recommendation.drawDate ? <span>{formatLotteryDrawDate(recommendation.drawDate)} 开奖</span> : null}
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="min-w-0 truncate">
+            {recommendation.createdAt ? `${formatLotteryDateTime(recommendation.createdAt)} 生成` : ""}
+          </span>
+          <span className={`shrink-0 rounded-full px-2 py-0.5 ${status.className}`}>{status.label}</span>
+        </div>
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[1.1rem] bg-slate-50 px-4 py-3 text-sm">
@@ -506,6 +514,9 @@ export function RecommendationPanel(props: RecommendationPanelProps) {
                 {selectedRecommendation.drawDate ? (
                   <Badge variant="secondary">{formatLotteryDrawDate(selectedRecommendation.drawDate)} 开奖</Badge>
                 ) : null}
+                {selectedRecommendation.createdAt ? (
+                  <Badge variant="secondary">{formatLotteryDateTime(selectedRecommendation.createdAt)} 生成</Badge>
+                ) : null}
                 <Badge className={getRecommendationStatus(selectedRecommendation).className}>
                   {getRecommendationStatus(selectedRecommendation).label}
                 </Badge>
@@ -525,6 +536,7 @@ export function RecommendationPanel(props: RecommendationPanelProps) {
               <span>共 {selectedRecommendation.entryCount || selectedRecommendation.entries.length} 注</span>
               <span>命中 {selectedRecommendation.winningCount || 0} 注</span>
               <span>{getRecommendationPurchaseText(selectedRecommendation)}</span>
+              <span>生成于 {formatLotteryDateTime(selectedRecommendation.createdAt)}</span>
               <span className="font-medium text-slate-900">
                 总奖金 {formatCurrency(selectedRecommendation.prizeAmount || 0)}
               </span>

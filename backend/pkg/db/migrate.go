@@ -37,11 +37,17 @@ func autoMigrate() error {
 	if err := cleanupDuplicateTickets(); err != nil {
 		return err
 	}
+	if err := cleanupDuplicateRecommendations(); err != nil {
+		return err
+	}
 
 	if err := DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_ticket_entries_ticket_sequence ON ticket_entries(ticket_id, sequence)").Error; err != nil {
 		return err
 	}
 	if err := DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_tickets_user_lottery_issue_signature ON tickets(user_id, lottery_code, issue, entry_signature)").Error; err != nil {
+		return err
+	}
+	if err := DB.Exec("DROP INDEX IF EXISTS idx_recommendations_user_lottery_issue_created").Error; err != nil {
 		return err
 	}
 	if err := DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_recommendations_user_lottery_issue ON recommendations(user_id, lottery_code, issue)").Error; err != nil {
@@ -153,6 +159,35 @@ func cleanupDuplicateTickets() error {
 		return err
 	}
 	return DB.Where("id IN ?", duplicateIDs).Delete(&lotteryModel.Ticket{}).Error
+}
+
+func cleanupDuplicateRecommendations() error {
+	recommendations := make([]lotteryModel.Recommendation, 0)
+	if err := DB.Order("created_at asc").Order("id asc").Find(&recommendations).Error; err != nil {
+		return err
+	}
+
+	seen := make(map[string]string, len(recommendations))
+	duplicateIDs := make([]any, 0)
+	for _, recommendation := range recommendations {
+		userID := ""
+		if recommendation.UserID != nil {
+			userID = recommendation.UserID.String()
+		}
+		key := strings.Join([]string{userID, recommendation.LotteryCode, recommendation.Issue}, ":")
+		if _, exists := seen[key]; exists {
+			duplicateIDs = append(duplicateIDs, recommendation.Id)
+			continue
+		}
+		seen[key] = recommendation.Id.String()
+	}
+	if len(duplicateIDs) == 0 {
+		return nil
+	}
+	if err := DB.Where("recommendation_id IN ?", duplicateIDs).Delete(&lotteryModel.RecommendationEntry{}).Error; err != nil {
+		return err
+	}
+	return DB.Where("id IN ?", duplicateIDs).Delete(&lotteryModel.Recommendation{}).Error
 }
 
 func refreshTicketPrizeSummary(ticketID string) error {

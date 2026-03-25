@@ -11,6 +11,7 @@ import (
 	model "go-fiber-starter/internal/model/lottery"
 	"go-fiber-starter/pkg/db"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -135,6 +136,13 @@ func GenerateRecommendation(ctx context.Context, code string, count int, userID 
 	if err != nil {
 		return nil, err
 	}
+	existing, err := findExistingRecommendation(userUUID, code, targetIssue)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		return existing, nil
+	}
 	providerName := resolveValue(definition.Recommendation.Provider, ProviderOpenAICompatible)
 	provider := newRecommendationProvider(providerName)
 	if provider == nil {
@@ -147,54 +155,39 @@ func GenerateRecommendation(ctx context.Context, code string, count int, userID 
 
 	recommendation := model.Recommendation{}
 	if err := db.DB.Transaction(func(tx *gorm.DB) error {
-		saveModeCreate := false
-		findErr := tx.Where("user_id = ? AND lottery_code = ? AND issue = ?", userUUID, code, targetIssue).Order("created_at desc").First(&recommendation).Error
-		if errors.Is(findErr, gorm.ErrRecordNotFound) {
-			recommendation = model.Recommendation{
-				UserID:      &userUUID,
-				LotteryCode: code,
-				Issue:       targetIssue,
-			}
-			saveModeCreate = true
-		} else if findErr != nil {
-			return findErr
+		if existing, err := findExistingRecommendationWithDB(tx, userUUID, code, targetIssue); err != nil {
+			return err
+		} else if existing != nil {
+			recommendation = *existing
+			return nil
 		}
 
-		applyRecommendationSnapshot := func() {
-			recommendation.DrawDate = &targetDrawDate
-			recommendation.UserID = &userUUID
-			recommendation.Provider = providerName
-			recommendation.Model = definition.Recommendation.Model
-			recommendation.Strategy = "history+ai"
-			recommendation.PromptVersion = definition.Recommendation.PromptVersion
-			recommendation.Summary = result.Summary
-			recommendation.Basis = result.Basis
-			recommendation.RawPayload = mustJSON(result)
-			recommendation.CheckedAt = nil
-			recommendation.PrizeAmount = 0
+		recommendation = model.Recommendation{
+			UserID:        &userUUID,
+			LotteryCode:   code,
+			Issue:         targetIssue,
+			DrawDate:      &targetDrawDate,
+			Provider:      providerName,
+			Model:         definition.Recommendation.Model,
+			Strategy:      "history+ai",
+			PromptVersion: definition.Recommendation.PromptVersion,
+			Summary:       result.Summary,
+			Basis:         result.Basis,
+			RawPayload:    mustJSON(result),
+			CheckedAt:     nil,
+			PrizeAmount:   0,
 		}
-		applyRecommendationSnapshot()
-
-		if saveModeCreate {
-			if createErr := tx.Create(&recommendation).Error; createErr != nil {
-				if !isUniqueConstraintError(createErr) {
-					return createErr
+		if err := tx.Create(&recommendation).Error; err != nil {
+			if isUniqueConstraintError(err) {
+				existing, queryErr := findExistingRecommendationWithDB(tx, userUUID, code, targetIssue)
+				if queryErr != nil {
+					return queryErr
 				}
-				if retryErr := tx.Where("user_id = ? AND lottery_code = ? AND issue = ?", userUUID, code, targetIssue).Order("created_at desc").First(&recommendation).Error; retryErr != nil {
-					return retryErr
-				}
-				applyRecommendationSnapshot()
-				if saveErr := tx.Omit("Entries").Save(&recommendation).Error; saveErr != nil {
-					return saveErr
+				if existing != nil {
+					recommendation = *existing
+					return nil
 				}
 			}
-		} else {
-			if err := tx.Omit("Entries").Save(&recommendation).Error; err != nil {
-				return err
-			}
-		}
-
-		if err := tx.Where("recommendation_id = ?", recommendation.Id).Delete(&model.RecommendationEntry{}).Error; err != nil {
 			return err
 		}
 
@@ -218,6 +211,26 @@ func GenerateRecommendation(ctx context.Context, code string, count int, userID 
 	}
 
 	if err := db.DB.Preload("Entries").First(&recommendation, "id = ?", recommendation.Id).Error; err != nil {
+		return nil, err
+	}
+	return &recommendation, nil
+}
+
+func findExistingRecommendation(userID uuid.UUID, code string, issue string) (*model.Recommendation, error) {
+	return findExistingRecommendationWithDB(db.DB, userID, code, issue)
+}
+
+func findExistingRecommendationWithDB(database *gorm.DB, userID uuid.UUID, code string, issue string) (*model.Recommendation, error) {
+	recommendation := model.Recommendation{}
+	err := database.Preload("Entries").
+		Where("user_id = ? AND lottery_code = ? AND issue = ?", userID, code, issue).
+		Order("created_at asc").
+		Order("id asc").
+		First(&recommendation).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
 		return nil, err
 	}
 	return &recommendation, nil

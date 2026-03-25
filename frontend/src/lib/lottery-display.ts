@@ -46,3 +46,21 @@ export function formatLotteryDrawDate(drawDate?: string | null) {
   }
   return drawDate;
 }
+
+export function formatLotteryDateTime(value?: string | null) {
+  if (!value) {
+    return "";
+  }
+
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) {
+    const year = parsed.getFullYear();
+    const month = `${parsed.getMonth() + 1}`.padStart(2, "0");
+    const day = `${parsed.getDate()}`.padStart(2, "0");
+    const hour = `${parsed.getHours()}`.padStart(2, "0");
+    const minute = `${parsed.getMinutes()}`.padStart(2, "0");
+    return `${year}-${month}-${day} ${hour}:${minute}`;
+  }
+
+  return value.length >= 16 ? value.slice(0, 16) : value;
+}
