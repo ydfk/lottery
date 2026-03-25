@@ -1,4 +1,4 @@
-import { ImageUp, RotateCcw, Save, ScanSearch, X } from "lucide-react";
+import { ImageUp, Plus, RotateCcw, Save, ScanSearch, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +11,8 @@ import {
   getLotteryDisplayName,
   lotteryDisplayOptions,
 } from "@/lib/lottery-display";
-import type { Recommendation, TicketRecognitionDraft, TicketUpload } from "@/types/lottery";
+import { buildParsedEntriesFromDrafts } from "@/lib/ticket-entry-drafts";
+import type { Recommendation, TicketEntryDraft, TicketRecognitionDraft, TicketUpload } from "@/types/lottery";
 
 interface RecordPanelProps {
   selectedRecommendation: Recommendation | null;
@@ -26,7 +27,7 @@ interface RecordPanelProps {
   drawDate: string;
   costAmount: string;
   notes: string;
-  entryText: string;
+  entryDrafts: TicketEntryDraft[];
   submitPending: boolean;
   onSelectImage: (file: File | null) => void;
   onLotteryCodeChange: (value: string) => void;
@@ -35,43 +36,13 @@ interface RecordPanelProps {
   onDrawDateChange: (value: string) => void;
   onCostAmountChange: (value: string) => void;
   onNotesChange: (value: string) => void;
-  onEntryTextChange: (value: string) => void;
+  onEntryFieldChange: (index: number, field: "redNumbers" | "blueNumbers", value: string) => void;
   onToggleEntryAdditional: (index: number) => void;
   onChangeEntryMultiple: (index: number, nextMultiple: number) => void;
+  onAddEntry: () => void;
+  onRemoveEntry: (index: number) => void;
   onCreateTicket: () => void;
   onClearRecommendation: () => void;
-}
-
-function buildPreviewEntries(value: string) {
-  return value
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const isAdditional = line.includes("追加");
-      const sourceLine = line.replace(/追加/g, "").trim();
-      const multipleMatch = sourceLine.match(/[（(]\s*(\d+)\s*[)）]\s*$/);
-      const multiple = multipleMatch ? Number(multipleMatch[1]) : 1;
-      const normalizedLine = sourceLine.replace(/[（(]\s*\d+\s*[)）]\s*$/, "").trim();
-      const [redPart, bluePart] = normalizedLine.split("+");
-      return {
-        redNumbers:
-          redPart
-            ?.split(",")
-            .map((item) => item.trim())
-            .filter(Boolean)
-            .join(",") || "",
-        blueNumbers:
-          bluePart
-            ?.split(",")
-            .map((item) => item.trim())
-            .filter(Boolean)
-            .join(",") || "",
-        multiple: multiple > 0 ? multiple : 1,
-        isAdditional,
-      };
-    })
-    .filter((entry) => entry.redNumbers && entry.blueNumbers);
 }
 
 export function RecordPanel(props: RecordPanelProps) {
@@ -88,7 +59,7 @@ export function RecordPanel(props: RecordPanelProps) {
     drawDate,
     costAmount,
     notes,
-    entryText,
+    entryDrafts,
     submitPending,
     onSelectImage,
     onLotteryCodeChange,
@@ -97,14 +68,15 @@ export function RecordPanel(props: RecordPanelProps) {
     onDrawDateChange,
     onCostAmountChange,
     onNotesChange,
-    onEntryTextChange,
+    onEntryFieldChange,
     onToggleEntryAdditional,
     onChangeEntryMultiple,
+    onAddEntry,
+    onRemoveEntry,
     onCreateTicket,
     onClearRecommendation,
   } = props;
 
-  const previewEntries = buildPreviewEntries(entryText);
   const showAdditionalToggle = lotteryCode === "dlt";
   const recognizeLabel = recognitionDraft ? "重新识别" : "开始识别";
   const recognizeBusy = uploadPending || recognizePending;
@@ -262,66 +234,103 @@ export function RecordPanel(props: RecordPanelProps) {
             <p className="text-[11px] leading-4 text-slate-400">金额会按号码、倍数和追加自动计算，也可手动修改。</p>
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-[1.08fr_0.92fr]">
-            <div className="space-y-1.5">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
               <label className="text-sm font-medium text-slate-700">号码</label>
-              <Textarea
-                className="min-h-24 bg-white px-3 py-2.5 text-sm leading-5"
-                value={entryText}
-                placeholder="每行一注，例如 01,02,03,04,05,06+07 (2)"
-                onChange={(event) => onEntryTextChange(event.target.value)}
-              />
+              <Button type="button" variant="secondary" size="sm" className="rounded-full" onClick={onAddEntry}>
+                <Plus className="size-3.5" />
+                新增一注
+              </Button>
             </div>
 
             <div className="space-y-3 rounded-[1.45rem] bg-slate-50 p-3">
-              <div className="space-y-3">
-                {previewEntries.length > 0 ? (
-                  previewEntries.map((entry, index) => (
-                    <div key={`${entry.redNumbers}-${entry.blueNumbers}-${index}`} className="rounded-[1.1rem] border border-slate-200 bg-white p-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-sm font-medium text-slate-700">号码 {index + 1}</span>
-                        <div className="flex items-center gap-2">
-                          <div className="flex items-center rounded-full border border-slate-200 bg-slate-50">
-                            <button
-                              type="button"
-                              className="h-7 w-7 text-sm text-slate-500 transition hover:text-slate-900"
-                              onClick={() => onChangeEntryMultiple(index, Math.max(1, entry.multiple - 1))}
-                            >
-                              -
-                            </button>
-                            <span className="min-w-10 text-center text-xs text-slate-600">{entry.multiple} 倍</span>
-                            <button
-                              type="button"
-                              className="h-7 w-7 text-sm text-slate-500 transition hover:text-slate-900"
-                              onClick={() => onChangeEntryMultiple(index, entry.multiple + 1)}
-                            >
-                              +
-                            </button>
-                          </div>
-                          {showAdditionalToggle && (
-                            <Button
-                              type="button"
-                              variant={entry.isAdditional ? "default" : "secondary"}
-                              size="sm"
-                              className="h-7 rounded-full px-3 text-xs"
-                              onClick={() => onToggleEntryAdditional(index)}
-                            >
-                              追加
-                            </Button>
-                          )}
+              {entryDrafts.map((entry, index) => {
+                const previewEntry = buildParsedEntriesFromDrafts([entry], lotteryCode)[0];
+
+                return (
+                  <div key={`entry-${index}`} className="rounded-[1.1rem] border border-slate-200 bg-white p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-medium text-slate-700">号码 {index + 1}</span>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center rounded-full border border-slate-200 bg-slate-50">
+                          <button
+                            type="button"
+                            className="h-7 w-7 text-sm text-slate-500 transition hover:text-slate-900"
+                            onClick={() => onChangeEntryMultiple(index, Math.max(1, entry.multiple - 1))}
+                          >
+                            -
+                          </button>
+                          <span className="min-w-10 text-center text-xs text-slate-600">{entry.multiple} 倍</span>
+                          <button
+                            type="button"
+                            className="h-7 w-7 text-sm text-slate-500 transition hover:text-slate-900"
+                            onClick={() => onChangeEntryMultiple(index, entry.multiple + 1)}
+                          >
+                            +
+                          </button>
                         </div>
-                      </div>
-                      <div className="mt-3">
-                        <NumberBalls redNumbers={entry.redNumbers} blueNumbers={entry.blueNumbers} compact />
+                        {showAdditionalToggle && (
+                          <Button
+                            type="button"
+                            variant={entry.isAdditional ? "default" : "secondary"}
+                            size="sm"
+                            className="h-7 rounded-full px-3 text-xs"
+                            onClick={() => onToggleEntryAdditional(index)}
+                          >
+                            追加
+                          </Button>
+                        )}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 rounded-full text-slate-500"
+                          onClick={() => onRemoveEntry(index)}
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
                       </div>
                     </div>
-                  ))
-                ) : (
-                  <div className="rounded-[1.1rem] border border-dashed border-slate-300 bg-white px-4 py-3 text-center text-sm text-slate-500">
-                    识别后在这里预览号码
+
+                    <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_8.5rem]">
+                      <div className="space-y-1.5">
+                        <span className="text-xs text-slate-500">红球</span>
+                        <Input
+                          className="h-9 bg-white text-sm"
+                          inputMode="numeric"
+                          value={entry.redNumbers}
+                          placeholder={lotteryCode === "dlt" ? "03 11 18 26 32" : "01 02 03 04 05 06"}
+                          onChange={(event) => onEntryFieldChange(index, "redNumbers", event.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <span className="text-xs text-slate-500">蓝球</span>
+                        <Input
+                          className="h-9 bg-white text-sm"
+                          inputMode="numeric"
+                          value={entry.blueNumbers}
+                          placeholder={lotteryCode === "dlt" ? "04 09" : "07"}
+                          onChange={(event) => onEntryFieldChange(index, "blueNumbers", event.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-2 text-[11px] leading-4 text-slate-400">
+                      支持空格、逗号或连续数字，例如 010203040506
+                    </div>
+
+                    {previewEntry ? (
+                      <div className="mt-3">
+                        <NumberBalls
+                          redNumbers={previewEntry.red.map((value) => value.toString().padStart(2, "0")).join(",")}
+                          blueNumbers={previewEntry.blue.map((value) => value.toString().padStart(2, "0")).join(",")}
+                          compact
+                        />
+                      </div>
+                    ) : null}
                   </div>
-                )}
-              </div>
+                );
+              })}
             </div>
           </div>
 

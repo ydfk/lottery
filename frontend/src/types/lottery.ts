@@ -141,6 +141,13 @@ export interface ParsedEntry {
   isAdditional: boolean;
 }
 
+export interface TicketEntryDraft {
+  redNumbers: string;
+  blueNumbers: string;
+  multiple: number;
+  isAdditional: boolean;
+}
+
 export interface TicketUpload {
   id: string;
   lotteryCode: string;

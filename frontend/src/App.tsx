@@ -23,13 +23,20 @@ import {
   uploadTicketImage,
 } from "@/lib/api/methods/lottery";
 import { formatLotteryDrawDate } from "@/lib/lottery-display";
+import {
+  buildDraftsFromParsedEntries,
+  buildDraftsFromRecommendationEntries,
+  buildParsedEntriesFromDrafts,
+  createEmptyEntryDraft,
+  normalizeDraftsForLottery,
+} from "@/lib/ticket-entry-drafts";
 import type { AuthUser } from "@/types/auth";
 import type {
   DashboardData,
-  ParsedEntry,
   Recommendation,
   RecommendationFilters,
   Ticket as TicketRecord,
+  TicketEntryDraft,
   TicketHistoryFilters,
   TicketRecognitionDraft,
   TicketUpload,
@@ -56,110 +63,13 @@ const DEFAULT_RECOMMENDATION_FILTERS: RecommendationFilters = {
   sort: "latest",
 };
 
-function buildParsedEntryText(entries: ParsedEntry[], lotteryCode?: string) {
-  return entries
-    .map((entry) => {
-      const { redNumbers, blueNumbers } = formatParsedEntry(entry);
-      const additional = lotteryCode === "dlt" && entry.isAdditional ? " 追加" : "";
-      const multiple = entry.multiple > 1 ? ` (${entry.multiple})` : "";
-      return `${redNumbers}+${blueNumbers}${additional}${multiple}`;
-    })
-    .join("\n");
-}
-
-function buildRecommendationEntryText(recommendation: Recommendation) {
-  return recommendation.entries
-    .map((entry) => `${entry.redNumbers}+${entry.blueNumbers}`)
-    .join("\n");
-}
-
-function calculateEntriesCost(entries: ParsedEntry[]) {
+function calculateEntriesCost(
+  entries: Array<{ multiple: number; isAdditional: boolean }>
+) {
   return entries.reduce((total, entry) => {
     const perBetCost = entry.isAdditional ? 3 : 2;
     return total + Math.max(1, entry.multiple) * perBetCost;
   }, 0);
-}
-
-function parseEntryText(value: string, lotteryCode: string) {
-  return value
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const isAdditional = line.includes("追加");
-      const sourceLine = line.replace(/追加/g, "").trim();
-      const multipleMatch = sourceLine.match(/[（(]\s*(\d+)\s*[)）]\s*$/);
-      const multiple = multipleMatch ? Number(multipleMatch[1]) : 1;
-      const normalizedLine = sourceLine.replace(/[（(]\s*\d+\s*[)）]\s*$/, "").trim();
-      const [redPart, bluePart] = normalizedLine.split("+");
-      const redNumbers = redPart
-        ?.split(",")
-        .map((item) => Number(item.trim()))
-        .filter((item) => Number.isFinite(item)) ?? [];
-      const blueNumbers = bluePart
-        ?.split(",")
-        .map((item) => Number(item.trim()))
-        .filter((item) => Number.isFinite(item)) ?? [];
-      return {
-        red: redNumbers,
-        blue: blueNumbers,
-        multiple: multiple > 0 ? multiple : 1,
-        isAdditional: lotteryCode === "dlt" ? isAdditional : false,
-      };
-    })
-    .filter((entry) => entry.red.length > 0 && entry.blue.length > 0);
-}
-
-function toggleEntryAdditionalText(value: string, index: number, lotteryCode: string) {
-  if (lotteryCode !== "dlt") {
-    return value;
-  }
-
-  const lines = value
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  return lines
-    .map((line, lineIndex) => {
-      if (lineIndex !== index) {
-        return line;
-      }
-
-      const hasAdditional = line.includes("追加");
-      const sourceLine = line.replace(/追加/g, "").trim();
-      if (hasAdditional) {
-        return sourceLine;
-      }
-
-      const multipleMatch = sourceLine.match(/[（(]\s*\d+\s*[)）]\s*$/);
-      if (!multipleMatch) {
-        return `${sourceLine} 追加`;
-      }
-
-      const multiplePart = multipleMatch[0];
-      const numbersPart = sourceLine.slice(0, sourceLine.length - multiplePart.length).trim();
-      return `${numbersPart} 追加 ${multiplePart}`.trim();
-    })
-    .join("\n");
-}
-
-function changeEntryMultipleText(value: string, index: number, nextMultiple: number) {
-  const lines = value
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  return lines
-    .map((line, lineIndex) => {
-      if (lineIndex !== index) {
-        return line;
-      }
-
-      const baseLine = line.replace(/[（(]\s*\d+\s*[)）]\s*$/, "").trim();
-      return nextMultiple > 1 ? `${baseLine} (${nextMultiple})` : baseLine;
-    })
-    .join("\n");
 }
 
 function replaceRecommendation(
@@ -217,7 +127,7 @@ export default function App() {
   const [costAmount, setCostAmount] = useState("");
   const [costAmountEdited, setCostAmountEdited] = useState(false);
   const [notes, setNotes] = useState("");
-  const [entryText, setEntryText] = useState("");
+  const [entryDrafts, setEntryDrafts] = useState<TicketEntryDraft[]>([createEmptyEntryDraft()]);
 
   function resetLotteryState() {
     setDashboard(null);
@@ -248,7 +158,7 @@ export default function App() {
     setCostAmount("");
     setCostAmountEdited(false);
     setNotes("");
-    setEntryText("");
+    setEntryDrafts([createEmptyEntryDraft()]);
   }
 
   function handleRequestError(error: unknown, fallbackMessage: string) {
@@ -380,14 +290,14 @@ export default function App() {
       return;
     }
 
-    const entries = parseEntryText(entryText, lotteryCode);
+    const entries = buildParsedEntriesFromDrafts(entryDrafts, lotteryCode);
     if (entries.length === 0) {
       setCostAmount("");
       return;
     }
 
     setCostAmount(calculateEntriesCost(entries).toFixed(2));
-  }, [costAmountEdited, entryText, lotteryCode]);
+  }, [costAmountEdited, entryDrafts, lotteryCode]);
 
   async function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -449,7 +359,7 @@ export default function App() {
     setLotteryCode(recommendation.lotteryCode || "");
     setIssue(recommendation.issue || "");
     setDrawDate(formatLotteryDrawDate(recommendation.drawDate));
-    setEntryText(buildRecommendationEntryText(recommendation));
+    setEntryDrafts(buildDraftsFromRecommendationEntries(recommendation.entries));
     setCostAmountEdited(false);
     setActiveTab("records");
     toast.success("已切换到记录页，接下来上传这条推荐的购买票据即可");
@@ -500,7 +410,7 @@ export default function App() {
       setDrawDate(draft.drawDate || "");
       setCostAmount(draft.costAmount > 0 ? draft.costAmount.toFixed(2) : "");
       setCostAmountEdited(false);
-      setEntryText(buildParsedEntryText(draft.entries, draft.lotteryCode || lotteryCode));
+      setEntryDrafts(buildDraftsFromParsedEntries(draft.entries));
       toast.success("识别完成");
     } catch (error) {
       handleRequestError(error, "识别失败");
@@ -515,7 +425,7 @@ export default function App() {
       return;
     }
 
-    const entries = parseEntryText(entryText, lotteryCode);
+    const entries = buildParsedEntriesFromDrafts(entryDrafts, lotteryCode);
     if (!lotteryCode.trim()) {
       toast.error("请确认彩票类型");
       return;
@@ -567,18 +477,11 @@ export default function App() {
     }
   }
 
-  function handleToggleEntryAdditional(index: number) {
-    setEntryText((current) => toggleEntryAdditionalText(current, index, lotteryCode));
-  }
-
-  function handleChangeEntryMultiple(index: number, nextMultiple: number) {
-    setEntryText((current) => changeEntryMultipleText(current, index, nextMultiple));
-  }
-
   function handleChangeLotteryCode(value: string) {
     setLotteryCode(value);
+    setEntryDrafts((current) => normalizeDraftsForLottery(current, value));
     if (!costAmountEdited) {
-      const entries = parseEntryText(entryText, value);
+      const entries = buildParsedEntriesFromDrafts(entryDrafts, value);
       setCostAmount(entries.length > 0 ? calculateEntriesCost(entries).toFixed(2) : "");
     }
   }
@@ -586,6 +489,51 @@ export default function App() {
   function handleChangeCostAmount(value: string) {
     setCostAmount(value);
     setCostAmountEdited(true);
+  }
+
+  function handleChangeEntryField(
+    index: number,
+    field: "redNumbers" | "blueNumbers",
+    value: string
+  ) {
+    setEntryDrafts((current) =>
+      current.map((entry, entryIndex) =>
+        entryIndex === index ? { ...entry, [field]: value } : entry
+      )
+    );
+  }
+
+  function handleToggleEntryAdditional(index: number) {
+    if (lotteryCode !== "dlt") {
+      return;
+    }
+
+    setEntryDrafts((current) =>
+      current.map((entry, entryIndex) =>
+        entryIndex === index ? { ...entry, isAdditional: !entry.isAdditional } : entry
+      )
+    );
+  }
+
+  function handleChangeEntryMultiple(index: number, nextMultiple: number) {
+    setEntryDrafts((current) =>
+      current.map((entry, entryIndex) =>
+        entryIndex === index ? { ...entry, multiple: Math.max(1, nextMultiple) } : entry
+      )
+    );
+  }
+
+  function handleAddEntry() {
+    setEntryDrafts((current) => [...current, createEmptyEntryDraft()]);
+  }
+
+  function handleRemoveEntry(index: number) {
+    setEntryDrafts((current) => {
+      if (current.length <= 1) {
+        return [createEmptyEntryDraft()];
+      }
+      return current.filter((_, entryIndex) => entryIndex !== index);
+    });
   }
 
   async function handleRecheckTicket(ticketId: string) {
@@ -765,7 +713,7 @@ export default function App() {
             drawDate={drawDate}
             costAmount={costAmount}
             notes={notes}
-            entryText={entryText}
+            entryDrafts={entryDrafts}
             submitPending={submitPending}
             onSelectImage={handleSelectImage}
             onLotteryCodeChange={handleChangeLotteryCode}
@@ -774,9 +722,11 @@ export default function App() {
             onDrawDateChange={setDrawDate}
             onCostAmountChange={handleChangeCostAmount}
             onNotesChange={setNotes}
-            onEntryTextChange={setEntryText}
+            onEntryFieldChange={handleChangeEntryField}
             onToggleEntryAdditional={handleToggleEntryAdditional}
             onChangeEntryMultiple={handleChangeEntryMultiple}
+            onAddEntry={handleAddEntry}
+            onRemoveEntry={handleRemoveEntry}
             onCreateTicket={() => void handleCreateTicket()}
             onClearRecommendation={() => setPurchaseRecommendation(null)}
           />
