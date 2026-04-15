@@ -45,6 +45,17 @@ type TicketImportResult struct {
 	Rows         []TicketImportRowResult `json:"rows"`
 }
 
+type importTicketGroupItem struct {
+	RowNumber int
+	Input     importTicketRow
+	Entry     ParsedEntry
+}
+
+type importTicketGroup struct {
+	Key   string
+	Items []importTicketGroupItem
+}
+
 type importTicketRow struct {
 	LotteryCode      string
 	RecommendationID string
@@ -95,6 +106,8 @@ func ImportTickets(ctx context.Context, input ImportTicketsInput) (*TicketImport
 	result := &TicketImportResult{
 		Rows: make([]TicketImportRowResult, 0, len(rows)-1),
 	}
+	groupMap := make(map[string]*importTicketGroup)
+	groupKeys := make([]string, 0)
 
 	for index := 1; index < len(rows); index++ {
 		rowNumber := index + 1
@@ -118,33 +131,79 @@ func ImportTickets(ctx context.Context, input ImportTicketsInput) (*TicketImport
 			continue
 		}
 
-		ticket, importErr := importTicketRowWithImage(ctx, input.UserID, rowInput, images)
-		if importErr != nil {
+		entry, entryErr := buildImportedRowEntry(rowInput)
+		if entryErr != nil {
 			rowResult.Status = "failed"
-			rowResult.Message = importErr.Error()
+			rowResult.Message = entryErr.Error()
 			result.FailedCount++
 			result.Rows = append(result.Rows, rowResult)
 			continue
 		}
 
-		rowResult.LotteryCode = ticket.LotteryCode
-		rowResult.Issue = ticket.Issue
-		rowResult.TicketID = ticket.Id.String()
-		rowResult.Status = "success"
-		result.SuccessCount++
 		result.Rows = append(result.Rows, rowResult)
+		groupKey := buildImportGroupKey(rowInput.LotteryCode, rowInput.Issue)
+		group, ok := groupMap[groupKey]
+		if !ok {
+			group = &importTicketGroup{Key: groupKey}
+			groupMap[groupKey] = group
+			groupKeys = append(groupKeys, groupKey)
+		}
+		group.Items = append(group.Items, importTicketGroupItem{
+			RowNumber: rowNumber,
+			Input:     rowInput,
+			Entry:     entry,
+		})
+	}
+
+	for _, groupKey := range groupKeys {
+		group := groupMap[groupKey]
+		if group == nil || len(group.Items) == 0 {
+			continue
+		}
+
+		ticket, importErr := importTicketGroupWithImage(ctx, input.UserID, *group, images)
+		for index := range result.Rows {
+			rowResult := &result.Rows[index]
+			if rowResult.Status != "" || rowResult.Row < 2 {
+				continue
+			}
+
+			for _, item := range group.Items {
+				if rowResult.Row != item.RowNumber {
+					continue
+				}
+
+				if importErr != nil {
+					rowResult.Status = "failed"
+					rowResult.Message = importErr.Error()
+					result.FailedCount++
+				} else {
+					rowResult.LotteryCode = ticket.LotteryCode
+					rowResult.Issue = ticket.Issue
+					rowResult.TicketID = ticket.Id.String()
+					rowResult.Status = "success"
+					result.SuccessCount++
+				}
+				break
+			}
+		}
 	}
 
 	return result, nil
 }
 
-func importTicketRowWithImage(ctx context.Context, userID string, row importTicketRow, images map[string]string) (*TicketDetail, error) {
-	recommendation, recommendationID, err := resolveRecommendation(userID, row.LotteryCode, row.RecommendationID)
+func importTicketGroupWithImage(ctx context.Context, userID string, group importTicketGroup, images map[string]string) (*TicketDetail, error) {
+	payload, err := buildImportGroupPayload(group, images)
 	if err != nil {
 		return nil, err
 	}
 
-	code, err := resolveCreateTicketCode(row.LotteryCode, "", recommendation)
+	recommendation, recommendationID, err := resolveRecommendation(userID, payload.LotteryCode, payload.RecommendationID)
+	if err != nil {
+		return nil, err
+	}
+
+	code, err := resolveCreateTicketCode(payload.LotteryCode, "", recommendation)
 	if err != nil {
 		return nil, err
 	}
@@ -154,42 +213,34 @@ func importTicketRowWithImage(ctx context.Context, userID string, row importTick
 		return nil, err
 	}
 
-	entries := []ParsedEntry(nil)
-	if strings.TrimSpace(row.EntriesText) != "" {
-		entries, err = parseImportedEntries(row.EntriesText, code)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		entries, err = buildImportedSingleEntry(row, code)
-		if err != nil {
-			return nil, err
-		}
-	}
+	entries := payload.Entries
 	entries, err = normalizeParsedEntries(definition, entries)
 	if err != nil {
 		return nil, err
 	}
 
-	issue := normalizeIssueByCode(code, row.Issue)
+	issue := normalizeIssueByCode(code, payload.Issue)
 	if issue == "" {
 		return nil, fmt.Errorf("期号不能为空")
 	}
 
-	imagePath, err := resolveImportedImagePath(row.ImageName, images)
-	if err != nil {
-		return nil, err
-	}
-
-	purchasedAt := row.PurchasedAt
+	purchasedAt := payload.PurchasedAt
 	if purchasedAt.IsZero() {
 		purchasedAt = time.Now()
 	}
 
 	ticketID := ""
 	shouldEvaluate := false
-	drawDate := row.DrawDate
-	costAmount := row.CostAmount
+	drawDate := payload.DrawDate
+	costAmount := payload.CostAmount
+
+	if recommendationID == nil {
+		matchedRecommendationID, matchErr := matchImportRecommendation(userID, code, issue, entries)
+		if matchErr != nil {
+			return nil, matchErr
+		}
+		recommendationID = matchedRecommendationID
+	}
 
 	if err := db.DB.Transaction(func(tx *gorm.DB) error {
 		if err := validateDuplicateTicket(tx, userID, code, issue, entries); err != nil {
@@ -204,11 +255,11 @@ func importTicketRowWithImage(ctx context.Context, userID string, row importTick
 			issue,
 			drawDate,
 			"import",
-			imagePath,
-			row.EntriesText,
+			payload.ImagePath,
+			"",
 			purchasedAt,
 			costAmount,
-			row.Notes,
+			payload.Notes,
 			entries,
 		)
 		if createErr != nil {
@@ -260,8 +311,8 @@ func parseImportTicketRow(row []string, headerMap map[string]int) (importTicketR
 	if item.Issue == "" {
 		return item, false, fmt.Errorf("期号不能为空")
 	}
-	if item.EntriesText == "" && (item.RedNumbers == "" || item.BlueNumbers == "") {
-		return item, false, fmt.Errorf("号码不能为空，请填写 entries 或红球/蓝球列")
+	if item.RedNumbers == "" || item.BlueNumbers == "" {
+		return item, false, fmt.Errorf("红球和蓝球不能为空")
 	}
 
 	drawDate, err := parseImportDate(readImportCell(row, headerMap, "drawDate"))
@@ -295,6 +346,17 @@ func parseImportTicketRow(row []string, headerMap map[string]int) (importTicketR
 	item.IsAdditional = isAdditional
 
 	return item, false, nil
+}
+
+func buildImportedRowEntry(row importTicketRow) (ParsedEntry, error) {
+	entries, err := buildImportedSingleEntry(row, row.LotteryCode)
+	if err != nil {
+		return ParsedEntry{}, err
+	}
+	if len(entries) == 0 {
+		return ParsedEntry{}, fmt.Errorf("号码不能为空")
+	}
+	return entries[0], nil
 }
 
 func parseImportedEntries(value string, lotteryCode string) ([]ParsedEntry, error) {
@@ -434,7 +496,6 @@ func isEmptyImportRow(row importTicketRow) bool {
 		row.RecommendationID == "" &&
 		row.Issue == "" &&
 		row.Notes == "" &&
-		row.EntriesText == "" &&
 		row.RedNumbers == "" &&
 		row.BlueNumbers == "" &&
 		row.ImageName == ""

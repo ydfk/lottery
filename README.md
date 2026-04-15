@@ -209,6 +209,12 @@ cd backend
 go run ./cmd
 ```
 
+或直接使用热更新脚本：
+
+```powershell
+.\scripts\dev-backend.ps1
+```
+
 默认地址：
 
 - API: [http://127.0.0.1:25610](http://127.0.0.1:25610)
@@ -220,6 +226,12 @@ go run ./cmd
 cd frontend
 pnpm install
 pnpm dev
+```
+
+或直接使用前端开发脚本：
+
+```powershell
+.\scripts\dev-frontend.ps1
 ```
 
 默认地址：
@@ -315,6 +327,7 @@ ghcr.io/ydfk/lottery
 - `POST /api/lotteries/tickets/upload-image`
 - `POST /api/lotteries/tickets/recognize`
 - `POST /api/lotteries/tickets`
+- `POST /api/lotteries/tickets/import`
 - `GET /api/lotteries/tickets/history`
 - `POST /api/lotteries/tickets/:ticketId/recheck`
 
@@ -339,6 +352,65 @@ go test ./...
 cd frontend
 pnpm build
 pnpm test:run
+```
+
+## 批量导入说明
+
+系统支持通过 Excel 批量导入历史票据，适合一次性补录大量已购买号码。
+
+模板文件：
+
+- [ticket-import-template.xlsx](./docs/ticket-import-template.xlsx)
+
+模板生成脚本：
+
+- [generate_ticket_import_template.go](./backend/scripts/generate_ticket_import_template.go)
+
+当前导入规则：
+
+- 一行就是一注号码
+- 不再区分“单注模板”和“多注模板”
+- 同一用户、同一彩票类型、同一期号的多行，会自动合并成一条购买记录
+- 图片可选；如果同时上传图片 ZIP，会按 `图片名` 列和 ZIP 内文件名关联
+- 推荐无需手填，系统会自动匹配
+
+推荐自动关联规则：
+
+- 先按 `彩票类型 + 期号` 找候选推荐
+- 再比对号码是否匹配
+- 只比较 `红球 + 蓝球`
+- 不比较 `倍数` 和 `追加`
+- 如果一条购买记录里有多注号码，只要其中完整包含某条推荐的全部号码，就会自动关联该推荐
+
+推荐的 Excel 列：
+
+- `彩票类型`
+- `期号`
+- `开奖日期`
+- `购买时间`
+- `红球`
+- `蓝球`
+- `倍数`
+- `追加`
+- `金额`
+- `备注`
+- `图片名`
+
+调用方式：
+
+```bash
+curl -X POST "http://127.0.0.1:25610/api/lotteries/tickets/import" \
+  -H "Authorization: Bearer <token>" \
+  -F "workbook=@./docs/ticket-import-template.xlsx"
+```
+
+如果同时上传图片：
+
+```bash
+curl -X POST "http://127.0.0.1:25610/api/lotteries/tickets/import" \
+  -H "Authorization: Bearer <token>" \
+  -F "workbook=@./docs/ticket-import-template.xlsx" \
+  -F "imagesZip=@./tickets-images.zip"
 ```
 
 ## 适合谁使用

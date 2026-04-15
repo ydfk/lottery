@@ -11,12 +11,11 @@ func main() {
 	file := excelize.NewFile()
 	defer file.Close()
 
-	createSingleEntrySheet(file)
-	createMultiEntrySheet(file)
+	createImportSheet(file)
 	createReadmeSheet(file)
 
 	file.DeleteSheet("Sheet1")
-	sheetIndex, err := file.GetSheetIndex("单注分列模板")
+	sheetIndex, err := file.GetSheetIndex("批量导入模板")
 	if err != nil {
 		panic(err)
 	}
@@ -30,8 +29,8 @@ func main() {
 	fmt.Println(outputPath)
 }
 
-func createSingleEntrySheet(file *excelize.File) {
-	sheet := "单注分列模板"
+func createImportSheet(file *excelize.File) {
+	sheet := "批量导入模板"
 	file.NewSheet(sheet)
 
 	headers := []string{
@@ -46,65 +45,15 @@ func createSingleEntrySheet(file *excelize.File) {
 		"金额",
 		"备注",
 		"图片名",
-		"推荐ID",
 	}
 	rows := [][]string{
 		headers,
-		{"福彩双色球", "2026031", "2026-03-22", "2026-03-20 19:35", "02,06,10,13,22,31", "04", "2", "否", "4", "历史补录示例", "ssq-001.jpg", ""},
-		{"体彩大乐透", "2026030", "2026-03-23", "2026-03-22 18:20", "03,11,18,26,32", "04,09", "2", "是", "6", "追加示例", "dlt-001.jpg", ""},
+		{"福彩双色球", "2026031", "2026-03-22", "2026-03-20 19:35", "02,06,10,13,22,31", "04", "2", "否", "4", "同一期同一张票第1注", "ssq-001.jpg"},
+		{"福彩双色球", "2026031", "2026-03-22", "2026-03-20 19:35", "03,09,15,19,25,30", "10", "2", "否", "4", "同一期同一张票第2注，会合并到上一行购买记录", "ssq-001.jpg"},
+		{"体彩大乐透", "2026030", "2026-03-23", "2026-03-22 18:20", "03,11,18,26,32", "04,09", "2", "是", "6", "大乐透示例", "dlt-001.jpg"},
 	}
 	writeRows(file, sheet, rows)
 	styleSheet(file, sheet, len(headers))
-}
-
-func createMultiEntrySheet(file *excelize.File) {
-	sheet := "多注整列模板"
-	file.NewSheet(sheet)
-
-	headers := []string{
-		"彩票类型",
-		"期号",
-		"开奖日期",
-		"购买时间",
-		"号码",
-		"金额",
-		"备注",
-		"图片名",
-		"推荐ID",
-	}
-	rows := [][]string{
-		headers,
-		{
-			"福彩双色球",
-			"2026031",
-			"2026-03-22",
-			"2026-03-20 19:35",
-			"02,06,10,13,22,31+04 (2)\n03,09,15,19,25,30+10 (2)",
-			"8",
-			"同一张票两注",
-			"ssq-batch-001.jpg",
-			"",
-		},
-		{
-			"体彩大乐透",
-			"2026030",
-			"2026-03-23",
-			"2026-03-22 18:20",
-			"03,11,18,26,32+04,09 追加 (2)\n06,14,21,29,34+02,11 追加 (2)",
-			"12",
-			"大乐透多注示例",
-			"dlt-batch-001.jpg",
-			"",
-		},
-	}
-	writeRows(file, sheet, rows)
-	styleSheet(file, sheet, len(headers))
-	if err := file.SetRowHeight(sheet, 2, 42); err != nil {
-		panic(err)
-	}
-	if err := file.SetRowHeight(sheet, 3, 42); err != nil {
-		panic(err)
-	}
 }
 
 func createReadmeSheet(file *excelize.File) {
@@ -114,14 +63,15 @@ func createReadmeSheet(file *excelize.File) {
 	rows := [][]string{
 		{"说明项", "内容"},
 		{"用途", "用于批量导入历史票据，可不带图片，也可配合图片 ZIP 一起导入。"},
-		{"单注分列模板", "适合一行只录一注号码；大乐透可单独填写追加。"},
-		{"多注整列模板", "适合同一张票里有多注号码，号码列里换行分隔。"},
+		{"导入规则", "一行就是一注号码，不再区分单注模板和多注模板。"},
+		{"合并规则", "同一用户、同一彩票类型、同一期号的多行，会自动合并为一次购买记录。"},
 		{"彩票类型", "支持：福彩双色球 / 体彩大乐透，也支持 ssq / dlt。"},
 		{"开奖日期", "建议格式：2026-03-22。"},
 		{"购买时间", "建议格式：2026-03-20 19:35 或 RFC3339。"},
 		{"图片名", "如果同时上传图片 ZIP，这里填 ZIP 内文件名，例如 ssq-001.jpg。"},
 		{"追加列", "支持：是/否、true/false、1/0、追加/不追加。"},
-		{"推荐ID", "可选，填入后会把这条购买记录关联到推荐。"},
+		{"推荐关联", "无需手填推荐ID。系统会按彩票类型、期号和号码自动匹配推荐；只比较红球和蓝球，不比较倍数和追加。"},
+		{"号码匹配规则", "如果导入记录包含某条推荐的全部号码，即使购买记录里还有其他号码，也会自动关联这条推荐。"},
 	}
 	writeRows(file, sheet, rows)
 	styleSheet(file, sheet, 2)
@@ -195,7 +145,6 @@ func styleSheet(file *excelize.File, sheet string, columnCount int) {
 		"I": 10,
 		"J": 24,
 		"K": 18,
-		"L": 38,
 	}
 	for column, width := range widths {
 		if err := file.SetColWidth(sheet, column, column, width); err != nil {

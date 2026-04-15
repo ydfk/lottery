@@ -524,7 +524,7 @@ export default function App() {
   }
 
   function handleAddEntry() {
-    setEntryDrafts((current) => [...current, createEmptyEntryDraft()]);
+    setEntryDrafts((current) => [createEmptyEntryDraft(), ...current]);
   }
 
   function handleRemoveEntry(index: number) {

@@ -5,12 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { NumberBalls } from "@/components/lottery/number-balls";
-import {
-  formatLotteryDrawDate,
-  formatLotteryIssue,
-  getLotteryDisplayName,
-  lotteryDisplayOptions,
-} from "@/lib/lottery-display";
+import { formatLotteryDrawDate, formatLotteryIssue, getLotteryDisplayName, lotteryDisplayOptions } from "@/lib/lottery-display";
 import { buildParsedEntriesFromDrafts } from "@/lib/ticket-entry-drafts";
 import type { Recommendation, TicketEntryDraft, TicketRecognitionDraft, TicketUpload } from "@/types/lottery";
 
@@ -90,9 +85,7 @@ export function RecordPanel(props: RecordPanelProps) {
             <h2 className="text-base font-semibold text-slate-950">录入</h2>
           </div>
           <div className="flex items-center gap-2">
-            {recognitionDraft ? (
-              <Badge variant="secondary">识别 {(recognitionDraft.confidence * 100).toFixed(0)}%</Badge>
-            ) : null}
+            {recognitionDraft ? <Badge variant="secondary">识别 {(recognitionDraft.confidence * 100).toFixed(0)}%</Badge> : null}
             {uploadedTicket ? <Badge variant="secondary">图片已上传</Badge> : null}
           </div>
         </div>
@@ -105,9 +98,7 @@ export function RecordPanel(props: RecordPanelProps) {
               <CardTitle className="text-slate-900">关联推荐</CardTitle>
               <div className="flex items-center gap-2">
                 <Badge variant="secondary">{getLotteryDisplayName(selectedRecommendation.lotteryCode)}</Badge>
-                <Badge variant="secondary">
-                  第 {formatLotteryIssue(selectedRecommendation.lotteryCode, selectedRecommendation.issue)} 期
-                </Badge>
+                <Badge variant="secondary">第 {formatLotteryIssue(selectedRecommendation.lotteryCode, selectedRecommendation.issue)} 期</Badge>
                 {selectedRecommendation.drawDate ? (
                   <Badge variant="secondary">{formatLotteryDrawDate(selectedRecommendation.drawDate)} 开奖</Badge>
                 ) : null}
@@ -145,19 +136,12 @@ export function RecordPanel(props: RecordPanelProps) {
                   <p className="mt-1.5 text-sm font-medium text-slate-700">选择图片</p>
                 </>
               )}
-              <input
-                className="hidden"
-                type="file"
-                accept="image/*"
-                onChange={(event) => onSelectImage(event.target.files?.[0] || null)}
-              />
+              <input className="hidden" type="file" accept="image/*" onChange={(event) => onSelectImage(event.target.files?.[0] || null)} />
             </label>
 
             <div className="space-y-3 rounded-[1.45rem] bg-slate-50 p-3">
               {selectedImage && (
-                <div className="rounded-[1rem] border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
-                  {selectedImage.name}
-                </div>
+                <div className="rounded-[1rem] border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">{selectedImage.name}</div>
               )}
 
               <div className="grid gap-3 sm:grid-cols-1">
@@ -168,7 +152,11 @@ export function RecordPanel(props: RecordPanelProps) {
                   onClick={onRecognize}
                 >
                   {recognizeBusy ? (
-                    uploadPending ? "上传中..." : "识别中..."
+                    uploadPending ? (
+                      "上传中..."
+                    ) : (
+                      "识别中..."
+                    )
                   ) : recognitionDraft ? (
                     <>
                       <RotateCcw className="mr-2 size-4" />
@@ -209,15 +197,10 @@ export function RecordPanel(props: RecordPanelProps) {
               </div>
             </div>
 
-            <div className="grid grid-cols-[minmax(0,1fr)_7.5rem] gap-2.5">
+            <div className="grid grid-cols-2 gap-2.5">
               <div className="min-w-0 space-y-1.5">
                 <label className="text-sm font-medium text-slate-700">开奖日期</label>
-                <Input
-                  className="h-9 min-w-0"
-                  type="date"
-                  value={drawDate}
-                  onChange={(event) => onDrawDateChange(event.target.value)}
-                />
+                <Input className="h-9 min-w-0" type="date" value={drawDate} onChange={(event) => onDrawDateChange(event.target.value)} />
               </div>
 
               <div className="min-w-0 space-y-1.5">
@@ -292,7 +275,7 @@ export function RecordPanel(props: RecordPanelProps) {
                       </div>
                     </div>
 
-                    <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_8.5rem]">
+                    <div className="mt-3 grid grid-cols-[minmax(0,1fr)_6rem] gap-2">
                       <div className="space-y-1.5">
                         <span className="text-xs text-slate-500">红球</span>
                         <Input
@@ -315,9 +298,7 @@ export function RecordPanel(props: RecordPanelProps) {
                       </div>
                     </div>
 
-                    <div className="mt-2 text-[11px] leading-4 text-slate-400">
-                      支持空格、逗号或连续数字，例如 010203040506
-                    </div>
+                    <div className="mt-2 text-[11px] leading-4 text-slate-400">支持空格、逗号或连续数字，例如 010203040506</div>
 
                     {previewEntry ? (
                       <div className="mt-3">
@@ -336,12 +317,7 @@ export function RecordPanel(props: RecordPanelProps) {
 
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">备注</label>
-            <Textarea
-              className="min-h-24 bg-white"
-              value={notes}
-              placeholder="备注"
-              onChange={(event) => onNotesChange(event.target.value)}
-            />
+            <Textarea className="min-h-24 bg-white" value={notes} placeholder="备注" onChange={(event) => onNotesChange(event.target.value)} />
           </div>
 
           <Button

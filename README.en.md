@@ -14,6 +14,7 @@ System design document: [docs/system-design.md](docs/system-design.md)
 - Scheduled AI recommendation generation based on cron
 - Scheduled latest draw synchronization plus manual historical draw import
 - Ticket image upload, OCR-assisted parsing, manual correction, and persistence
+- Excel-based bulk ticket import for historical purchases
 - Automatic prize evaluation and manual recheck
 - Recommendation-to-purchase linking
 - Mobile-first frontend with web support
@@ -53,6 +54,29 @@ All lottery rules, draw schedules, recommendation settings, and sync schedules a
 - Historical draw import through the `history` API
 - Automatic settlement of related tickets and recommendations after draw sync
 - Manual recheck support
+
+### Bulk Ticket Import
+
+Historical tickets can be imported from Excel without relying on OCR.
+
+Template:
+
+- [ticket-import-template.xlsx](./docs/ticket-import-template.xlsx)
+
+Rules:
+
+- One row equals one single entry
+- There is no separate single-entry vs multi-entry template anymore
+- Rows with the same user, lottery type, and issue are merged into one purchase record
+- Images are optional and can be matched by the `imageName` column when uploading a ZIP file
+- Recommendations are matched automatically
+
+Recommendation matching rules:
+
+- First match by `lottery type + issue`
+- Then compare only `redNumbers + blueNumbers`
+- `multiple` and `isAdditional` are ignored
+- A purchase record may contain extra entries; as long as it fully contains all entries of a recommendation, the recommendation will be linked
 
 ### 4. User Isolation
 

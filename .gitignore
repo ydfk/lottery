@@ -20,3 +20,4 @@ frontend/.turbo/
 
 # Docker Compose 本地环境变量
 .env
+.history

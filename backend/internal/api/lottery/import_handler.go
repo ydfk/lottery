@@ -11,7 +11,7 @@ import (
 )
 
 // @Summary 批量导入历史票据
-// @Description 上传 Excel 批量导入票据，图片压缩包可选；不依赖 OCR，可直接按表格号码入库
+// @Description 上传 Excel 批量导入票据，图片压缩包可选；一行一注，同彩种同一期号会自动合并为一次购买记录，并按号码自动关联推荐
 // @Tags lottery
 // @Accept mpfd
 // @Produce json
