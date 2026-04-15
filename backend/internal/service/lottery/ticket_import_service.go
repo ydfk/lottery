@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -13,10 +14,12 @@ import (
 	"strings"
 	"time"
 
+	model "go-fiber-starter/internal/model/lottery"
 	"go-fiber-starter/pkg/config"
 	"go-fiber-starter/pkg/db"
 	"go-fiber-starter/pkg/util"
 
+	"github.com/google/uuid"
 	"github.com/xuri/excelize/v2"
 	"gorm.io/gorm"
 )
@@ -243,11 +246,21 @@ func importTicketGroupWithImage(ctx context.Context, userID string, group import
 	}
 
 	if err := db.DB.Transaction(func(tx *gorm.DB) error {
-		if err := validateDuplicateTicket(tx, userID, code, issue, entries); err != nil {
-			return err
+		ticket, exists, findErr := findImportDuplicateTicket(tx, userID, code, issue, entries)
+		if findErr != nil {
+			return findErr
 		}
 
-		ticket, createErr := createTicketRecord(
+		if exists {
+			if updateErr := updateImportedTicketRecord(tx, ticket.Id.String(), recommendationID, issue, drawDate, payload.ImagePath, purchasedAt, costAmount, payload.Notes, entries); updateErr != nil {
+				return updateErr
+			}
+			ticketID = ticket.Id.String()
+			shouldEvaluate = len(entries) > 0
+			return nil
+		}
+
+		createdTicket, createErr := createTicketRecord(
 			tx,
 			userID,
 			code,
@@ -269,7 +282,7 @@ func importTicketGroupWithImage(ctx context.Context, userID string, group import
 			return createErr
 		}
 
-		ticketID = ticket.Id.String()
+		ticketID = createdTicket.Id.String()
 		shouldEvaluate = len(entries) > 0
 		return nil
 	}); err != nil {
@@ -288,6 +301,59 @@ func importTicketGroupWithImage(ctx context.Context, userID string, group import
 	}
 
 	return GetTicketDetail(ticketID, userID)
+}
+
+func findImportDuplicateTicket(tx *gorm.DB, userID string, code string, issue string, entries []ParsedEntry) (model.Ticket, bool, error) {
+	if len(entries) == 0 {
+		return model.Ticket{}, false, nil
+	}
+
+	signature := buildTicketEntriesHash(entries)
+	ticket := model.Ticket{}
+	err := currentUserScope(tx, userID).
+		Where("lottery_code = ? AND issue IN ? AND entry_signature = ?", code, issueAliases(code, issue), signature).
+		Order("updated_at desc").
+		Order("created_at desc").
+		First(&ticket).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return model.Ticket{}, false, nil
+	}
+	if err != nil {
+		return model.Ticket{}, false, err
+	}
+
+	return ticket, true, nil
+}
+
+func updateImportedTicketRecord(tx *gorm.DB, ticketID string, recommendationID *uuid.UUID, issue string, drawDate time.Time, imagePath string, purchasedAt time.Time, costAmount float64, notes string, entries []ParsedEntry) error {
+	totalCost := costAmount
+	if totalCost <= 0 {
+		totalCost = calculateEntriesCost(entries)
+	}
+
+	var manualDrawDate *time.Time
+	if !drawDate.IsZero() {
+		value := drawDate
+		manualDrawDate = &value
+	}
+
+	if err := tx.Model(&model.Ticket{}).
+		Where("id = ?", ticketID).
+		Updates(map[string]any{
+			"recommendation_id": recommendationID,
+			"issue":             issue,
+			"manual_draw_date":  manualDrawDate,
+			"source":            "import",
+			"image_path":        imagePath,
+			"recognized_text":   "",
+			"purchased_at":      purchasedAt,
+			"cost_amount":       totalCost,
+			"notes":             notes,
+		}).Error; err != nil {
+		return err
+	}
+
+	return resetTicketPendingWithDB(tx, ticketID)
 }
 
 func parseImportTicketRow(row []string, headerMap map[string]int) (importTicketRow, bool, error) {
