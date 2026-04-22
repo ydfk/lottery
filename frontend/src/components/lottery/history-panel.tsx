@@ -1,14 +1,36 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition, type MouseEvent } from "react";
+import {
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+  type MouseEvent,
+} from "react";
 import { format } from "date-fns";
 import { ArrowDownWideNarrow, ChevronDown, SlidersHorizontal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { TicketImportDialog } from "@/components/lottery/ticket-import-dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import type { LotteryDisplayMode } from "@/components/lottery/display-mode-toggle";
 import { DetailSheet } from "@/components/lottery/detail-sheet";
 import { NumberBalls } from "@/components/lottery/number-balls";
 import { TicketCard } from "@/components/lottery/ticket-card";
-import { formatLotteryIssue, getLotteryDisplayName, lotteryDisplayOptions } from "@/lib/lottery-display";
-import type { Ticket, TicketHistoryFilters } from "@/types/lottery";
+import {
+  formatLotteryIssue,
+  getLotteryDisplayName,
+  lotteryDisplayOptions,
+} from "@/lib/lottery-display";
+import type { Ticket, TicketHistoryFilters, TicketImportResult } from "@/types/lottery";
 
 const statusLabelMap: Record<string, string> = {
   pending: "待开奖",
@@ -23,6 +45,7 @@ const statusClassMap: Record<string, string> = {
 };
 
 interface HistoryPanelProps {
+  displayMode: LotteryDisplayMode;
   tickets: Ticket[];
   filters: TicketHistoryFilters;
   loading: boolean;
@@ -34,6 +57,8 @@ interface HistoryPanelProps {
   deletePending: boolean;
   onFiltersChange: (filters: TicketHistoryFilters) => void;
   onLoadMore: () => void;
+  onImportTickets: (workbook: File, imagesZip: File | null) => Promise<TicketImportResult>;
+  onOpenRecord: () => void;
   onSelectTicket: (ticket: Ticket | null) => void;
   onRecheckTicket: (ticketId: string) => void;
   onDeleteTicket: (ticket: Ticket) => void;
@@ -53,8 +78,117 @@ const sortOptions = [
   { value: "cost_high", label: "花费金额" },
 ];
 
+function HistoryTable(props: {
+  items: Ticket[];
+  recheckPending: boolean;
+  onSelectTicket: (ticket: Ticket) => void;
+  onRecheckTicket: (ticketId: string) => void;
+}) {
+  const { items, recheckPending, onSelectTicket, onRecheckTicket } = props;
+
+  return (
+    <Card className="border-white/60 bg-white/85 shadow-[0_16px_40px_rgba(15,23,42,0.08)] backdrop-blur">
+      <CardContent className="p-0">
+        <Table className="min-w-[1120px]">
+          <TableHeader>
+            <TableRow className="bg-slate-50/80">
+              <TableHead className="pl-4">彩种</TableHead>
+              <TableHead>来源</TableHead>
+              <TableHead>期号</TableHead>
+              <TableHead>状态</TableHead>
+              <TableHead>开奖号码</TableHead>
+              <TableHead>花费</TableHead>
+              <TableHead>中奖</TableHead>
+              <TableHead>录入时间</TableHead>
+              <TableHead className="w-[180px] pr-4 text-right">操作</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {items.map((ticket) => (
+              <TableRow key={ticket.id}>
+                <TableCell className="pl-4">
+                  <Badge variant="secondary">{getLotteryDisplayName(ticket.lotteryCode)}</Badge>
+                </TableCell>
+                <TableCell className="text-slate-600">
+                  {ticket.recommendationId ? "推荐购买" : "手动录入"}
+                </TableCell>
+                <TableCell className="font-medium text-slate-900">
+                  第 {formatLotteryIssue(ticket.lotteryCode, ticket.issue)} 期
+                  {ticket.drawDate ? (
+                    <p className="mt-1 text-xs font-normal text-slate-500">
+                      {format(new Date(ticket.drawDate), "yyyy-MM-dd")}
+                    </p>
+                  ) : null}
+                </TableCell>
+                <TableCell>
+                  <span
+                    className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
+                      statusClassMap[ticket.status] ||
+                      "border-slate-200 bg-slate-100 text-slate-700"
+                    }`}
+                  >
+                    {statusLabelMap[ticket.status] || ticket.status}
+                  </span>
+                </TableCell>
+                <TableCell className="min-w-[220px]">
+                  {ticket.drawRedNumbers && ticket.drawBlueNumbers ? (
+                    <NumberBalls
+                      redNumbers={ticket.drawRedNumbers}
+                      blueNumbers={ticket.drawBlueNumbers}
+                      compact
+                    />
+                  ) : (
+                    <span className="text-sm text-slate-400">待开奖</span>
+                  )}
+                </TableCell>
+                <TableCell className="font-medium text-slate-900">
+                  ¥ {ticket.costAmount.toFixed(2)}
+                </TableCell>
+                <TableCell
+                  className={
+                    ticket.prizeAmount > 0 ? "font-medium text-emerald-600" : "text-slate-900"
+                  }
+                >
+                  ¥ {ticket.prizeAmount.toFixed(2)}
+                </TableCell>
+                <TableCell className="text-slate-500">
+                  {format(new Date(ticket.purchasedAt), "yyyy-MM-dd HH:mm")}
+                </TableCell>
+                <TableCell className="pr-4">
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 rounded-full"
+                      onClick={() => onSelectTicket(ticket)}
+                    >
+                      详情
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 rounded-full"
+                      disabled={recheckPending}
+                      onClick={() => onRecheckTicket(ticket.id)}
+                    >
+                      {recheckPending ? "判奖中" : "重判"}
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function HistoryPanel(props: HistoryPanelProps) {
   const {
+    displayMode,
     tickets,
     filters,
     loading,
@@ -66,6 +200,8 @@ export function HistoryPanel(props: HistoryPanelProps) {
     deletePending,
     onFiltersChange,
     onLoadMore,
+    onImportTickets,
+    onOpenRecord,
     onSelectTicket,
     onRecheckTicket,
     onDeleteTicket,
@@ -73,8 +209,11 @@ export function HistoryPanel(props: HistoryPanelProps) {
   const loadMoreTriggerRef = useRef<HTMLDivElement | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [, startTransition] = useTransition();
+  const isWebDisplay = displayMode === "web";
   const deferredFilters = useDeferredValue(filters);
-  const hasActiveFilters = Boolean(deferredFilters.lotteryCode || deferredFilters.status || deferredFilters.sort !== "latest");
+  const hasActiveFilters = Boolean(
+    deferredFilters.lotteryCode || deferredFilters.status || deferredFilters.sort !== "latest"
+  );
   const activeFilterLabels = useMemo(() => {
     const labels: string[] = [];
     if (deferredFilters.lotteryCode) {
@@ -155,6 +294,18 @@ export function HistoryPanel(props: HistoryPanelProps) {
                   </span>
                 ))}
               </div>
+            ) : null}
+            <TicketImportDialog onImport={onImportTickets} />
+            {isWebDisplay ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="h-10 rounded-full px-4"
+                onClick={onOpenRecord}
+              >
+                录入票据
+              </Button>
             ) : null}
             <button
               type="button"
@@ -239,95 +390,111 @@ export function HistoryPanel(props: HistoryPanelProps) {
 
       {loading ? (
         <Card className="border-white/60 bg-white/85 backdrop-blur">
-          <CardContent className="py-14 text-center text-sm text-slate-500">历史记录加载中...</CardContent>
+          <CardContent className="py-14 text-center text-sm text-slate-500">
+            历史记录加载中...
+          </CardContent>
         </Card>
       ) : tickets.length > 0 ? (
         <>
-        <div className="grid gap-4 lg:grid-cols-2">
-          {tickets.map((ticket) => (
-            <button
-              key={ticket.id}
-              type="button"
-              className="text-left"
-              onClick={() => onSelectTicket(ticket)}
-            >
-              <Card className="border-white/60 bg-white/85 shadow-[0_16px_40px_rgba(15,23,42,0.08)] transition hover:-translate-y-0.5 hover:shadow-[0_20px_48px_rgba(15,23,42,0.12)]">
-                <CardContent className="p-5">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary">{getLotteryDisplayName(ticket.lotteryCode)}</Badge>
-                      <Badge variant="secondary">
-                        {ticket.recommendationId ? "推荐购买" : "手动录入"}
-                      </Badge>
-                      <span
-                        className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
-                          statusClassMap[ticket.status] || "border-slate-200 bg-slate-100 text-slate-700"
-                        }`}
-                      >
-                        {statusLabelMap[ticket.status] || ticket.status}
-                      </span>
-                    </div>
-                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                      <p className="text-lg font-semibold text-slate-900">
-                        第 {formatLotteryIssue(ticket.lotteryCode, ticket.issue)} 期
-                        {ticket.drawDate ? ` · ${format(new Date(ticket.drawDate), "yyyy-MM-dd")}` : ""}
-                      </p>
-                      {ticket.drawRedNumbers && ticket.drawBlueNumbers ? (
-                        <NumberBalls
-                          redNumbers={ticket.drawRedNumbers}
-                          blueNumbers={ticket.drawBlueNumbers}
-                          compact
-                        />
-                      ) : (
-                        <span className="text-sm font-medium text-slate-400">待开奖</span>
-                      )}
-                    </div>
-                    <p className="mt-2 text-sm text-slate-500">
-                      {format(new Date(ticket.purchasedAt), "yyyy-MM-dd HH:mm")}
-                    </p>
-                  </div>
+          {isWebDisplay ? (
+            <HistoryTable
+              items={tickets}
+              recheckPending={recheckPending}
+              onSelectTicket={onSelectTicket}
+              onRecheckTicket={onRecheckTicket}
+            />
+          ) : (
+            <div className="grid gap-4 lg:grid-cols-2">
+              {tickets.map((ticket) => (
+                <button
+                  key={ticket.id}
+                  type="button"
+                  className="text-left"
+                  onClick={() => onSelectTicket(ticket)}
+                >
+                  <Card className="border-white/60 bg-white/85 shadow-[0_16px_40px_rgba(15,23,42,0.08)] transition hover:-translate-y-0.5 hover:shadow-[0_20px_48px_rgba(15,23,42,0.12)]">
+                    <CardContent className="p-5">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary">
+                            {getLotteryDisplayName(ticket.lotteryCode)}
+                          </Badge>
+                          <Badge variant="secondary">
+                            {ticket.recommendationId ? "推荐购买" : "手动录入"}
+                          </Badge>
+                          <span
+                            className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
+                              statusClassMap[ticket.status] ||
+                              "border-slate-200 bg-slate-100 text-slate-700"
+                            }`}
+                          >
+                            {statusLabelMap[ticket.status] || ticket.status}
+                          </span>
+                        </div>
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                          <p className="text-lg font-semibold text-slate-900">
+                            第 {formatLotteryIssue(ticket.lotteryCode, ticket.issue)} 期
+                            {ticket.drawDate
+                              ? ` · ${format(new Date(ticket.drawDate), "yyyy-MM-dd")}`
+                              : ""}
+                          </p>
+                          {ticket.drawRedNumbers && ticket.drawBlueNumbers ? (
+                            <NumberBalls
+                              redNumbers={ticket.drawRedNumbers}
+                              blueNumbers={ticket.drawBlueNumbers}
+                              compact
+                            />
+                          ) : (
+                            <span className="text-sm font-medium text-slate-400">待开奖</span>
+                          )}
+                        </div>
+                        <p className="mt-2 text-sm text-slate-500">
+                          {format(new Date(ticket.purchasedAt), "yyyy-MM-dd HH:mm")}
+                        </p>
+                      </div>
 
-                  <div className="mt-4 flex items-center justify-between gap-4 rounded-2xl bg-slate-50 px-4 py-3">
-                    <div className="min-w-0">
-                      <p className="text-xs text-slate-500">花费</p>
-                      <p className="mt-1 text-base font-semibold text-slate-900">
-                        ¥ {ticket.costAmount.toFixed(2)}
-                      </p>
-                    </div>
-                    <div className="h-10 w-px bg-slate-200" />
-                    <div className="min-w-0 text-right">
-                      <p className="text-xs text-slate-500">中奖</p>
-                      <p
-                        className={`mt-1 text-base font-semibold ${
-                          ticket.prizeAmount > 0 ? "text-emerald-600" : "text-slate-900"
-                        }`}
-                      >
-                        ¥ {ticket.prizeAmount.toFixed(2)}
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </button>
-          ))}
-        </div>
+                      <div className="mt-4 flex items-center justify-between gap-4 rounded-2xl bg-slate-50 px-4 py-3">
+                        <div className="min-w-0">
+                          <p className="text-xs text-slate-500">花费</p>
+                          <p className="mt-1 text-base font-semibold text-slate-900">
+                            ¥ {ticket.costAmount.toFixed(2)}
+                          </p>
+                        </div>
+                        <div className="h-10 w-px bg-slate-200" />
+                        <div className="min-w-0 text-right">
+                          <p className="text-xs text-slate-500">中奖</p>
+                          <p
+                            className={`mt-1 text-base font-semibold ${
+                              ticket.prizeAmount > 0 ? "text-emerald-600" : "text-slate-900"
+                            }`}
+                          >
+                            ¥ {ticket.prizeAmount.toFixed(2)}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </button>
+              ))}
+            </div>
+          )}
 
-        {hasMore && (
-          <div className="space-y-3">
-            <div ref={loadMoreTriggerRef} className="h-4" />
-            <div className="flex justify-center">
-            <Button
-              type="button"
-              variant="secondary"
-              className="h-11 rounded-2xl px-6"
-              disabled={loadingMore}
-              onClick={onLoadMore}
-            >
-              {loadingMore ? "加载中..." : "加载更多"}
-            </Button>
-          </div>
-          </div>
-        )}
+          {hasMore && (
+            <div className="space-y-3">
+              <div ref={loadMoreTriggerRef} className="h-4" />
+              <div className="flex justify-center">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-11 rounded-2xl px-6"
+                  disabled={loadingMore}
+                  onClick={onLoadMore}
+                >
+                  {loadingMore ? "加载中..." : "加载更多"}
+                </Button>
+              </div>
+            </div>
+          )}
         </>
       ) : (
         <Card className="border-white/60 bg-white/85 backdrop-blur">

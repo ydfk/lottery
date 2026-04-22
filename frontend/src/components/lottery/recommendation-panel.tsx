@@ -1,8 +1,25 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition, type MouseEvent } from "react";
+import {
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+  type MouseEvent,
+} from "react";
 import { ArrowDownWideNarrow, ChevronDown, ScanSearch, SlidersHorizontal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import type { LotteryDisplayMode } from "@/components/lottery/display-mode-toggle";
 import { DetailSheet } from "@/components/lottery/detail-sheet";
 import { HitNumberBalls, NumberBalls } from "@/components/lottery/number-balls";
 import { RecommendationStealthSheet } from "@/components/lottery/recommendation-stealth-sheet";
@@ -17,6 +34,7 @@ import {
 import type { Recommendation, RecommendationFilters } from "@/types/lottery";
 
 interface RecommendationPanelProps {
+  displayMode: LotteryDisplayMode;
   recommendations: Recommendation[];
   filters: RecommendationFilters;
   loading: boolean;
@@ -53,7 +71,9 @@ function formatCurrency(value: number) {
 }
 
 function getWinningCount(recommendation: Recommendation) {
-  return recommendation.winningCount ?? recommendation.entries.filter((entry) => entry.isWinning).length;
+  return (
+    recommendation.winningCount ?? recommendation.entries.filter((entry) => entry.isWinning).length
+  );
 }
 
 function getRecommendationStatus(recommendation: Recommendation) {
@@ -156,18 +176,26 @@ function RecommendationCard(props: {
       <div className="mt-3 space-y-1.5 text-xs text-slate-500">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <span>第 {formatLotteryIssue(recommendation.lotteryCode, recommendation.issue)} 期</span>
-          {recommendation.drawDate ? <span>{formatLotteryDrawDate(recommendation.drawDate)} 开奖</span> : null}
+          {recommendation.drawDate ? (
+            <span>{formatLotteryDrawDate(recommendation.drawDate)} 开奖</span>
+          ) : null}
         </div>
         <div className="flex items-center justify-between gap-3">
           <span className="min-w-0 truncate">
-            {recommendation.createdAt ? `${formatLotteryDateTime(recommendation.createdAt)} 生成` : ""}
+            {recommendation.createdAt
+              ? `${formatLotteryDateTime(recommendation.createdAt)} 生成`
+              : ""}
           </span>
-          <span className={`shrink-0 rounded-full px-2 py-0.5 ${status.className}`}>{status.label}</span>
+          <span className={`shrink-0 rounded-full px-2 py-0.5 ${status.className}`}>
+            {status.label}
+          </span>
         </div>
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[1.1rem] bg-slate-50 px-4 py-3 text-sm">
-        <span className="font-medium text-slate-900">{getRecommendationStatusText(recommendation)}</span>
+        <span className="font-medium text-slate-900">
+          {getRecommendationStatusText(recommendation)}
+        </span>
         <span className="text-slate-500">{getRecommendationPurchaseText(recommendation)}</span>
         {recommendation.checkedAt ? (
           <span className="text-slate-500">命中 {getWinningCount(recommendation)} 注</span>
@@ -220,8 +248,106 @@ function RecommendationSection(props: {
   );
 }
 
+function RecommendationTable(props: {
+  items: Recommendation[];
+  onSelectRecommendation: (recommendationId: string) => void;
+  onOpenStealth: (recommendationId: string) => void;
+  onRecordPurchase: (recommendation: Recommendation) => void;
+}) {
+  const { items, onSelectRecommendation, onOpenStealth, onRecordPurchase } = props;
+
+  return (
+    <Card className="border-white/60 bg-white/85 shadow-[0_16px_40px_rgba(15,23,42,0.08)] backdrop-blur">
+      <CardContent className="p-0">
+        <Table className="min-w-[1080px]">
+          <TableHeader>
+            <TableRow className="bg-slate-50/80">
+              <TableHead className="pl-4">彩种</TableHead>
+              <TableHead>期号</TableHead>
+              <TableHead>状态</TableHead>
+              <TableHead>购买</TableHead>
+              <TableHead>奖金</TableHead>
+              <TableHead>生成时间</TableHead>
+              <TableHead className="w-[230px] pr-4 text-right">操作</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {items.map((recommendation) => {
+              const status = getRecommendationStatus(recommendation);
+
+              return (
+                <TableRow key={recommendation.id}>
+                  <TableCell className="pl-4">
+                    <Badge variant="secondary">
+                      {getLotteryDisplayName(recommendation.lotteryCode)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="font-medium text-slate-900">
+                    第 {formatLotteryIssue(recommendation.lotteryCode, recommendation.issue)} 期
+                    {recommendation.drawDate ? (
+                      <p className="mt-1 text-xs font-normal text-slate-500">
+                        {formatLotteryDrawDate(recommendation.drawDate)} 开奖
+                      </p>
+                    ) : null}
+                  </TableCell>
+                  <TableCell>
+                    <span className={`rounded-full px-2 py-1 text-xs ${status.className}`}>
+                      {status.label}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-slate-600">
+                    {getRecommendationPurchaseText(recommendation)}
+                  </TableCell>
+                  <TableCell className="font-medium text-slate-900">
+                    {formatCurrency(recommendation.prizeAmount || 0)}
+                  </TableCell>
+                  <TableCell className="text-slate-500">
+                    {formatLotteryDateTime(recommendation.createdAt)}
+                  </TableCell>
+                  <TableCell className="pr-4">
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 rounded-full"
+                        onClick={() => onSelectRecommendation(recommendation.id)}
+                      >
+                        详情
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="h-8 rounded-full"
+                        onClick={() => onRecordPurchase(recommendation)}
+                      >
+                        {recommendation.isPurchased ? "续购" : "购买"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 rounded-full"
+                        onClick={() => onOpenStealth(recommendation.id)}
+                      >
+                        隐览
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function RecommendationPanel(props: RecommendationPanelProps) {
   const {
+    displayMode,
     recommendations,
     filters,
     loading,
@@ -241,6 +367,7 @@ export function RecommendationPanel(props: RecommendationPanelProps) {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [stealthRecommendationId, setStealthRecommendationId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+  const isWebDisplay = displayMode === "web";
   const deferredFilters = useDeferredValue(filters);
   const hasActiveFilters = Boolean(
     deferredFilters.lotteryCode || deferredFilters.status || deferredFilters.sort !== "latest"
@@ -251,7 +378,10 @@ export function RecommendationPanel(props: RecommendationPanelProps) {
       labels.push(getLotteryDisplayName(deferredFilters.lotteryCode));
     }
     if (deferredFilters.status) {
-      labels.push(statusFilterOptions.find((item) => item.value === deferredFilters.status)?.label || deferredFilters.status);
+      labels.push(
+        statusFilterOptions.find((item) => item.value === deferredFilters.status)?.label ||
+          deferredFilters.status
+      );
     }
     if (deferredFilters.sort && deferredFilters.sort !== "latest") {
       const sortLabel = sortOptions.find((item) => item.value === deferredFilters.sort)?.label;
@@ -354,7 +484,9 @@ export function RecommendationPanel(props: RecommendationPanelProps) {
                 <select
                   className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-slate-400"
                   value={filters.lotteryCode}
-                  onChange={(event) => updateFilters({ ...filters, lotteryCode: event.target.value })}
+                  onChange={(event) =>
+                    updateFilters({ ...filters, lotteryCode: event.target.value })
+                  }
                 >
                   <option value="">全部彩种</option>
                   {lotteryDisplayOptions.map((item) => (
@@ -417,35 +549,65 @@ export function RecommendationPanel(props: RecommendationPanelProps) {
 
         {loading ? (
           <Card className="border-white/60 bg-white/85 backdrop-blur">
-            <CardContent className="py-14 text-center text-sm text-slate-500">推荐加载中...</CardContent>
+            <CardContent className="py-14 text-center text-sm text-slate-500">
+              推荐加载中...
+            </CardContent>
           </Card>
         ) : recommendations.length > 0 ? (
           <>
-            {filters.status ? (
-              <RecommendationSection
-                title={statusFilterOptions.find((item) => item.value === filters.status)?.label || "推荐"}
+            {isWebDisplay ? (
+              <RecommendationTable
                 items={recommendations}
-                onSelectRecommendation={(recommendationId) => onSelectRecommendation(recommendationId)}
+                onSelectRecommendation={(recommendationId) =>
+                  onSelectRecommendation(recommendationId)
+                }
                 onOpenStealth={(recommendationId) => setStealthRecommendationId(recommendationId)}
                 onRecordPurchase={onRecordPurchase}
               />
             ) : (
-              <div className="space-y-6">
-                <RecommendationSection
-                  title="待开奖"
-                  items={pendingRecommendations}
-                  onSelectRecommendation={(recommendationId) => onSelectRecommendation(recommendationId)}
-                  onOpenStealth={(recommendationId) => setStealthRecommendationId(recommendationId)}
-                  onRecordPurchase={onRecordPurchase}
-                />
-                <RecommendationSection
-                  title="已开奖"
-                  items={checkedRecommendations}
-                  onSelectRecommendation={(recommendationId) => onSelectRecommendation(recommendationId)}
-                  onOpenStealth={(recommendationId) => setStealthRecommendationId(recommendationId)}
-                  onRecordPurchase={onRecordPurchase}
-                />
-              </div>
+              <>
+                {filters.status ? (
+                  <RecommendationSection
+                    title={
+                      statusFilterOptions.find((item) => item.value === filters.status)?.label ||
+                      "推荐"
+                    }
+                    items={recommendations}
+                    onSelectRecommendation={(recommendationId) =>
+                      onSelectRecommendation(recommendationId)
+                    }
+                    onOpenStealth={(recommendationId) =>
+                      setStealthRecommendationId(recommendationId)
+                    }
+                    onRecordPurchase={onRecordPurchase}
+                  />
+                ) : (
+                  <div className="space-y-6">
+                    <RecommendationSection
+                      title="待开奖"
+                      items={pendingRecommendations}
+                      onSelectRecommendation={(recommendationId) =>
+                        onSelectRecommendation(recommendationId)
+                      }
+                      onOpenStealth={(recommendationId) =>
+                        setStealthRecommendationId(recommendationId)
+                      }
+                      onRecordPurchase={onRecordPurchase}
+                    />
+                    <RecommendationSection
+                      title="已开奖"
+                      items={checkedRecommendations}
+                      onSelectRecommendation={(recommendationId) =>
+                        onSelectRecommendation(recommendationId)
+                      }
+                      onOpenStealth={(recommendationId) =>
+                        setStealthRecommendationId(recommendationId)
+                      }
+                      onRecordPurchase={onRecordPurchase}
+                    />
+                  </div>
+                )}
+              </>
             )}
 
             {hasMore ? (
@@ -501,27 +663,42 @@ export function RecommendationPanel(props: RecommendationPanelProps) {
             </>
           ) : undefined
         }
-        onOpenChange={(open) => onSelectRecommendation(open ? selectedRecommendation?.id ?? null : null)}
+        onOpenChange={(open) =>
+          onSelectRecommendation(open ? (selectedRecommendation?.id ?? null) : null)
+        }
       >
         {selectedRecommendation ? (
           <div className="space-y-6">
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="secondary">{getLotteryDisplayName(selectedRecommendation.lotteryCode)}</Badge>
                 <Badge variant="secondary">
-                  第 {formatLotteryIssue(selectedRecommendation.lotteryCode, selectedRecommendation.issue)} 期
+                  {getLotteryDisplayName(selectedRecommendation.lotteryCode)}
+                </Badge>
+                <Badge variant="secondary">
+                  第{" "}
+                  {formatLotteryIssue(
+                    selectedRecommendation.lotteryCode,
+                    selectedRecommendation.issue
+                  )}{" "}
+                  期
                 </Badge>
                 {selectedRecommendation.drawDate ? (
-                  <Badge variant="secondary">{formatLotteryDrawDate(selectedRecommendation.drawDate)} 开奖</Badge>
+                  <Badge variant="secondary">
+                    {formatLotteryDrawDate(selectedRecommendation.drawDate)} 开奖
+                  </Badge>
                 ) : null}
                 {selectedRecommendation.createdAt ? (
-                  <Badge variant="secondary">{formatLotteryDateTime(selectedRecommendation.createdAt)} 生成</Badge>
+                  <Badge variant="secondary">
+                    {formatLotteryDateTime(selectedRecommendation.createdAt)} 生成
+                  </Badge>
                 ) : null}
                 <Badge className={getRecommendationStatus(selectedRecommendation).className}>
                   {getRecommendationStatus(selectedRecommendation).label}
                 </Badge>
                 {selectedRecommendation.isPurchased ? (
-                  <Badge variant="secondary">{getRecommendationPurchaseText(selectedRecommendation)}</Badge>
+                  <Badge variant="secondary">
+                    {getRecommendationPurchaseText(selectedRecommendation)}
+                  </Badge>
                 ) : null}
               </div>
               {selectedRecommendation.summary ? (
@@ -532,8 +709,12 @@ export function RecommendationPanel(props: RecommendationPanelProps) {
             </div>
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[1.35rem] bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              <span className="font-medium text-slate-900">{getRecommendationStatusText(selectedRecommendation)}</span>
-              <span>共 {selectedRecommendation.entryCount || selectedRecommendation.entries.length} 注</span>
+              <span className="font-medium text-slate-900">
+                {getRecommendationStatusText(selectedRecommendation)}
+              </span>
+              <span>
+                共 {selectedRecommendation.entryCount || selectedRecommendation.entries.length} 注
+              </span>
               <span>命中 {selectedRecommendation.winningCount || 0} 注</span>
               <span>{getRecommendationPurchaseText(selectedRecommendation)}</span>
               <span>生成于 {formatLotteryDateTime(selectedRecommendation.createdAt)}</span>
@@ -572,7 +753,10 @@ export function RecommendationPanel(props: RecommendationPanelProps) {
                 >
                   <div className="flex items-center justify-between gap-3 text-sm font-medium text-slate-600">
                     <span>第 {entry.sequence} 注</span>
-                    <span>{entry.prizeName || (selectedRecommendation.checkedAt ? "未命中奖级" : "待开奖")}</span>
+                    <span>
+                      {entry.prizeName ||
+                        (selectedRecommendation.checkedAt ? "未命中奖级" : "待开奖")}
+                    </span>
                   </div>
                   <div className="mt-3">
                     <HitNumberBalls
@@ -602,7 +786,8 @@ export function RecommendationPanel(props: RecommendationPanelProps) {
                   正在加载推荐详情...
                 </CardContent>
               </Card>
-            ) : selectedRecommendation.purchasedTickets && selectedRecommendation.purchasedTickets.length > 0 ? (
+            ) : selectedRecommendation.purchasedTickets &&
+              selectedRecommendation.purchasedTickets.length > 0 ? (
               <div className="space-y-3">
                 <h3 className="text-base font-semibold text-slate-900">购买记录</h3>
                 <div className="space-y-4">

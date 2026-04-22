@@ -3,13 +3,19 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { APP_VERSION_LABEL } from "@/lib/app-meta";
+import {
+  LotteryDisplayModeToggle,
+  type LotteryDisplayMode,
+} from "@/components/lottery/display-mode-toggle";
 import type { AuthUser } from "@/types/auth";
 import type { DashboardData } from "@/types/lottery";
 
 interface DashboardPanelProps {
   currentUser: AuthUser;
   dashboard: DashboardData | null;
+  displayMode: LotteryDisplayMode;
   generatingLotteryCode?: string;
+  onDisplayModeChange: (mode: LotteryDisplayMode) => void;
   onGenerateRecommendation: (lotteryCode: string) => void;
   onLogout: () => void;
 }
@@ -21,7 +27,9 @@ function formatCurrency(value: number) {
 export function DashboardPanel({
   currentUser,
   dashboard,
+  displayMode,
   generatingLotteryCode,
+  onDisplayModeChange,
   onGenerateRecommendation,
   onLogout,
 }: DashboardPanelProps) {
@@ -40,9 +48,19 @@ export function DashboardPanel({
     <div className="space-y-4">
       <section className="rounded-[1.8rem] border border-white/60 bg-[linear-gradient(135deg,rgba(15,23,42,0.96),rgba(30,64,175,0.9)_58%,rgba(12,74,110,0.88))] p-5 text-white shadow-[0_24px_60px_rgba(15,23,42,0.18)]">
         <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Badge className="bg-white/15 text-white hover:bg-white/20">看板</Badge>
-            <span className="text-xs text-white/65">账户与统计</span>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Badge className="bg-white/15 text-white hover:bg-white/20">看板</Badge>
+              <span className="text-xs text-white/65">账户与统计</span>
+            </div>
+            {displayMode === "app" ? (
+              <LotteryDisplayModeToggle
+                value={displayMode}
+                compact
+                className="border-white/12 bg-white/10 shadow-none"
+                onValueChange={onDisplayModeChange}
+              />
+            ) : null}
           </div>
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">

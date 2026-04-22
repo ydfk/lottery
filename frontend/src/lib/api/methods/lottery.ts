@@ -8,6 +8,7 @@ import type {
   Ticket,
   TicketHistoryFilters,
   TicketHistoryPage,
+  TicketImportResult,
   TicketRecognitionDraft,
   TicketUpload,
 } from "@/types/lottery";
@@ -41,7 +42,9 @@ export function getTicketHistory(page: number, pageSize: number, filters: Ticket
   return apiGet<TicketHistoryPage>(`/api/lotteries/tickets/history?${query.toString()}`);
 }
 
-function normalizeRecommendationPage(data: RecommendationPage | Recommendation[]): RecommendationPage {
+function normalizeRecommendationPage(
+  data: RecommendationPage | Recommendation[]
+): RecommendationPage {
   if (Array.isArray(data)) {
     return {
       items: data,
@@ -61,7 +64,11 @@ function normalizeRecommendationPage(data: RecommendationPage | Recommendation[]
   };
 }
 
-export async function getRecommendations(page: number, pageSize: number, filters: RecommendationFilters) {
+export async function getRecommendations(
+  page: number,
+  pageSize: number,
+  filters: RecommendationFilters
+) {
   const query = new URLSearchParams({
     page: String(page),
     pageSize: String(pageSize),
@@ -84,7 +91,9 @@ export function getLatestRecommendation() {
 }
 
 export function getRecommendationDetail(lotteryCode: string, recommendationId: string) {
-  return apiGet<Recommendation>(`/api/lotteries/${lotteryCode}/recommendations/${recommendationId}`);
+  return apiGet<Recommendation>(
+    `/api/lotteries/${lotteryCode}/recommendations/${recommendationId}`
+  );
 }
 
 export function generateRecommendation(lotteryCode: string) {
@@ -97,6 +106,10 @@ export function syncDraws() {
 
 export function uploadTicketImage(formData: FormData) {
   return apiPost<TicketUpload, FormData>(`/api/lotteries/tickets/upload-image`, formData);
+}
+
+export function importTickets(formData: FormData) {
+  return apiPost<TicketImportResult, FormData>(`/api/lotteries/tickets/import`, formData);
 }
 
 export function recognizeTicket(body: { uploadId: string; ocrText?: string }) {
@@ -115,19 +128,32 @@ export function createTicket(body: {
   purchasedAt?: string;
   costAmount?: number;
   notes?: string;
-  entries?: Array<{ redNumbers: string; blueNumbers: string; multiple?: number; isAdditional?: boolean }>;
+  entries?: Array<{
+    redNumbers: string;
+    blueNumbers: string;
+    multiple?: number;
+    isAdditional?: boolean;
+  }>;
 }) {
-  return apiPost<Ticket, {
-    lotteryCode?: string;
-    uploadId: string;
-    recommendationId?: string;
-    issue?: string;
-    drawDate?: string;
-    purchasedAt?: string;
-    costAmount?: number;
-    notes?: string;
-    entries?: Array<{ redNumbers: string; blueNumbers: string; multiple?: number; isAdditional?: boolean }>;
-  }>(`/api/lotteries/tickets`, body);
+  return apiPost<
+    Ticket,
+    {
+      lotteryCode?: string;
+      uploadId: string;
+      recommendationId?: string;
+      issue?: string;
+      drawDate?: string;
+      purchasedAt?: string;
+      costAmount?: number;
+      notes?: string;
+      entries?: Array<{
+        redNumbers: string;
+        blueNumbers: string;
+        multiple?: number;
+        isAdditional?: boolean;
+      }>;
+    }
+  >(`/api/lotteries/tickets`, body);
 }
 
 export function recheckTicket(ticketId: string) {
@@ -139,7 +165,9 @@ export function deleteTicket(ticketId: string) {
 }
 
 export function deleteRecommendation(lotteryCode: string, recommendationId: string) {
-  return apiDelete<{ deleted: boolean }>(`/api/lotteries/${lotteryCode}/recommendations/${recommendationId}`);
+  return apiDelete<{ deleted: boolean }>(
+    `/api/lotteries/${lotteryCode}/recommendations/${recommendationId}`
+  );
 }
 
 export function scanTicket(formData: FormData) {

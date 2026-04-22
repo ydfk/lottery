@@ -3,7 +3,12 @@ import { History, LayoutDashboard, ReceiptText, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { AuthPanel } from "@/components/lottery/auth-panel";
 import { DashboardPanel } from "@/components/lottery/dashboard-panel";
+import {
+  LotteryDisplayModeToggle,
+  type LotteryDisplayMode,
+} from "@/components/lottery/display-mode-toggle";
 import { HistoryPanel } from "@/components/lottery/history-panel";
+import { LotteryShell, type LotteryShellTab } from "@/components/lottery/lottery-shell";
 import { RecommendationPanel } from "@/components/lottery/recommendation-panel";
 import { RecordPanel } from "@/components/lottery/record-panel";
 import { getStoredToken } from "@/lib/api/client";
@@ -14,6 +19,7 @@ import {
   deleteTicket,
   formatParsedEntry,
   getDashboard,
+  importTickets,
   getRecommendationDetail,
   getRecommendations,
   generateRecommendation,
@@ -44,11 +50,33 @@ import type {
 
 type TabKey = "dashboard" | "recommendation" | "records" | "history";
 
-const tabs: { key: TabKey; label: string; icon: typeof LayoutDashboard }[] = [
-  { key: "dashboard", label: "看板", icon: LayoutDashboard },
-  { key: "recommendation", label: "推荐", icon: Sparkles },
-  { key: "records", label: "记录", icon: ReceiptText },
-  { key: "history", label: "历史", icon: History },
+const DISPLAY_MODE_STORAGE_KEY = "lottery:display-mode";
+
+const tabs: LotteryShellTab<TabKey>[] = [
+  {
+    key: "dashboard",
+    label: "看板",
+    description: "查看账户与统计概览",
+    icon: LayoutDashboard,
+  },
+  {
+    key: "recommendation",
+    label: "推荐",
+    description: "浏览推荐结果与购买动作",
+    icon: Sparkles,
+  },
+  {
+    key: "records",
+    label: "记录",
+    description: "上传票据并录入号码",
+    icon: ReceiptText,
+  },
+  {
+    key: "history",
+    label: "历史",
+    description: "追踪已购记录与中奖状态",
+    icon: History,
+  },
 ];
 
 const DEFAULT_HISTORY_FILTERS: TicketHistoryFilters = {
@@ -63,19 +91,14 @@ const DEFAULT_RECOMMENDATION_FILTERS: RecommendationFilters = {
   sort: "latest",
 };
 
-function calculateEntriesCost(
-  entries: Array<{ multiple: number; isAdditional: boolean }>
-) {
+function calculateEntriesCost(entries: Array<{ multiple: number; isAdditional: boolean }>) {
   return entries.reduce((total, entry) => {
     const perBetCost = entry.isAdditional ? 3 : 2;
     return total + Math.max(1, entry.multiple) * perBetCost;
   }, 0);
 }
 
-function replaceRecommendation(
-  items: Recommendation[],
-  nextItem: Recommendation
-) {
+function replaceRecommendation(items: Recommendation[], nextItem: Recommendation) {
   const nextItems = items.slice();
   const index = nextItems.findIndex((item) => item.id === nextItem.id);
   if (index >= 0) {
@@ -85,7 +108,16 @@ function replaceRecommendation(
   return [nextItem, ...nextItems];
 }
 
+function getStoredDisplayMode(): LotteryDisplayMode {
+  if (typeof window === "undefined") {
+    return "app";
+  }
+
+  return window.localStorage.getItem(DISPLAY_MODE_STORAGE_KEY) === "web" ? "web" : "app";
+}
+
 export default function App() {
+  const [displayMode, setDisplayMode] = useState<LotteryDisplayMode>(() => getStoredDisplayMode());
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [authUsername, setAuthUsername] = useState("");
@@ -105,12 +137,15 @@ export default function App() {
   const [historyLoadingMore, setHistoryLoadingMore] = useState(false);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
-  const [recommendationFilters, setRecommendationFilters] = useState<RecommendationFilters>(DEFAULT_RECOMMENDATION_FILTERS);
+  const [recommendationFilters, setRecommendationFilters] = useState<RecommendationFilters>(
+    DEFAULT_RECOMMENDATION_FILTERS
+  );
   const [recommendationPage, setRecommendationPage] = useState(1);
   const [recommendationHasMore, setRecommendationHasMore] = useState(false);
   const [recommendationTotal, setRecommendationTotal] = useState(0);
   const [tickets, setTickets] = useState<TicketRecord[]>([]);
-  const [historyFilters, setHistoryFilters] = useState<TicketHistoryFilters>(DEFAULT_HISTORY_FILTERS);
+  const [historyFilters, setHistoryFilters] =
+    useState<TicketHistoryFilters>(DEFAULT_HISTORY_FILTERS);
   const [historyPage, setHistoryPage] = useState(1);
   const [historyHasMore, setHistoryHasMore] = useState(false);
   const [historyTotal, setHistoryTotal] = useState(0);
@@ -128,6 +163,10 @@ export default function App() {
   const [costAmountEdited, setCostAmountEdited] = useState(false);
   const [notes, setNotes] = useState("");
   const [entryDrafts, setEntryDrafts] = useState<TicketEntryDraft[]>([createEmptyEntryDraft()]);
+  const webNavigationTabs = tabs.filter((item) => item.key !== "records");
+  const navigationTabs = displayMode === "web" ? webNavigationTabs : tabs;
+  const navigationActiveTab =
+    displayMode === "web" && activeTab === "records" ? "history" : activeTab;
 
   function resetLotteryState() {
     setDashboard(null);
@@ -199,7 +238,11 @@ export default function App() {
     }
   }
 
-  async function loadRecommendations(page: number, append: boolean, filters: RecommendationFilters) {
+  async function loadRecommendations(
+    page: number,
+    append: boolean,
+    filters: RecommendationFilters
+  ) {
     if (append) {
       setRecommendationLoadingMore(true);
     } else {
@@ -273,6 +316,10 @@ export default function App() {
 
     void bootstrap();
   }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(DISPLAY_MODE_STORAGE_KEY, displayMode);
+  }, [displayMode]);
 
   useEffect(() => {
     if (!selectedImage) {
@@ -458,7 +505,8 @@ export default function App() {
         issue: issue || undefined,
         drawDate: drawDate || undefined,
         purchasedAt: new Date().toISOString(),
-        costAmount: Number.isFinite(manualCostAmount) && manualCostAmount > 0 ? manualCostAmount : undefined,
+        costAmount:
+          Number.isFinite(manualCostAmount) && manualCostAmount > 0 ? manualCostAmount : undefined,
         notes: notes || undefined,
         entries: entries.map((entry) => ({
           ...formatParsedEntry(entry),
@@ -540,7 +588,9 @@ export default function App() {
     setRecheckPending(true);
     try {
       const updatedTicket = await recheckTicket(ticketId);
-      setTickets((current) => current.map((item) => (item.id === updatedTicket.id ? updatedTicket : item)));
+      setTickets((current) =>
+        current.map((item) => (item.id === updatedTicket.id ? updatedTicket : item))
+      );
       setSelectedHistoryTicket(updatedTicket);
       toast.success("重新判奖完成");
     } catch (error) {
@@ -551,7 +601,11 @@ export default function App() {
   }
 
   async function handleDeleteTicket(ticket: TicketRecord) {
-    if (!window.confirm(`确认删除第 ${ticket.issue} 期的这条记录吗？相关号码、上传图片记录会一并删除。`)) {
+    if (
+      !window.confirm(
+        `确认删除第 ${ticket.issue} 期的这条记录吗？相关号码、上传图片记录会一并删除。`
+      )
+    ) {
       return;
     }
 
@@ -593,6 +647,29 @@ export default function App() {
       handleRequestError(error, "删除推荐失败");
     } finally {
       setDeletePending(false);
+    }
+  }
+
+  async function handleImportTickets(workbook: File, imagesZip: File | null) {
+    const formData = new FormData();
+    formData.append("workbook", workbook);
+    if (imagesZip) {
+      formData.append("imagesZip", imagesZip);
+    }
+
+    try {
+      const result = await importTickets(formData);
+      setSelectedHistoryTicket(null);
+      await loadData(false);
+      toast.success(
+        result.failedCount > 0
+          ? `导入完成，成功 ${result.successCount} 行，失败 ${result.failedCount} 行`
+          : `导入完成，共成功导入 ${result.successCount} 行`
+      );
+      return result;
+    } catch (error) {
+      handleRequestError(error, "导入 Excel 失败");
+      throw error;
     }
   }
 
@@ -644,22 +721,153 @@ export default function App() {
     void loadRecommendations(recommendationPage + 1, true, recommendationFilters);
   }
 
+  function handleOpenRecordPanel() {
+    setSelectedHistoryTicket(null);
+    setActiveTab("records");
+  }
+
+  function renderActivePanel(user: AuthUser) {
+    if (activeTab === "dashboard") {
+      return (
+        <DashboardPanel
+          currentUser={user}
+          dashboard={dashboard}
+          displayMode={displayMode}
+          generatingLotteryCode={generatingLotteryCode}
+          onDisplayModeChange={setDisplayMode}
+          onGenerateRecommendation={(lotteryCode) => void handleGenerateRecommendation(lotteryCode)}
+          onLogout={handleLogout}
+        />
+      );
+    }
+
+    if (activeTab === "recommendation") {
+      return (
+        <RecommendationPanel
+          displayMode={displayMode}
+          recommendations={recommendations}
+          filters={recommendationFilters}
+          loading={recommendationLoading}
+          loadingMore={recommendationLoadingMore}
+          hasMore={recommendationHasMore}
+          total={recommendationTotal}
+          selectedRecommendation={selectedRecommendation}
+          detailPending={detailPending}
+          deletePending={deletePending}
+          onFiltersChange={handleRecommendationFilterChange}
+          onLoadMore={handleLoadMoreRecommendations}
+          onSelectRecommendation={(recommendationId) =>
+            void handleOpenRecommendation(recommendationId)
+          }
+          onRecordPurchase={handleRecordPurchase}
+          onDeleteRecommendation={(recommendation) =>
+            void handleDeleteRecommendation(recommendation)
+          }
+        />
+      );
+    }
+
+    if (activeTab === "records") {
+      return (
+        <RecordPanel
+          displayMode={displayMode}
+          selectedRecommendation={purchaseRecommendation}
+          previewUrl={previewUrl}
+          selectedImage={selectedImage}
+          uploadPending={uploadPending}
+          uploadedTicket={uploadedTicket}
+          recognitionDraft={recognitionDraft}
+          lotteryCode={lotteryCode}
+          recognizePending={recognizePending}
+          issue={issue}
+          drawDate={drawDate}
+          costAmount={costAmount}
+          notes={notes}
+          entryDrafts={entryDrafts}
+          submitPending={submitPending}
+          onSelectImage={handleSelectImage}
+          onLotteryCodeChange={handleChangeLotteryCode}
+          onRecognize={() => void handleRecognizeTicket()}
+          onIssueChange={setIssue}
+          onDrawDateChange={setDrawDate}
+          onCostAmountChange={handleChangeCostAmount}
+          onNotesChange={setNotes}
+          onEntryFieldChange={handleChangeEntryField}
+          onToggleEntryAdditional={handleToggleEntryAdditional}
+          onChangeEntryMultiple={handleChangeEntryMultiple}
+          onAddEntry={handleAddEntry}
+          onRemoveEntry={handleRemoveEntry}
+          onCreateTicket={() => void handleCreateTicket()}
+          onClearRecommendation={() => setPurchaseRecommendation(null)}
+        />
+      );
+    }
+
+    return (
+      <HistoryPanel
+        displayMode={displayMode}
+        tickets={tickets}
+        filters={historyFilters}
+        loading={historyLoading}
+        loadingMore={historyLoadingMore}
+        hasMore={historyHasMore}
+        total={historyTotal}
+        selectedTicket={selectedHistoryTicket}
+        recheckPending={recheckPending}
+        deletePending={deletePending}
+        onFiltersChange={handleHistoryFilterChange}
+        onLoadMore={handleLoadMoreHistory}
+        onImportTickets={handleImportTickets}
+        onOpenRecord={handleOpenRecordPanel}
+        onSelectTicket={setSelectedHistoryTicket}
+        onRecheckTicket={(ticketId) => void handleRecheckTicket(ticketId)}
+        onDeleteTicket={(ticket) => void handleDeleteTicket(ticket)}
+      />
+    );
+  }
+
   if (!currentUser) {
     if (loading) {
       return (
-        <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.92),rgba(226,232,240,0.9)_45%,rgba(203,213,225,1))]">
-          <div className="rounded-3xl bg-white/80 px-6 py-4 text-sm text-slate-600 shadow-sm">
-            正在检查登录状态...
+        <div
+          className={`min-h-screen px-4 py-6 sm:px-6 ${
+            displayMode === "web"
+              ? "bg-[linear-gradient(180deg,rgba(248,250,252,0.96),rgba(226,232,240,0.88)),radial-gradient(circle_at_top_right,rgba(59,130,246,0.14),transparent_38%)]"
+              : "bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.92),rgba(226,232,240,0.9)_45%,rgba(203,213,225,1))]"
+          }`}
+        >
+          <div
+            className={`mx-auto flex w-full ${
+              displayMode === "web" ? "max-w-6xl" : "max-w-md"
+            } justify-end`}
+          >
+            {displayMode === "web" ? (
+              <LotteryDisplayModeToggle value={displayMode} onValueChange={setDisplayMode} />
+            ) : (
+              <LotteryDisplayModeToggle
+                value={displayMode}
+                compact
+                className="bg-white/84"
+                onValueChange={setDisplayMode}
+              />
+            )}
+          </div>
+          <div className="flex min-h-[calc(100vh-7rem)] items-center justify-center">
+            <div className="rounded-3xl bg-white/80 px-6 py-4 text-sm text-slate-600 shadow-sm">
+              正在检查登录状态...
+            </div>
           </div>
         </div>
       );
     }
 
-      return (
+    return (
       <AuthPanel
+        displayMode={displayMode}
         username={authUsername}
         password={authPassword}
         pending={authPending}
+        onDisplayModeChange={setDisplayMode}
         onUsernameChange={setAuthUsername}
         onPasswordChange={setAuthPassword}
         onSubmit={handleAuthSubmit}
@@ -668,111 +876,17 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.84),rgba(241,245,249,0.9)_40%,rgba(226,232,240,1))] pb-28">
-      <div className="mx-auto w-full max-w-6xl px-4 pb-10 pt-4 sm:px-6">
-        {activeTab === "dashboard" && (
-          <DashboardPanel
-            currentUser={currentUser}
-            dashboard={dashboard}
-            generatingLotteryCode={generatingLotteryCode}
-            onGenerateRecommendation={(lotteryCode) => void handleGenerateRecommendation(lotteryCode)}
-            onLogout={handleLogout}
-          />
-        )}
-
-        {activeTab === "recommendation" && (
-          <RecommendationPanel
-            recommendations={recommendations}
-            filters={recommendationFilters}
-            loading={recommendationLoading}
-            loadingMore={recommendationLoadingMore}
-            hasMore={recommendationHasMore}
-            total={recommendationTotal}
-            selectedRecommendation={selectedRecommendation}
-            detailPending={detailPending}
-            deletePending={deletePending}
-            onFiltersChange={handleRecommendationFilterChange}
-            onLoadMore={handleLoadMoreRecommendations}
-            onSelectRecommendation={(recommendationId) => void handleOpenRecommendation(recommendationId)}
-            onRecordPurchase={handleRecordPurchase}
-            onDeleteRecommendation={(recommendation) => void handleDeleteRecommendation(recommendation)}
-          />
-        )}
-
-        {activeTab === "records" && (
-          <RecordPanel
-            selectedRecommendation={purchaseRecommendation}
-            previewUrl={previewUrl}
-            selectedImage={selectedImage}
-            uploadPending={uploadPending}
-            uploadedTicket={uploadedTicket}
-            recognitionDraft={recognitionDraft}
-            lotteryCode={lotteryCode}
-            recognizePending={recognizePending}
-            issue={issue}
-            drawDate={drawDate}
-            costAmount={costAmount}
-            notes={notes}
-            entryDrafts={entryDrafts}
-            submitPending={submitPending}
-            onSelectImage={handleSelectImage}
-            onLotteryCodeChange={handleChangeLotteryCode}
-            onRecognize={() => void handleRecognizeTicket()}
-            onIssueChange={setIssue}
-            onDrawDateChange={setDrawDate}
-            onCostAmountChange={handleChangeCostAmount}
-            onNotesChange={setNotes}
-            onEntryFieldChange={handleChangeEntryField}
-            onToggleEntryAdditional={handleToggleEntryAdditional}
-            onChangeEntryMultiple={handleChangeEntryMultiple}
-            onAddEntry={handleAddEntry}
-            onRemoveEntry={handleRemoveEntry}
-            onCreateTicket={() => void handleCreateTicket()}
-            onClearRecommendation={() => setPurchaseRecommendation(null)}
-          />
-        )}
-
-        {activeTab === "history" && (
-          <HistoryPanel
-            tickets={tickets}
-            filters={historyFilters}
-            loading={historyLoading}
-            loadingMore={historyLoadingMore}
-            hasMore={historyHasMore}
-            total={historyTotal}
-            selectedTicket={selectedHistoryTicket}
-            recheckPending={recheckPending}
-            deletePending={deletePending}
-            onFiltersChange={handleHistoryFilterChange}
-            onLoadMore={handleLoadMoreHistory}
-            onSelectTicket={setSelectedHistoryTicket}
-            onRecheckTicket={(ticketId) => void handleRecheckTicket(ticketId)}
-            onDeleteTicket={(ticket) => void handleDeleteTicket(ticket)}
-          />
-        )}
-      </div>
-
-      <nav className="fixed inset-x-0 bottom-4 z-50 mx-auto flex w-[calc(100%-1.5rem)] max-w-5xl items-center gap-2 rounded-[2rem] border border-white/70 bg-white/90 p-2 shadow-[0_18px_40px_rgba(15,23,42,0.14)] backdrop-blur">
-        {tabs.map((item) => {
-          const Icon = item.icon;
-          const active = activeTab === item.key;
-          return (
-            <button
-              key={item.key}
-              type="button"
-              className={`flex flex-1 items-center justify-center gap-2 rounded-[1.25rem] px-3 py-3 text-sm transition ${
-                active
-                  ? "bg-slate-900 text-white shadow-sm"
-                  : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-              }`}
-              onClick={() => setActiveTab(item.key)}
-            >
-              <Icon className="size-4" />
-              <span>{item.label}</span>
-            </button>
-          );
-        })}
-      </nav>
-    </div>
+    <LotteryShell
+      displayMode={displayMode}
+      activeTab={activeTab}
+      navigationActiveTab={navigationActiveTab}
+      navigationTabs={navigationTabs}
+      tabs={tabs}
+      currentUser={currentUser}
+      onDisplayModeChange={setDisplayMode}
+      onTabChange={setActiveTab}
+    >
+      {renderActivePanel(currentUser)}
+    </LotteryShell>
   );
 }

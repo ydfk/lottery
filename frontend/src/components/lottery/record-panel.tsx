@@ -3,13 +3,33 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import type { LotteryDisplayMode } from "@/components/lottery/display-mode-toggle";
 import { NumberBalls } from "@/components/lottery/number-balls";
-import { formatLotteryDrawDate, formatLotteryIssue, getLotteryDisplayName, lotteryDisplayOptions } from "@/lib/lottery-display";
+import {
+  formatLotteryDrawDate,
+  formatLotteryIssue,
+  getLotteryDisplayName,
+  lotteryDisplayOptions,
+} from "@/lib/lottery-display";
 import { buildParsedEntriesFromDrafts } from "@/lib/ticket-entry-drafts";
-import type { Recommendation, TicketEntryDraft, TicketRecognitionDraft, TicketUpload } from "@/types/lottery";
+import type {
+  Recommendation,
+  TicketEntryDraft,
+  TicketRecognitionDraft,
+  TicketUpload,
+} from "@/types/lottery";
 
 interface RecordPanelProps {
+  displayMode: LotteryDisplayMode;
   selectedRecommendation: Recommendation | null;
   previewUrl: string;
   selectedImage: File | null;
@@ -40,8 +60,237 @@ interface RecordPanelProps {
   onClearRecommendation: () => void;
 }
 
+function RecordBasicInfoTable(props: {
+  lotteryCode: string;
+  issue: string;
+  drawDate: string;
+  costAmount: string;
+  onLotteryCodeChange: (value: string) => void;
+  onIssueChange: (value: string) => void;
+  onDrawDateChange: (value: string) => void;
+  onCostAmountChange: (value: string) => void;
+}) {
+  const {
+    lotteryCode,
+    issue,
+    drawDate,
+    costAmount,
+    onLotteryCodeChange,
+    onIssueChange,
+    onDrawDateChange,
+    onCostAmountChange,
+  } = props;
+
+  return (
+    <Card className="border-slate-200 bg-slate-50/90 shadow-none">
+      <CardContent className="p-0">
+        <Table className="min-w-[760px]">
+          <TableHeader>
+            <TableRow className="bg-white/80">
+              <TableHead className="pl-4">彩票类型</TableHead>
+              <TableHead>期号</TableHead>
+              <TableHead>开奖日期</TableHead>
+              <TableHead className="pr-4">金额</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow>
+              <TableCell className="pl-4">
+                <select
+                  className="flex h-9 w-full min-w-[150px] rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+                  value={lotteryCode}
+                  onChange={(event) => onLotteryCodeChange(event.target.value)}
+                >
+                  <option value="">请选择</option>
+                  {lotteryDisplayOptions.map((item) => (
+                    <option key={item.code} value={item.code}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </TableCell>
+              <TableCell>
+                <Input
+                  className="h-9 min-w-[140px] bg-white"
+                  value={issue}
+                  onChange={(event) => onIssueChange(event.target.value)}
+                />
+              </TableCell>
+              <TableCell>
+                <Input
+                  className="h-9 min-w-[150px] bg-white"
+                  type="date"
+                  value={drawDate}
+                  onChange={(event) => onDrawDateChange(event.target.value)}
+                />
+              </TableCell>
+              <TableCell className="pr-4">
+                <Input
+                  className="h-9 min-w-[140px] bg-white"
+                  type="number"
+                  step="0.01"
+                  value={costAmount}
+                  onChange={(event) => onCostAmountChange(event.target.value)}
+                />
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+        <div className="px-4 pb-4 text-[11px] leading-4 text-slate-400">
+          金额会按号码、倍数和追加自动计算，也可手动修改。
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function RecordEntryTable(props: {
+  lotteryCode: string;
+  entryDrafts: TicketEntryDraft[];
+  showAdditionalToggle: boolean;
+  onEntryFieldChange: (index: number, field: "redNumbers" | "blueNumbers", value: string) => void;
+  onToggleEntryAdditional: (index: number) => void;
+  onChangeEntryMultiple: (index: number, nextMultiple: number) => void;
+  onRemoveEntry: (index: number) => void;
+}) {
+  const {
+    lotteryCode,
+    entryDrafts,
+    showAdditionalToggle,
+    onEntryFieldChange,
+    onToggleEntryAdditional,
+    onChangeEntryMultiple,
+    onRemoveEntry,
+  } = props;
+
+  return (
+    <Card className="border-slate-200 bg-slate-50/90 shadow-none">
+      <CardContent className="p-0">
+        <Table className="min-w-[1100px]">
+          <TableHeader>
+            <TableRow className="bg-white/80">
+              <TableHead className="pl-4">注号</TableHead>
+              <TableHead>红球</TableHead>
+              <TableHead>蓝球</TableHead>
+              <TableHead>倍数</TableHead>
+              {showAdditionalToggle ? <TableHead>追加</TableHead> : null}
+              <TableHead>预览</TableHead>
+              <TableHead className="pr-4 text-right">操作</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {entryDrafts.map((entry, index) => {
+              const previewEntry = buildParsedEntriesFromDrafts([entry], lotteryCode)[0];
+
+              return (
+                <TableRow key={`entry-${index}`}>
+                  <TableCell className="pl-4 font-medium text-slate-900">
+                    第 {index + 1} 注
+                  </TableCell>
+                  <TableCell>
+                    <div className="min-w-[220px]">
+                      <Input
+                        className="h-9 bg-white text-sm"
+                        inputMode="numeric"
+                        value={entry.redNumbers}
+                        placeholder={lotteryCode === "dlt" ? "03 11 18 26 32" : "01 02 03 04 05 06"}
+                        onChange={(event) =>
+                          onEntryFieldChange(index, "redNumbers", event.target.value)
+                        }
+                      />
+                      <p className="mt-2 text-[11px] leading-4 text-slate-400">
+                        支持空格、逗号或连续数字
+                      </p>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      className="h-9 min-w-[120px] bg-white text-sm"
+                      inputMode="numeric"
+                      value={entry.blueNumbers}
+                      placeholder={lotteryCode === "dlt" ? "04 09" : "07"}
+                      onChange={(event) =>
+                        onEntryFieldChange(index, "blueNumbers", event.target.value)
+                      }
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex w-fit items-center rounded-full border border-slate-200 bg-white">
+                      <button
+                        type="button"
+                        className="h-8 w-8 text-sm text-slate-500 transition hover:text-slate-900"
+                        onClick={() =>
+                          onChangeEntryMultiple(index, Math.max(1, entry.multiple - 1))
+                        }
+                      >
+                        -
+                      </button>
+                      <span className="min-w-12 text-center text-xs text-slate-600">
+                        {entry.multiple} 倍
+                      </span>
+                      <button
+                        type="button"
+                        className="h-8 w-8 text-sm text-slate-500 transition hover:text-slate-900"
+                        onClick={() => onChangeEntryMultiple(index, entry.multiple + 1)}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </TableCell>
+                  {showAdditionalToggle ? (
+                    <TableCell>
+                      <Button
+                        type="button"
+                        variant={entry.isAdditional ? "default" : "secondary"}
+                        size="sm"
+                        className="h-8 rounded-full"
+                        onClick={() => onToggleEntryAdditional(index)}
+                      >
+                        {entry.isAdditional ? "已追加" : "未追加"}
+                      </Button>
+                    </TableCell>
+                  ) : null}
+                  <TableCell className="min-w-[220px]">
+                    {previewEntry ? (
+                      <NumberBalls
+                        redNumbers={previewEntry.red
+                          .map((value) => value.toString().padStart(2, "0"))
+                          .join(",")}
+                        blueNumbers={previewEntry.blue
+                          .map((value) => value.toString().padStart(2, "0"))
+                          .join(",")}
+                        compact
+                      />
+                    ) : (
+                      <span className="text-sm text-slate-400">等待输入完整号码</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="pr-4">
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="rounded-full text-slate-500"
+                        onClick={() => onRemoveEntry(index)}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function RecordPanel(props: RecordPanelProps) {
   const {
+    displayMode,
     selectedRecommendation,
     previewUrl,
     selectedImage,
@@ -75,6 +324,7 @@ export function RecordPanel(props: RecordPanelProps) {
   const showAdditionalToggle = lotteryCode === "dlt";
   const recognizeLabel = recognitionDraft ? "重新识别" : "开始识别";
   const recognizeBusy = uploadPending || recognizePending;
+  const isWebDisplay = displayMode === "web";
 
   return (
     <div className="space-y-6">
@@ -85,7 +335,11 @@ export function RecordPanel(props: RecordPanelProps) {
             <h2 className="text-base font-semibold text-slate-950">录入</h2>
           </div>
           <div className="flex items-center gap-2">
-            {recognitionDraft ? <Badge variant="secondary">识别 {(recognitionDraft.confidence * 100).toFixed(0)}%</Badge> : null}
+            {recognitionDraft ? (
+              <Badge variant="secondary">
+                识别 {(recognitionDraft.confidence * 100).toFixed(0)}%
+              </Badge>
+            ) : null}
             {uploadedTicket ? <Badge variant="secondary">图片已上传</Badge> : null}
           </div>
         </div>
@@ -97,30 +351,88 @@ export function RecordPanel(props: RecordPanelProps) {
             <div className="space-y-2">
               <CardTitle className="text-slate-900">关联推荐</CardTitle>
               <div className="flex items-center gap-2">
-                <Badge variant="secondary">{getLotteryDisplayName(selectedRecommendation.lotteryCode)}</Badge>
-                <Badge variant="secondary">第 {formatLotteryIssue(selectedRecommendation.lotteryCode, selectedRecommendation.issue)} 期</Badge>
+                <Badge variant="secondary">
+                  {getLotteryDisplayName(selectedRecommendation.lotteryCode)}
+                </Badge>
+                <Badge variant="secondary">
+                  第{" "}
+                  {formatLotteryIssue(
+                    selectedRecommendation.lotteryCode,
+                    selectedRecommendation.issue
+                  )}{" "}
+                  期
+                </Badge>
                 {selectedRecommendation.drawDate ? (
-                  <Badge variant="secondary">{formatLotteryDrawDate(selectedRecommendation.drawDate)} 开奖</Badge>
+                  <Badge variant="secondary">
+                    {formatLotteryDrawDate(selectedRecommendation.drawDate)} 开奖
+                  </Badge>
                 ) : null}
               </div>
             </div>
-            <Button type="button" variant="ghost" size="icon" className="rounded-2xl" onClick={onClearRecommendation}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="rounded-2xl"
+              onClick={onClearRecommendation}
+            >
               <X className="size-4" />
             </Button>
           </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2">
-            {selectedRecommendation.entries.map((entry) => (
-              <div key={entry.id} className="rounded-[1.25rem] bg-white p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm font-medium text-slate-700">推荐 {entry.sequence}</span>
-                  <span className="text-xs text-slate-500">{(entry.confidence * 100).toFixed(0)}%</span>
+          {isWebDisplay ? (
+            <CardContent className="p-0">
+              <Table className="min-w-[760px]">
+                <TableHeader>
+                  <TableRow className="bg-white/70">
+                    <TableHead className="pl-6">推荐</TableHead>
+                    <TableHead>号码</TableHead>
+                    <TableHead className="pr-6">置信度</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {selectedRecommendation.entries.map((entry) => (
+                    <TableRow key={entry.id}>
+                      <TableCell className="pl-6 font-medium text-slate-900">
+                        推荐 {entry.sequence}
+                      </TableCell>
+                      <TableCell>
+                        <NumberBalls
+                          redNumbers={entry.redNumbers}
+                          blueNumbers={entry.blueNumbers}
+                          compact
+                        />
+                      </TableCell>
+                      <TableCell className="pr-6 text-slate-500">
+                        {(entry.confidence * 100).toFixed(0)}%
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          ) : (
+            <CardContent className="grid gap-3 sm:grid-cols-2">
+              {selectedRecommendation.entries.map((entry) => (
+                <div key={entry.id} className="rounded-[1.25rem] bg-white p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-medium text-slate-700">
+                      推荐 {entry.sequence}
+                    </span>
+                    <span className="text-xs text-slate-500">
+                      {(entry.confidence * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                  <div className="mt-3">
+                    <NumberBalls
+                      redNumbers={entry.redNumbers}
+                      blueNumbers={entry.blueNumbers}
+                      compact
+                    />
+                  </div>
                 </div>
-                <div className="mt-3">
-                  <NumberBalls redNumbers={entry.redNumbers} blueNumbers={entry.blueNumbers} compact />
-                </div>
-              </div>
-            ))}
-          </CardContent>
+              ))}
+            </CardContent>
+          )}
         </Card>
       )}
 
@@ -129,19 +441,30 @@ export function RecordPanel(props: RecordPanelProps) {
           <div className="grid gap-3 lg:grid-cols-[0.88fr_1.12fr]">
             <label className="flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-[1.45rem] border border-dashed border-slate-300 bg-slate-50 p-3 text-center">
               {previewUrl ? (
-                <img src={previewUrl} alt="彩票预览" className="h-32 w-full rounded-[1.1rem] object-cover" />
+                <img
+                  src={previewUrl}
+                  alt="彩票预览"
+                  className="h-32 w-full rounded-[1.1rem] object-cover"
+                />
               ) : (
                 <>
                   <ImageUp className="size-7 text-slate-400" />
                   <p className="mt-1.5 text-sm font-medium text-slate-700">选择图片</p>
                 </>
               )}
-              <input className="hidden" type="file" accept="image/*" onChange={(event) => onSelectImage(event.target.files?.[0] || null)} />
+              <input
+                className="hidden"
+                type="file"
+                accept="image/*"
+                onChange={(event) => onSelectImage(event.target.files?.[0] || null)}
+              />
             </label>
 
             <div className="space-y-3 rounded-[1.45rem] bg-slate-50 p-3">
               {selectedImage && (
-                <div className="rounded-[1rem] border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">{selectedImage.name}</div>
+                <div className="rounded-[1rem] border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
+                  {selectedImage.name}
+                </div>
               )}
 
               <div className="grid gap-3 sm:grid-cols-1">
@@ -174,150 +497,218 @@ export function RecordPanel(props: RecordPanelProps) {
           </div>
 
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-2.5">
-              <div className="min-w-0 space-y-1.5">
-                <label className="text-sm font-medium text-slate-700">彩票类型</label>
-                <select
-                  className="flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
-                  value={lotteryCode}
-                  onChange={(event) => onLotteryCodeChange(event.target.value)}
-                >
-                  <option value="">请选择</option>
-                  {lotteryDisplayOptions.map((item) => (
-                    <option key={item.code} value={item.code}>
-                      {item.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            {isWebDisplay ? (
+              <RecordBasicInfoTable
+                lotteryCode={lotteryCode}
+                issue={issue}
+                drawDate={drawDate}
+                costAmount={costAmount}
+                onLotteryCodeChange={onLotteryCodeChange}
+                onIssueChange={onIssueChange}
+                onDrawDateChange={onDrawDateChange}
+                onCostAmountChange={onCostAmountChange}
+              />
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="min-w-0 space-y-1.5">
+                    <label className="text-sm font-medium text-slate-700">彩票类型</label>
+                    <select
+                      className="flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+                      value={lotteryCode}
+                      onChange={(event) => onLotteryCodeChange(event.target.value)}
+                    >
+                      <option value="">请选择</option>
+                      {lotteryDisplayOptions.map((item) => (
+                        <option key={item.code} value={item.code}>
+                          {item.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-              <div className="min-w-0 space-y-1.5">
-                <label className="text-sm font-medium text-slate-700">期号</label>
-                <Input className="h-9" value={issue} onChange={(event) => onIssueChange(event.target.value)} />
-              </div>
-            </div>
+                  <div className="min-w-0 space-y-1.5">
+                    <label className="text-sm font-medium text-slate-700">期号</label>
+                    <Input
+                      className="h-9"
+                      value={issue}
+                      onChange={(event) => onIssueChange(event.target.value)}
+                    />
+                  </div>
+                </div>
 
-            <div className="grid grid-cols-2 gap-2.5">
-              <div className="min-w-0 space-y-1.5">
-                <label className="text-sm font-medium text-slate-700">开奖日期</label>
-                <Input className="h-9 min-w-0" type="date" value={drawDate} onChange={(event) => onDrawDateChange(event.target.value)} />
-              </div>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="min-w-0 space-y-1.5">
+                    <label className="text-sm font-medium text-slate-700">开奖日期</label>
+                    <Input
+                      className="h-9 min-w-0"
+                      type="date"
+                      value={drawDate}
+                      onChange={(event) => onDrawDateChange(event.target.value)}
+                    />
+                  </div>
 
-              <div className="min-w-0 space-y-1.5">
-                <label className="text-sm font-medium text-slate-700">金额</label>
-                <Input
-                  className="h-9 min-w-0"
-                  type="number"
-                  step="0.01"
-                  value={costAmount}
-                  onChange={(event) => onCostAmountChange(event.target.value)}
-                />
-              </div>
-            </div>
-            <p className="text-[11px] leading-4 text-slate-400">金额会按号码、倍数和追加自动计算，也可手动修改。</p>
+                  <div className="min-w-0 space-y-1.5">
+                    <label className="text-sm font-medium text-slate-700">金额</label>
+                    <Input
+                      className="h-9 min-w-0"
+                      type="number"
+                      step="0.01"
+                      value={costAmount}
+                      onChange={(event) => onCostAmountChange(event.target.value)}
+                    />
+                  </div>
+                </div>
+                <p className="text-[11px] leading-4 text-slate-400">
+                  金额会按号码、倍数和追加自动计算，也可手动修改。
+                </p>
+              </>
+            )}
           </div>
 
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <label className="text-sm font-medium text-slate-700">号码</label>
-              <Button type="button" variant="secondary" size="sm" className="rounded-full" onClick={onAddEntry}>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="rounded-full"
+                onClick={onAddEntry}
+              >
                 <Plus className="size-3.5" />
                 新增一注
               </Button>
             </div>
 
-            <div className="space-y-3 rounded-[1.45rem] bg-slate-50 p-3">
-              {entryDrafts.map((entry, index) => {
-                const previewEntry = buildParsedEntriesFromDrafts([entry], lotteryCode)[0];
+            {isWebDisplay ? (
+              <RecordEntryTable
+                lotteryCode={lotteryCode}
+                entryDrafts={entryDrafts}
+                showAdditionalToggle={showAdditionalToggle}
+                onEntryFieldChange={onEntryFieldChange}
+                onToggleEntryAdditional={onToggleEntryAdditional}
+                onChangeEntryMultiple={onChangeEntryMultiple}
+                onRemoveEntry={onRemoveEntry}
+              />
+            ) : (
+              <div className="space-y-3 rounded-[1.45rem] bg-slate-50 p-3">
+                {entryDrafts.map((entry, index) => {
+                  const previewEntry = buildParsedEntriesFromDrafts([entry], lotteryCode)[0];
 
-                return (
-                  <div key={`entry-${index}`} className="rounded-[1.1rem] border border-slate-200 bg-white p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-sm font-medium text-slate-700">号码 {index + 1}</span>
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center rounded-full border border-slate-200 bg-slate-50">
-                          <button
-                            type="button"
-                            className="h-7 w-7 text-sm text-slate-500 transition hover:text-slate-900"
-                            onClick={() => onChangeEntryMultiple(index, Math.max(1, entry.multiple - 1))}
-                          >
-                            -
-                          </button>
-                          <span className="min-w-10 text-center text-xs text-slate-600">{entry.multiple} 倍</span>
-                          <button
-                            type="button"
-                            className="h-7 w-7 text-sm text-slate-500 transition hover:text-slate-900"
-                            onClick={() => onChangeEntryMultiple(index, entry.multiple + 1)}
-                          >
-                            +
-                          </button>
-                        </div>
-                        {showAdditionalToggle && (
+                  return (
+                    <div
+                      key={`entry-${index}`}
+                      className="rounded-[1.1rem] border border-slate-200 bg-white p-3"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm font-medium text-slate-700">号码 {index + 1}</span>
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center rounded-full border border-slate-200 bg-slate-50">
+                            <button
+                              type="button"
+                              className="h-7 w-7 text-sm text-slate-500 transition hover:text-slate-900"
+                              onClick={() =>
+                                onChangeEntryMultiple(index, Math.max(1, entry.multiple - 1))
+                              }
+                            >
+                              -
+                            </button>
+                            <span className="min-w-10 text-center text-xs text-slate-600">
+                              {entry.multiple} 倍
+                            </span>
+                            <button
+                              type="button"
+                              className="h-7 w-7 text-sm text-slate-500 transition hover:text-slate-900"
+                              onClick={() => onChangeEntryMultiple(index, entry.multiple + 1)}
+                            >
+                              +
+                            </button>
+                          </div>
+                          {showAdditionalToggle && (
+                            <Button
+                              type="button"
+                              variant={entry.isAdditional ? "default" : "secondary"}
+                              size="sm"
+                              className="h-7 rounded-full px-3 text-xs"
+                              onClick={() => onToggleEntryAdditional(index)}
+                            >
+                              追加
+                            </Button>
+                          )}
                           <Button
                             type="button"
-                            variant={entry.isAdditional ? "default" : "secondary"}
-                            size="sm"
-                            className="h-7 rounded-full px-3 text-xs"
-                            onClick={() => onToggleEntryAdditional(index)}
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 rounded-full text-slate-500"
+                            onClick={() => onRemoveEntry(index)}
                           >
-                            追加
+                            <Trash2 className="size-3.5" />
                           </Button>
-                        )}
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 rounded-full text-slate-500"
-                          onClick={() => onRemoveEntry(index)}
-                        >
-                          <Trash2 className="size-3.5" />
-                        </Button>
+                        </div>
                       </div>
+
+                      <div className="mt-3 grid grid-cols-[minmax(0,1fr)_6rem] gap-2">
+                        <div className="space-y-1.5">
+                          <span className="text-xs text-slate-500">红球</span>
+                          <Input
+                            className="h-9 bg-white text-sm"
+                            inputMode="numeric"
+                            value={entry.redNumbers}
+                            placeholder={
+                              lotteryCode === "dlt" ? "03 11 18 26 32" : "01 02 03 04 05 06"
+                            }
+                            onChange={(event) =>
+                              onEntryFieldChange(index, "redNumbers", event.target.value)
+                            }
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <span className="text-xs text-slate-500">蓝球</span>
+                          <Input
+                            className="h-9 bg-white text-sm"
+                            inputMode="numeric"
+                            value={entry.blueNumbers}
+                            placeholder={lotteryCode === "dlt" ? "04 09" : "07"}
+                            onChange={(event) =>
+                              onEntryFieldChange(index, "blueNumbers", event.target.value)
+                            }
+                          />
+                        </div>
+                      </div>
+
+                      <div className="mt-2 text-[11px] leading-4 text-slate-400">
+                        支持空格、逗号或连续数字，例如 010203040506
+                      </div>
+
+                      {previewEntry ? (
+                        <div className="mt-3">
+                          <NumberBalls
+                            redNumbers={previewEntry.red
+                              .map((value) => value.toString().padStart(2, "0"))
+                              .join(",")}
+                            blueNumbers={previewEntry.blue
+                              .map((value) => value.toString().padStart(2, "0"))
+                              .join(",")}
+                            compact
+                          />
+                        </div>
+                      ) : null}
                     </div>
-
-                    <div className="mt-3 grid grid-cols-[minmax(0,1fr)_6rem] gap-2">
-                      <div className="space-y-1.5">
-                        <span className="text-xs text-slate-500">红球</span>
-                        <Input
-                          className="h-9 bg-white text-sm"
-                          inputMode="numeric"
-                          value={entry.redNumbers}
-                          placeholder={lotteryCode === "dlt" ? "03 11 18 26 32" : "01 02 03 04 05 06"}
-                          onChange={(event) => onEntryFieldChange(index, "redNumbers", event.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <span className="text-xs text-slate-500">蓝球</span>
-                        <Input
-                          className="h-9 bg-white text-sm"
-                          inputMode="numeric"
-                          value={entry.blueNumbers}
-                          placeholder={lotteryCode === "dlt" ? "04 09" : "07"}
-                          onChange={(event) => onEntryFieldChange(index, "blueNumbers", event.target.value)}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="mt-2 text-[11px] leading-4 text-slate-400">支持空格、逗号或连续数字，例如 010203040506</div>
-
-                    {previewEntry ? (
-                      <div className="mt-3">
-                        <NumberBalls
-                          redNumbers={previewEntry.red.map((value) => value.toString().padStart(2, "0")).join(",")}
-                          blueNumbers={previewEntry.blue.map((value) => value.toString().padStart(2, "0")).join(",")}
-                          compact
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">备注</label>
-            <Textarea className="min-h-24 bg-white" value={notes} placeholder="备注" onChange={(event) => onNotesChange(event.target.value)} />
+            <Textarea
+              className="min-h-24 bg-white"
+              value={notes}
+              placeholder="备注"
+              onChange={(event) => onNotesChange(event.target.value)}
+            />
           </div>
 
           <Button

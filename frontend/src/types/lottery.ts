@@ -134,6 +134,22 @@ export interface TicketHistoryPage {
   hasMore: boolean;
 }
 
+export interface TicketImportRowResult {
+  row: number;
+  lotteryCode?: string;
+  issue?: string;
+  ticketId?: string;
+  status: string;
+  message?: string;
+}
+
+export interface TicketImportResult {
+  totalCount: number;
+  successCount: number;
+  failedCount: number;
+  rows: TicketImportRowResult[];
+}
+
 export interface ParsedEntry {
   red: number[];
   blue: number[];
