@@ -12,12 +12,29 @@ export interface LotteryType {
 
 export interface DrawResult {
   id: string;
+  createdAt: string;
+  updatedAt: string;
+  lotteryCode: string;
   issue: string;
   drawDate: string;
   redNumbers: string;
   blueNumbers: string;
   saleAmount: number;
   prizePoolAmount: number;
+  source: string;
+}
+
+export interface DrawResultFilters {
+  lotteryCode: string;
+  sort: string;
+}
+
+export interface DrawResultPage {
+  items: DrawResult[];
+  page: number;
+  pageSize: number;
+  total: number;
+  hasMore: boolean;
 }
 
 export interface RecommendationEntry {

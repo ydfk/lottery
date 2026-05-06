@@ -68,6 +68,13 @@ type BatchSyncResultResponse struct {
 	Time string                         `json:"time" example:"2026-03-16T10:00:00Z"`
 }
 
+type DrawPageResponse struct {
+	Flag bool                          `json:"flag" example:"true"`
+	Code int                           `json:"code" example:"200"`
+	Data lotteryService.DrawPageResult `json:"data"`
+	Time string                        `json:"time" example:"2026-03-16T10:00:00Z"`
+}
+
 type TicketListResponse struct {
 	Flag bool                          `json:"flag" example:"true"`
 	Code int                           `json:"code" example:"200"`

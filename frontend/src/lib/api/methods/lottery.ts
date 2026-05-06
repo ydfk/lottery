@@ -1,6 +1,8 @@
 import { apiDelete, apiGet, apiPost } from "../client";
 import type {
   DashboardData,
+  DrawResultFilters,
+  DrawResultPage,
   ParsedEntry,
   Recommendation,
   RecommendationFilters,
@@ -17,6 +19,18 @@ const LOTTERY_CODE = "ssq";
 
 export function getDashboard() {
   return apiGet<DashboardData>(`/api/lotteries/dashboard`);
+}
+
+export function getDrawResults(page: number, pageSize: number, filters: DrawResultFilters) {
+  const query = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+    sort: filters.sort || "latest",
+  });
+  if (filters.lotteryCode) {
+    query.set("lotteryCode", filters.lotteryCode);
+  }
+  return apiGet<DrawResultPage>(`/api/lotteries/draws/history?${query.toString()}`);
 }
 
 export function getTickets() {

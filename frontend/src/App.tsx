@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { History, LayoutDashboard, ReceiptText, Sparkles } from "lucide-react";
+import { History, LayoutDashboard, List, ReceiptText, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { AuthPanel } from "@/components/lottery/auth-panel";
 import { DashboardPanel } from "@/components/lottery/dashboard-panel";
+import { DrawResultsPanel } from "@/components/lottery/draw-results-panel";
 import {
   LotteryDisplayModeToggle,
   type LotteryDisplayMode,
@@ -19,6 +20,7 @@ import {
   deleteTicket,
   formatParsedEntry,
   getDashboard,
+  getDrawResults,
   importTickets,
   getRecommendationDetail,
   getRecommendations,
@@ -39,6 +41,8 @@ import {
 import type { AuthUser } from "@/types/auth";
 import type {
   DashboardData,
+  DrawResult as DrawResultItem,
+  DrawResultFilters,
   Recommendation,
   RecommendationFilters,
   Ticket as TicketRecord,
@@ -48,7 +52,7 @@ import type {
   TicketUpload,
 } from "@/types/lottery";
 
-type TabKey = "dashboard" | "recommendation" | "records" | "history";
+type TabKey = "dashboard" | "recommendation" | "records" | "history" | "draws";
 
 const DISPLAY_MODE_STORAGE_KEY = "lottery:display-mode";
 
@@ -77,6 +81,12 @@ const tabs: LotteryShellTab<TabKey>[] = [
     description: "追踪已购记录与中奖状态",
     icon: History,
   },
+  {
+    key: "draws",
+    label: "开奖",
+    description: "查看历史爬取到的开奖记录",
+    icon: List,
+  },
 ];
 
 const DEFAULT_HISTORY_FILTERS: TicketHistoryFilters = {
@@ -88,6 +98,11 @@ const DEFAULT_HISTORY_FILTERS: TicketHistoryFilters = {
 const DEFAULT_RECOMMENDATION_FILTERS: RecommendationFilters = {
   lotteryCode: "",
   status: "",
+  sort: "latest",
+};
+
+const DEFAULT_DRAW_FILTERS: DrawResultFilters = {
+  lotteryCode: "",
   sort: "latest",
 };
 
@@ -135,7 +150,10 @@ export default function App() {
   const [recommendationLoadingMore, setRecommendationLoadingMore] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyLoadingMore, setHistoryLoadingMore] = useState(false);
+  const [drawLoading, setDrawLoading] = useState(false);
+  const [drawLoadingMore, setDrawLoadingMore] = useState(false);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+  const [drawResults, setDrawResults] = useState<DrawResultItem[]>([]);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [recommendationFilters, setRecommendationFilters] = useState<RecommendationFilters>(
     DEFAULT_RECOMMENDATION_FILTERS
@@ -149,6 +167,10 @@ export default function App() {
   const [historyPage, setHistoryPage] = useState(1);
   const [historyHasMore, setHistoryHasMore] = useState(false);
   const [historyTotal, setHistoryTotal] = useState(0);
+  const [drawFilters, setDrawFilters] = useState<DrawResultFilters>(DEFAULT_DRAW_FILTERS);
+  const [drawPage, setDrawPage] = useState(1);
+  const [drawHasMore, setDrawHasMore] = useState(false);
+  const [drawTotal, setDrawTotal] = useState(0);
   const [selectedRecommendation, setSelectedRecommendation] = useState<Recommendation | null>(null);
   const [selectedHistoryTicket, setSelectedHistoryTicket] = useState<TicketRecord | null>(null);
   const [purchaseRecommendation, setPurchaseRecommendation] = useState<Recommendation | null>(null);
@@ -164,12 +186,22 @@ export default function App() {
   const [notes, setNotes] = useState("");
   const [entryDrafts, setEntryDrafts] = useState<TicketEntryDraft[]>([createEmptyEntryDraft()]);
   const webNavigationTabs = tabs.filter((item) => item.key !== "records");
-  const navigationTabs = displayMode === "web" ? webNavigationTabs : tabs;
+  const appNavigationTabs = tabs.filter((item) => item.key !== "draws");
+  const navigationTabs = displayMode === "web" ? webNavigationTabs : appNavigationTabs;
   const navigationActiveTab =
-    displayMode === "web" && activeTab === "records" ? "history" : activeTab;
+    displayMode === "web" && activeTab === "records"
+      ? "history"
+      : displayMode === "app" && activeTab === "draws"
+        ? "dashboard"
+        : activeTab;
 
   function resetLotteryState() {
     setDashboard(null);
+    setDrawResults([]);
+    setDrawFilters(DEFAULT_DRAW_FILTERS);
+    setDrawPage(1);
+    setDrawHasMore(false);
+    setDrawTotal(0);
     setRecommendations([]);
     setRecommendationFilters(DEFAULT_RECOMMENDATION_FILTERS);
     setRecommendationPage(1);
@@ -215,12 +247,17 @@ export default function App() {
     }
 
     try {
-      const [dashboardData, recommendationData, historyData] = await Promise.all([
+      const [dashboardData, drawData, recommendationData, historyData] = await Promise.all([
         getDashboard(),
+        getDrawResults(1, 10, drawFilters),
         getRecommendations(1, 10, recommendationFilters),
         getTicketHistory(1, 10, historyFilters),
       ]);
       setDashboard(dashboardData);
+      setDrawResults(drawData.items);
+      setDrawPage(drawData.page);
+      setDrawHasMore(drawData.hasMore);
+      setDrawTotal(drawData.total);
       setRecommendations(recommendationData.items);
       setRecommendationPage(recommendationData.page);
       setRecommendationHasMore(recommendationData.hasMore);
@@ -234,6 +271,30 @@ export default function App() {
     } finally {
       if (showLoading) {
         setLoading(false);
+      }
+    }
+  }
+
+  async function loadDrawResults(page: number, append: boolean, filters: DrawResultFilters) {
+    if (append) {
+      setDrawLoadingMore(true);
+    } else {
+      setDrawLoading(true);
+    }
+
+    try {
+      const drawData = await getDrawResults(page, 10, filters);
+      setDrawResults((current) => (append ? [...current, ...drawData.items] : drawData.items));
+      setDrawPage(drawData.page);
+      setDrawHasMore(drawData.hasMore);
+      setDrawTotal(drawData.total);
+    } catch (error) {
+      handleRequestError(error, "加载开奖记录失败");
+    } finally {
+      if (append) {
+        setDrawLoadingMore(false);
+      } else {
+        setDrawLoading(false);
       }
     }
   }
@@ -320,6 +381,12 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem(DISPLAY_MODE_STORAGE_KEY, displayMode);
   }, [displayMode]);
+
+  useEffect(() => {
+    if (displayMode === "app" && activeTab === "draws") {
+      setActiveTab("dashboard");
+    }
+  }, [activeTab, displayMode]);
 
   useEffect(() => {
     if (!selectedImage) {
@@ -721,6 +788,18 @@ export default function App() {
     void loadRecommendations(recommendationPage + 1, true, recommendationFilters);
   }
 
+  function handleDrawFilterChange(nextFilters: DrawResultFilters) {
+    setDrawFilters(nextFilters);
+    void loadDrawResults(1, false, nextFilters);
+  }
+
+  function handleLoadMoreDraws() {
+    if (!drawHasMore || drawLoadingMore) {
+      return;
+    }
+    void loadDrawResults(drawPage + 1, true, drawFilters);
+  }
+
   function handleOpenRecordPanel() {
     setSelectedHistoryTicket(null);
     setActiveTab("records");
@@ -799,6 +878,21 @@ export default function App() {
           onRemoveEntry={handleRemoveEntry}
           onCreateTicket={() => void handleCreateTicket()}
           onClearRecommendation={() => setPurchaseRecommendation(null)}
+        />
+      );
+    }
+
+    if (activeTab === "draws") {
+      return (
+        <DrawResultsPanel
+          items={drawResults}
+          filters={drawFilters}
+          loading={drawLoading}
+          loadingMore={drawLoadingMore}
+          hasMore={drawHasMore}
+          total={drawTotal}
+          onFiltersChange={handleDrawFilterChange}
+          onLoadMore={handleLoadMoreDraws}
         />
       );
     }

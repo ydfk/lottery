@@ -6,6 +6,7 @@ func RegisterRoutes(router fiber.Router) {
 	group := router.Group("/lotteries")
 	group.Get("/", ListLotteries)
 	group.Get("/dashboard", GetGlobalDashboard)
+	group.Get("/draws/history", ListDrawHistory)
 	group.Get("/recommendations", ListAllRecommendations)
 	group.Post("/draws/sync-history", SyncMultipleDraws)
 	group.Get("/tickets/history", ListTicketHistory)
