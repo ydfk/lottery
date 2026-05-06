@@ -7,6 +7,7 @@ $projectRoot = Split-Path -Parent $scriptDir
 $imageName = if ($env:DOCKER_IMAGE_NAME) { $env:DOCKER_IMAGE_NAME } else { "ydfk/lottery" }
 $buildVersion = Get-LotteryBuildVersion
 $imageTag = $buildVersion
+$latestTag = "latest"
 
 Set-Location $projectRoot
 
@@ -16,10 +17,14 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "项目目录: $projectRoot" -ForegroundColor DarkGray
 Write-Host "镜像名称: $imageName" -ForegroundColor DarkGray
 Write-Host "构建版本: $buildVersion" -ForegroundColor DarkGray
-Write-Host "镜像标签: $imageTag" -ForegroundColor DarkGray
+Write-Host "版本标签: $imageTag" -ForegroundColor DarkGray
+Write-Host "默认标签: $latestTag" -ForegroundColor DarkGray
 Write-Host ""
 
 $tags = @("$imageName`:$imageTag")
+if ($imageTag -ne $latestTag) {
+  $tags += "$imageName`:$latestTag"
+}
 
 $arguments = @("build", "-f", "Dockerfile", "--build-arg", "APP_VERSION=$buildVersion")
 foreach ($tag in $tags) {

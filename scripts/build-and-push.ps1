@@ -59,3 +59,6 @@ Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "镜像已推送到:" -ForegroundColor Cyan
 Write-Host "  $imageName`:$imageTag" -ForegroundColor White
+if ($imageTag -ne "latest") {
+  Write-Host "  $imageName`:latest" -ForegroundColor White
+}
