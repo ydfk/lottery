@@ -30,6 +30,12 @@ export function getDrawResults(page: number, pageSize: number, filters: DrawResu
   if (filters.lotteryCode) {
     query.set("lotteryCode", filters.lotteryCode);
   }
+  if (filters.issue) {
+    query.set("issue", filters.issue);
+  }
+  if (filters.drawDate) {
+    query.set("drawDate", filters.drawDate);
+  }
   return apiGet<DrawResultPage>(`/api/lotteries/draws/history?${query.toString()}`);
 }
 
@@ -116,6 +122,13 @@ export function generateRecommendation(lotteryCode: string) {
 
 export function syncDraws() {
   return apiPost<{ syncedCount: number }>(`/api/lotteries/${LOTTERY_CODE}/draws/sync`);
+}
+
+export function syncDrawIssue(lotteryCode: string, issue: string) {
+  return apiPost<
+    { lotteryCode: string; issue?: string; requestedCount: number; syncedCount: number },
+    { issue: string }
+  >(`/api/lotteries/${lotteryCode}/draws/sync`, { issue });
 }
 
 export function uploadTicketImage(formData: FormData) {

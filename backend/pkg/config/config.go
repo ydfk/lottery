@@ -7,14 +7,15 @@ import (
 )
 
 type Config struct {
-	App       AppConfig
-	Jwt       JwtConfig
-	Database  DatabaseConfig
-	Storage   StorageConfig
-	Jisu      JisuConfig
-	AI        AIConnectionConfig
-	Vision    VisionConnectionConfig
-	Lotteries []LotteryConfig `mapstructure:"lotteries"`
+	App          AppConfig
+	Jwt          JwtConfig
+	Database     DatabaseConfig
+	Storage      StorageConfig
+	Jisu         JisuConfig
+	Compensation CompensationConfig `mapstructure:"compensation"`
+	AI           AIConnectionConfig
+	Vision       VisionConnectionConfig
+	Lotteries    []LotteryConfig `mapstructure:"lotteries"`
 }
 
 type AppConfig struct {
@@ -50,6 +51,19 @@ type JisuConfig struct {
 	BaseURL        string `mapstructure:"baseURL"`
 	AppKey         string `mapstructure:"appKey"`
 	TimeoutSeconds int    `mapstructure:"timeoutSeconds"`
+}
+
+type CompensationConfig struct {
+	Enabled bool                    `mapstructure:"enabled"`
+	Jobs    []CompensationJobConfig `mapstructure:"jobs"`
+}
+
+type CompensationJobConfig struct {
+	Name                 string `mapstructure:"name"`
+	Type                 string `mapstructure:"type"`
+	Enabled              bool   `mapstructure:"enabled"`
+	Cron                 string `mapstructure:"cron"`
+	TargetDateOffsetDays int    `mapstructure:"targetDateOffsetDays"`
 }
 
 type AIConnectionConfig struct {

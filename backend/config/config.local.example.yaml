@@ -5,6 +5,16 @@
 jisu:
   appKey: "your-jisu-app-key"
 
+# 数据补偿任务示例，可按需覆盖 cron 或关闭任务。
+compensation:
+  enabled: true
+  jobs:
+    - name: "previous-draw-prize"
+      type: "drawPrize"
+      enabled: true
+      cron: "0 0 3,8 * * *"
+      targetDateOffsetDays: 1
+
 # PostgreSQL 示例，按需覆盖。
 database:
   driver: "postgres"

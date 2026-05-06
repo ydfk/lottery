@@ -21,11 +21,25 @@ export interface DrawResult {
   blueNumbers: string;
   saleAmount: number;
   prizePoolAmount: number;
+  firstPrizeAmount: number;
+  secondPrizeAmount: number;
   source: string;
+  rawPayload: string;
+  prizeDetails: DrawPrizeDetail[];
+}
+
+export interface DrawPrizeDetail {
+  id: string;
+  prizeName: string;
+  prizeRule: string;
+  winnerCount: number;
+  singleBonus: number;
 }
 
 export interface DrawResultFilters {
   lotteryCode: string;
+  issue: string;
+  drawDate: string;
   sort: string;
 }
 

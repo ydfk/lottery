@@ -146,7 +146,7 @@ function WebLotteryShell<Key extends string = string>(props: WebLotteryShellProp
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,rgba(248,250,252,0.96),rgba(226,232,240,0.88)),radial-gradient(circle_at_top_right,rgba(59,130,246,0.14),transparent_40%)] px-4 py-4 sm:px-6 lg:px-8">
-      <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-6">
+      <div className="mx-auto flex w-full max-w-[1760px] flex-col gap-6">
         <header className="relative overflow-hidden rounded-[2rem] border border-white/70 bg-[linear-gradient(135deg,rgba(255,255,255,0.94),rgba(241,245,249,0.92)_52%,rgba(226,232,240,0.88))] p-5 shadow-[0_22px_60px_rgba(15,23,42,0.14)]">
           <div className="absolute inset-y-0 right-0 w-1/2 bg-[radial-gradient(circle_at_top,rgba(37,99,235,0.16),transparent_62%)]" />
           <div className="relative flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
@@ -173,7 +173,7 @@ function WebLotteryShell<Key extends string = string>(props: WebLotteryShellProp
           </div>
         </header>
 
-        <div className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
+        <div className="grid gap-6 xl:grid-cols-[300px_minmax(0,1fr)]">
           <aside className="xl:sticky xl:top-4 xl:self-start">
             <Card className="border-white/70 bg-white/82 shadow-[0_20px_55px_rgba(15,23,42,0.08)] backdrop-blur">
               <CardHeader className="gap-3">

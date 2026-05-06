@@ -213,11 +213,17 @@ func extractItems(raw json.RawMessage) ([]map[string]any, error) {
 	if err := json.Unmarshal(raw, &wrapper); err != nil {
 		return nil, err
 	}
+	if extractString(wrapper, "issueno", "issue") != "" {
+		return []map[string]any{wrapper}, nil
+	}
 
 	for _, key := range []string{"list", "data", "result"} {
 		value, ok := wrapper[key]
 		if !ok {
 			continue
+		}
+		if record, ok := value.(map[string]any); ok {
+			return []map[string]any{record}, nil
 		}
 		items, ok := value.([]any)
 		if !ok {

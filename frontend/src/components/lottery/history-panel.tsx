@@ -51,12 +51,15 @@ interface HistoryPanelProps {
   loading: boolean;
   loadingMore: boolean;
   hasMore: boolean;
+  page: number;
+  pageSize: number;
   total: number;
   selectedTicket: Ticket | null;
   recheckPending: boolean;
   deletePending: boolean;
   onFiltersChange: (filters: TicketHistoryFilters) => void;
   onLoadMore: () => void;
+  onPageChange: (page: number) => void;
   onImportTickets: (workbook: File, imagesZip: File | null) => Promise<TicketImportResult>;
   onOpenRecord: () => void;
   onSelectTicket: (ticket: Ticket | null) => void;
@@ -194,12 +197,15 @@ export function HistoryPanel(props: HistoryPanelProps) {
     loading,
     loadingMore,
     hasMore,
+    page,
+    pageSize,
     total,
     selectedTicket,
     recheckPending,
     deletePending,
     onFiltersChange,
     onLoadMore,
+    onPageChange,
     onImportTickets,
     onOpenRecord,
     onSelectTicket,
@@ -214,6 +220,7 @@ export function HistoryPanel(props: HistoryPanelProps) {
   const hasActiveFilters = Boolean(
     deferredFilters.lotteryCode || deferredFilters.status || deferredFilters.sort !== "latest"
   );
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
   const activeFilterLabels = useMemo(() => {
     const labels: string[] = [];
     if (deferredFilters.lotteryCode) {
@@ -233,7 +240,7 @@ export function HistoryPanel(props: HistoryPanelProps) {
 
   useEffect(() => {
     const target = loadMoreTriggerRef.current;
-    if (!target || !hasMore || loading || loadingMore) {
+    if (isWebDisplay || !target || !hasMore || loading || loadingMore) {
       return;
     }
 
@@ -250,7 +257,7 @@ export function HistoryPanel(props: HistoryPanelProps) {
 
     observer.observe(target);
     return () => observer.disconnect();
-  }, [hasMore, loading, loadingMore, onLoadMore]);
+  }, [hasMore, isWebDisplay, loading, loadingMore, onLoadMore]);
 
   useEffect(() => {
     if (hasActiveFilters) {
@@ -479,7 +486,33 @@ export function HistoryPanel(props: HistoryPanelProps) {
             </div>
           )}
 
-          {hasMore && (
+          {isWebDisplay ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.4rem] border border-white/60 bg-white/80 px-4 py-3 shadow-[0_12px_30px_rgba(15,23,42,0.06)] backdrop-blur">
+              <p className="text-sm text-slate-500">
+                第 {page} / {pageCount} 页，每页 {pageSize} 条
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-10 rounded-full px-4"
+                  disabled={loading || page <= 1}
+                  onClick={() => onPageChange(page - 1)}
+                >
+                  上一页
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-10 rounded-full px-4"
+                  disabled={loading || page >= pageCount}
+                  onClick={() => onPageChange(page + 1)}
+                >
+                  下一页
+                </Button>
+              </div>
+            </div>
+          ) : hasMore ? (
             <div className="space-y-3">
               <div ref={loadMoreTriggerRef} className="h-4" />
               <div className="flex justify-center">
@@ -494,7 +527,7 @@ export function HistoryPanel(props: HistoryPanelProps) {
                 </Button>
               </div>
             </div>
-          )}
+          ) : null}
         </>
       ) : (
         <Card className="border-white/60 bg-white/85 backdrop-blur">

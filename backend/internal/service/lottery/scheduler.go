@@ -3,6 +3,7 @@ package lottery
 import (
 	"context"
 
+	"go-fiber-starter/pkg/config"
 	"go-fiber-starter/pkg/logger"
 
 	"github.com/robfig/cron/v3"
@@ -10,6 +11,8 @@ import (
 
 func startSyncLoop(ctx context.Context) {
 	scheduler := cron.New(cron.WithSeconds())
+
+	registerCompensationJobs(ctx, scheduler)
 
 	for _, definition := range ListDefinitions() {
 		code := definition.Code
@@ -55,4 +58,27 @@ func startSyncLoop(ctx context.Context) {
 	<-ctx.Done()
 	stopContext := scheduler.Stop()
 	<-stopContext.Done()
+}
+
+func registerCompensationJobs(ctx context.Context, scheduler *cron.Cron) {
+	if !config.Current.Compensation.Enabled {
+		return
+	}
+
+	for _, item := range config.Current.Compensation.Jobs {
+		job := item
+		if !job.Enabled || job.Cron == "" || job.Type == "" {
+			continue
+		}
+		_, err := scheduler.AddFunc(job.Cron, func() {
+			if runErr := RunCompensationJob(ctx, job); runErr != nil {
+				logger.Error("补偿任务 %s 执行失败: %v", job.Name, runErr)
+				return
+			}
+			logger.Info("补偿任务 %s 执行完成", job.Name)
+		})
+		if err != nil {
+			logger.Warn("忽略非法补偿 cron 配置 %s: %v", job.Name, err)
+		}
+	}
 }

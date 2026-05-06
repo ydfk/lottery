@@ -53,6 +53,19 @@ jisu:
   # 调用极速数据接口超时时间，单位：秒。
   timeoutSeconds: 15
 
+# 数据补偿任务配置。
+compensation:
+  # 是否启用补偿任务。
+  enabled: true
+  # 补偿任务列表，type 用于后续扩展不同补偿逻辑。
+  jobs:
+    - name: "previous-draw-prize"
+      type: "drawPrize"
+      enabled: true
+      # 每天凌晨 3 点和早上 8 点检查前一天开奖数据。
+      cron: "0 0 3,8 * * *"
+      targetDateOffsetDays: 1
+
 # AI 推荐模型连接配置。
 ai:
   # OpenAI 兼容接口基础地址，例如 http://host/v1。

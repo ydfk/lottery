@@ -49,6 +49,10 @@ type saveDrawOptions struct {
 }
 
 func SyncLatestDraw(ctx context.Context, code string, issue string) (*SyncResult, error) {
+	if strings.TrimSpace(issue) != "" {
+		return SyncDrawIssue(ctx, code, issue)
+	}
+
 	lotteryType, err := getLotteryType(code)
 	if err != nil {
 		return nil, err
@@ -70,11 +74,56 @@ func SyncLatestDraw(ctx context.Context, code string, issue string) (*SyncResult
 	if err != nil {
 		return nil, err
 	}
-	if issue != "" {
-		itemIssue := normalizeIssueByCode(code, extractString(item, "issueno", "issue"))
-		if itemIssue != "" && expectedIssue != "" && !containsString(issueAliases(code, expectedIssue), itemIssue) {
-			return nil, fmt.Errorf("第三方返回的开奖期号与请求期号不一致: 请求 %s，返回 %s", expectedIssue, itemIssue)
-		}
+
+	saved, savedIssue, err := saveDrawItem(lotteryType, item, saveDrawOptions{
+		ExpectedIssue:    expectedIssue,
+		ExpectedDrawDate: expectedDrawDate,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if err := settleByIssue(code, savedIssue); err != nil {
+		return nil, err
+	}
+
+	result := &SyncResult{
+		LotteryCode:    code,
+		Issue:          savedIssue,
+		RequestedCount: 1,
+	}
+	if saved {
+		result.SyncedCount = 1
+	}
+	return result, nil
+}
+
+func SyncDrawIssue(ctx context.Context, code string, issue string) (*SyncResult, error) {
+	lotteryType, err := getLotteryType(code)
+	if err != nil {
+		return nil, err
+	}
+	definition, err := GetDefinition(code)
+	if err != nil {
+		return nil, err
+	}
+	if config.Current.Jisu.AppKey == "" {
+		return nil, fmt.Errorf("未配置极速数据 appkey")
+	}
+
+	expectedIssue, expectedDrawDate, err := resolveLatestSyncTarget(definition, issue)
+	if err != nil {
+		return nil, err
+	}
+	if expectedIssue == "" {
+		return nil, fmt.Errorf("请提供需要补全的开奖期号")
+	}
+
+	item, err := fetchLatestDraw(ctx, lotteryType, expectedIssue)
+	if err != nil {
+		return nil, err
+	}
+	if itemIssue := normalizeIssueByCode(code, extractString(item, "issueno", "issue")); !containsString(issueAliases(code, expectedIssue), itemIssue) {
+		return nil, fmt.Errorf("第三方 query 接口返回期号不匹配: 期望 %s，实际 %s", expectedIssue, itemIssue)
 	}
 
 	saved, savedIssue, err := saveDrawItem(lotteryType, item, saveDrawOptions{
@@ -100,6 +149,10 @@ func SyncLatestDraw(ctx context.Context, code string, issue string) (*SyncResult
 }
 
 func SyncDrawHistory(ctx context.Context, code string, options SyncOptions) (*SyncResult, error) {
+	if strings.TrimSpace(options.Issue) != "" {
+		return SyncDrawIssue(ctx, code, options.Issue)
+	}
+
 	lotteryType, err := getLotteryType(code)
 	if err != nil {
 		return nil, err
@@ -191,7 +244,7 @@ func fetchLatestDraw(ctx context.Context, lotteryType model.LotteryType, issue s
 		strings.TrimRight(config.Current.Jisu.BaseURL, "/"),
 		url.QueryEscape(config.Current.Jisu.AppKey),
 		url.QueryEscape(lotteryType.RemoteLotteryID),
-		url.QueryEscape(issue),
+		url.QueryEscape(formatRemoteIssue(lotteryType.Code, issue)),
 	)
 
 	parsed, err := requestJisu(ctx, requestURL)
@@ -201,22 +254,42 @@ func fetchLatestDraw(ctx context.Context, lotteryType model.LotteryType, issue s
 	return extractSingleItem(parsed.Result)
 }
 
+func formatRemoteIssue(code string, issue string) string {
+	issue = strings.TrimSpace(issue)
+	if code == "dlt" && len(issue) == 7 && strings.HasPrefix(issue, "20") && isDigits(issue) {
+		return issue[2:]
+	}
+	return issue
+}
+
 func fetchDrawHistory(ctx context.Context, lotteryType model.LotteryType, issue string, start int, count int) ([]map[string]any, error) {
-	requestURL := fmt.Sprintf(
-		"%s/caipiao/history?appkey=%s&caipiaoid=%s&issueno=%s&start=%d&num=%d",
-		strings.TrimRight(config.Current.Jisu.BaseURL, "/"),
-		url.QueryEscape(config.Current.Jisu.AppKey),
-		url.QueryEscape(lotteryType.RemoteLotteryID),
-		url.QueryEscape(issue),
-		start,
-		count,
-	)
+	query := url.Values{}
+	query.Set("appkey", config.Current.Jisu.AppKey)
+	query.Set("caipiaoid", lotteryType.RemoteLotteryID)
+	if strings.TrimSpace(issue) != "" {
+		query.Set("issueno", strings.TrimSpace(issue))
+	} else {
+		query.Set("start", strconv.Itoa(start))
+		query.Set("num", strconv.Itoa(count))
+	}
+	requestURL := fmt.Sprintf("%s/caipiao/history?%s", strings.TrimRight(config.Current.Jisu.BaseURL, "/"), query.Encode())
 
 	parsed, err := requestJisu(ctx, requestURL)
 	if err != nil {
 		return nil, err
 	}
 	return extractItems(parsed.Result)
+}
+
+func findHistoryItemByIssue(code string, issue string, items []map[string]any) (map[string]any, bool) {
+	aliases := issueAliases(code, issue)
+	for _, item := range items {
+		itemIssue := normalizeIssueByCode(code, extractString(item, "issueno", "issue"))
+		if itemIssue == "" || containsString(aliases, itemIssue) {
+			return item, true
+		}
+	}
+	return nil, false
 }
 
 func requestJisu(ctx context.Context, requestURL string) (*jisuResponse, error) {

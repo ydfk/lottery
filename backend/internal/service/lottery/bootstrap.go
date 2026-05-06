@@ -3,6 +3,7 @@ package lottery
 import (
 	"context"
 
+	"go-fiber-starter/pkg/config"
 	"go-fiber-starter/pkg/logger"
 )
 
@@ -38,6 +39,14 @@ func repairLotteryState() error {
 }
 
 func hasScheduledLotteries() bool {
+	if config.Current.Compensation.Enabled {
+		for _, job := range config.Current.Compensation.Jobs {
+			if job.Enabled && job.Cron != "" && job.Type != "" {
+				return true
+			}
+		}
+	}
+
 	for _, definition := range ListDefinitions() {
 		if definition.Enabled && definition.Sync.Enabled && definition.Sync.Cron != "" {
 			return true

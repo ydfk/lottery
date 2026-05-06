@@ -28,6 +28,7 @@ import {
   getTicketHistory,
   recheckTicket,
   recognizeTicket,
+  syncDrawIssue,
   uploadTicketImage,
 } from "@/lib/api/methods/lottery";
 import { formatLotteryDrawDate } from "@/lib/lottery-display";
@@ -55,6 +56,9 @@ import type {
 type TabKey = "dashboard" | "recommendation" | "records" | "history" | "draws";
 
 const DISPLAY_MODE_STORAGE_KEY = "lottery:display-mode";
+const DRAW_PAGE_SIZE = 20;
+const RECOMMENDATION_PAGE_SIZE = 20;
+const HISTORY_PAGE_SIZE = 20;
 
 const tabs: LotteryShellTab<TabKey>[] = [
   {
@@ -103,6 +107,8 @@ const DEFAULT_RECOMMENDATION_FILTERS: RecommendationFilters = {
 
 const DEFAULT_DRAW_FILTERS: DrawResultFilters = {
   lotteryCode: "",
+  issue: "",
+  drawDate: "",
   sort: "latest",
 };
 
@@ -151,7 +157,7 @@ export default function App() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyLoadingMore, setHistoryLoadingMore] = useState(false);
   const [drawLoading, setDrawLoading] = useState(false);
-  const [drawLoadingMore, setDrawLoadingMore] = useState(false);
+  const [drawCompletePendingId, setDrawCompletePendingId] = useState("");
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [drawResults, setDrawResults] = useState<DrawResultItem[]>([]);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
@@ -169,7 +175,6 @@ export default function App() {
   const [historyTotal, setHistoryTotal] = useState(0);
   const [drawFilters, setDrawFilters] = useState<DrawResultFilters>(DEFAULT_DRAW_FILTERS);
   const [drawPage, setDrawPage] = useState(1);
-  const [drawHasMore, setDrawHasMore] = useState(false);
   const [drawTotal, setDrawTotal] = useState(0);
   const [selectedRecommendation, setSelectedRecommendation] = useState<Recommendation | null>(null);
   const [selectedHistoryTicket, setSelectedHistoryTicket] = useState<TicketRecord | null>(null);
@@ -200,7 +205,6 @@ export default function App() {
     setDrawResults([]);
     setDrawFilters(DEFAULT_DRAW_FILTERS);
     setDrawPage(1);
-    setDrawHasMore(false);
     setDrawTotal(0);
     setRecommendations([]);
     setRecommendationFilters(DEFAULT_RECOMMENDATION_FILTERS);
@@ -247,25 +251,41 @@ export default function App() {
     }
 
     try {
-      const [dashboardData, drawData, recommendationData, historyData] = await Promise.all([
+      const [dashboardResult, drawResult, recommendationResult, historyResult] =
+        await Promise.allSettled([
         getDashboard(),
-        getDrawResults(1, 10, drawFilters),
-        getRecommendations(1, 10, recommendationFilters),
-        getTicketHistory(1, 10, historyFilters),
+        getDrawResults(1, DRAW_PAGE_SIZE, drawFilters),
+        getRecommendations(1, RECOMMENDATION_PAGE_SIZE, recommendationFilters),
+        getTicketHistory(1, HISTORY_PAGE_SIZE, historyFilters),
       ]);
-      setDashboard(dashboardData);
-      setDrawResults(drawData.items);
-      setDrawPage(drawData.page);
-      setDrawHasMore(drawData.hasMore);
-      setDrawTotal(drawData.total);
-      setRecommendations(recommendationData.items);
-      setRecommendationPage(recommendationData.page);
-      setRecommendationHasMore(recommendationData.hasMore);
-      setRecommendationTotal(recommendationData.total);
-      setTickets(historyData.items);
-      setHistoryPage(historyData.page);
-      setHistoryHasMore(historyData.hasMore);
-      setHistoryTotal(historyData.total);
+
+      if (dashboardResult.status === "fulfilled") {
+        setDashboard(dashboardResult.value);
+      }
+      if (drawResult.status === "fulfilled") {
+        setDrawResults(drawResult.value.items);
+        setDrawPage(drawResult.value.page);
+        setDrawTotal(drawResult.value.total);
+      }
+      if (recommendationResult.status === "fulfilled") {
+        setRecommendations(recommendationResult.value.items);
+        setRecommendationPage(recommendationResult.value.page);
+        setRecommendationHasMore(recommendationResult.value.hasMore);
+        setRecommendationTotal(recommendationResult.value.total);
+      }
+      if (historyResult.status === "fulfilled") {
+        setTickets(historyResult.value.items);
+        setHistoryPage(historyResult.value.page);
+        setHistoryHasMore(historyResult.value.hasMore);
+        setHistoryTotal(historyResult.value.total);
+      }
+
+      const failedResult = [dashboardResult, drawResult, recommendationResult, historyResult].find(
+        (result) => result.status === "rejected"
+      );
+      if (failedResult?.status === "rejected") {
+        handleRequestError(failedResult.reason, "部分数据加载失败");
+      }
     } catch (error) {
       handleRequestError(error, "加载数据失败");
     } finally {
@@ -275,27 +295,18 @@ export default function App() {
     }
   }
 
-  async function loadDrawResults(page: number, append: boolean, filters: DrawResultFilters) {
-    if (append) {
-      setDrawLoadingMore(true);
-    } else {
-      setDrawLoading(true);
-    }
+  async function loadDrawResults(page: number, filters: DrawResultFilters) {
+    setDrawLoading(true);
 
     try {
-      const drawData = await getDrawResults(page, 10, filters);
-      setDrawResults((current) => (append ? [...current, ...drawData.items] : drawData.items));
+      const drawData = await getDrawResults(page, DRAW_PAGE_SIZE, filters);
+      setDrawResults(drawData.items);
       setDrawPage(drawData.page);
-      setDrawHasMore(drawData.hasMore);
       setDrawTotal(drawData.total);
     } catch (error) {
       handleRequestError(error, "加载开奖记录失败");
     } finally {
-      if (append) {
-        setDrawLoadingMore(false);
-      } else {
-        setDrawLoading(false);
-      }
+      setDrawLoading(false);
     }
   }
 
@@ -311,7 +322,7 @@ export default function App() {
     }
 
     try {
-      const recommendationData = await getRecommendations(page, 10, filters);
+      const recommendationData = await getRecommendations(page, RECOMMENDATION_PAGE_SIZE, filters);
       setRecommendations((current) =>
         append ? [...current, ...recommendationData.items] : recommendationData.items
       );
@@ -337,7 +348,7 @@ export default function App() {
     }
 
     try {
-      const historyData = await getTicketHistory(page, 10, filters);
+      const historyData = await getTicketHistory(page, HISTORY_PAGE_SIZE, filters);
       setTickets((current) => (append ? [...current, ...historyData.items] : historyData.items));
       setHistoryPage(historyData.page);
       setHistoryHasMore(historyData.hasMore);
@@ -717,6 +728,22 @@ export default function App() {
     }
   }
 
+  async function handleCompleteDrawInfo(draw: DrawResultItem) {
+    setDrawCompletePendingId(draw.id);
+    try {
+      const result = await syncDrawIssue(draw.lotteryCode, draw.issue);
+      if (result.syncedCount <= 0) {
+        throw new Error("第三方接口暂未返回当前期完整开奖信息");
+      }
+      await loadDrawResults(drawPage, drawFilters);
+      toast.success("开奖信息已补全");
+    } catch (error) {
+      handleRequestError(error, "补全开奖信息失败");
+    } finally {
+      setDrawCompletePendingId("");
+    }
+  }
+
   async function handleImportTickets(workbook: File, imagesZip: File | null) {
     const formData = new FormData();
     formData.append("workbook", workbook);
@@ -781,6 +808,14 @@ export default function App() {
     void loadHistoryTickets(historyPage + 1, true, historyFilters);
   }
 
+  function handleHistoryPageChange(nextPage: number) {
+    if (nextPage === historyPage || historyLoading) {
+      return;
+    }
+    setSelectedHistoryTicket(null);
+    void loadHistoryTickets(nextPage, false, historyFilters);
+  }
+
   function handleLoadMoreRecommendations() {
     if (!recommendationHasMore || recommendationLoadingMore) {
       return;
@@ -788,16 +823,24 @@ export default function App() {
     void loadRecommendations(recommendationPage + 1, true, recommendationFilters);
   }
 
-  function handleDrawFilterChange(nextFilters: DrawResultFilters) {
-    setDrawFilters(nextFilters);
-    void loadDrawResults(1, false, nextFilters);
-  }
-
-  function handleLoadMoreDraws() {
-    if (!drawHasMore || drawLoadingMore) {
+  function handleRecommendationPageChange(nextPage: number) {
+    if (nextPage === recommendationPage || recommendationLoading) {
       return;
     }
-    void loadDrawResults(drawPage + 1, true, drawFilters);
+    setSelectedRecommendation(null);
+    void loadRecommendations(nextPage, false, recommendationFilters);
+  }
+
+  function handleDrawFilterChange(nextFilters: DrawResultFilters) {
+    setDrawFilters(nextFilters);
+    void loadDrawResults(1, nextFilters);
+  }
+
+  function handleDrawPageChange(nextPage: number) {
+    if (nextPage === drawPage || drawLoading) {
+      return;
+    }
+    void loadDrawResults(nextPage, drawFilters);
   }
 
   function handleOpenRecordPanel() {
@@ -829,12 +872,15 @@ export default function App() {
           loading={recommendationLoading}
           loadingMore={recommendationLoadingMore}
           hasMore={recommendationHasMore}
+          page={recommendationPage}
+          pageSize={RECOMMENDATION_PAGE_SIZE}
           total={recommendationTotal}
           selectedRecommendation={selectedRecommendation}
           detailPending={detailPending}
           deletePending={deletePending}
           onFiltersChange={handleRecommendationFilterChange}
           onLoadMore={handleLoadMoreRecommendations}
+          onPageChange={handleRecommendationPageChange}
           onSelectRecommendation={(recommendationId) =>
             void handleOpenRecommendation(recommendationId)
           }
@@ -888,11 +934,13 @@ export default function App() {
           items={drawResults}
           filters={drawFilters}
           loading={drawLoading}
-          loadingMore={drawLoadingMore}
-          hasMore={drawHasMore}
+          page={drawPage}
+          pageSize={DRAW_PAGE_SIZE}
           total={drawTotal}
+          completePendingId={drawCompletePendingId}
           onFiltersChange={handleDrawFilterChange}
-          onLoadMore={handleLoadMoreDraws}
+          onPageChange={handleDrawPageChange}
+          onCompleteDraw={(draw) => void handleCompleteDrawInfo(draw)}
         />
       );
     }
@@ -905,12 +953,15 @@ export default function App() {
         loading={historyLoading}
         loadingMore={historyLoadingMore}
         hasMore={historyHasMore}
+        page={historyPage}
+        pageSize={HISTORY_PAGE_SIZE}
         total={historyTotal}
         selectedTicket={selectedHistoryTicket}
         recheckPending={recheckPending}
         deletePending={deletePending}
         onFiltersChange={handleHistoryFilterChange}
         onLoadMore={handleLoadMoreHistory}
+        onPageChange={handleHistoryPageChange}
         onImportTickets={handleImportTickets}
         onOpenRecord={handleOpenRecordPanel}
         onSelectTicket={setSelectedHistoryTicket}
