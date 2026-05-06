@@ -2,12 +2,19 @@ $ErrorActionPreference = "Stop"
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $projectRoot = Split-Path -Parent $scriptDir
+. "$scriptDir\build-version.ps1"
 
 Set-Location $projectRoot
+
+$buildVersion = Get-LotteryBuildVersion
+$env:BUILD_VERSION = $buildVersion
+$env:APP_VERSION = $buildVersion
+$env:DOCKER_IMAGE_TAG = $buildVersion
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "彩迹 一键构建并推送 Docker 镜像" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "构建版本: $buildVersion" -ForegroundColor DarkGray
 Write-Host ""
 
 Write-Host "========================================" -ForegroundColor Yellow
@@ -43,7 +50,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $imageName = if ($env:DOCKER_IMAGE_NAME) { $env:DOCKER_IMAGE_NAME } else { "ydfk/lottery" }
-$imageTag = if ($env:DOCKER_IMAGE_TAG) { $env:DOCKER_IMAGE_TAG } else { "latest" }
+$imageTag = $buildVersion
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Green
