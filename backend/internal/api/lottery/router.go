@@ -22,6 +22,7 @@ func RegisterRoutes(router fiber.Router) {
 	group.Get("/:code/recommendations/latest", GetLatestRecommendation)
 	group.Get("/:code/recommendations/:recommendationId", GetRecommendationDetail)
 	group.Delete("/:code/recommendations/:recommendationId", DeleteRecommendation)
+	group.Post("/:code/recommendations/:recommendationId/recheck", RecheckRecommendation)
 	group.Post("/:code/recommendations/generate", GenerateRecommendation)
 	group.Post("/:code/draws/sync", SyncDraws)
 	group.Post("/:code/draws/sync-history", SyncDrawHistory)

@@ -120,10 +120,23 @@ func SyncDrawIssue(ctx context.Context, code string, issue string) (*SyncResult,
 
 	item, err := fetchLatestDraw(ctx, lotteryType, expectedIssue)
 	if err != nil {
+		if isNoDrawDataError(err) {
+			return &SyncResult{
+				LotteryCode:    code,
+				Issue:          expectedIssue,
+				RequestedCount: 1,
+				SyncedCount:    0,
+			}, nil
+		}
 		return nil, err
 	}
 	if itemIssue := normalizeIssueByCode(code, extractString(item, "issueno", "issue")); !containsString(issueAliases(code, expectedIssue), itemIssue) {
-		return nil, fmt.Errorf("第三方 query 接口返回期号不匹配: 期望 %s，实际 %s", expectedIssue, itemIssue)
+		return &SyncResult{
+			LotteryCode:    code,
+			Issue:          expectedIssue,
+			RequestedCount: 1,
+			SyncedCount:    0,
+		}, nil
 	}
 
 	saved, savedIssue, err := saveDrawItem(lotteryType, item, saveDrawOptions{
@@ -146,6 +159,19 @@ func SyncDrawIssue(ctx context.Context, code string, issue string) (*SyncResult,
 		result.SyncedCount = 1
 	}
 	return result, nil
+}
+
+func isNoDrawDataError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "暂无") ||
+		strings.Contains(message, "无数据") ||
+		strings.Contains(message, "没有数据") ||
+		strings.Contains(message, "未找到") ||
+		strings.Contains(message, "not found") ||
+		strings.Contains(message, "no data")
 }
 
 func SyncDrawHistory(ctx context.Context, code string, options SyncOptions) (*SyncResult, error) {

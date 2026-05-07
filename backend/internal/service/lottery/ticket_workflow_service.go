@@ -133,10 +133,6 @@ func RecognizeUploadedTicket(ctx context.Context, input RecognizeUploadedTicketI
 }
 
 func CreateTicket(ctx context.Context, input CreateTicketInput) (*TicketDetail, error) {
-	if input.UploadID == "" {
-		return nil, fmt.Errorf("请先上传彩票图片")
-	}
-
 	recommendation, recommendationID, err := resolveRecommendation(input.UserID, input.Code, input.RecommendationID)
 	if err != nil {
 		return nil, err
@@ -153,14 +149,45 @@ func CreateTicket(ctx context.Context, input CreateTicketInput) (*TicketDetail, 
 	shouldEvaluate := false
 
 	if err := db.DB.Transaction(func(tx *gorm.DB) error {
-		upload, reserveErr := reserveTicketUpload(tx, input.UserID, input.Code, input.UploadID)
-		if reserveErr != nil {
-			return reserveErr
-		}
+		var imagePath string
+		var recognizedText string
+		var source string
 
-		code, reserveErr = resolveCreateTicketCode(input.Code, upload.LotteryCode, recommendation)
-		if reserveErr != nil {
-			return reserveErr
+		if input.UploadID != "" {
+			upload, reserveErr := reserveTicketUpload(tx, input.UserID, input.Code, input.UploadID)
+			if reserveErr != nil {
+				return reserveErr
+			}
+
+			code, reserveErr = resolveCreateTicketCode(input.Code, upload.LotteryCode, recommendation)
+			if reserveErr != nil {
+				return reserveErr
+			}
+
+			imagePath = upload.ImagePath
+			recognizedText = upload.RecognizedText
+			source = "upload"
+
+			if issue == "" {
+				issue = upload.RecognitionIssue
+			}
+
+			if len(input.Entries) == 0 {
+				if upload.RecognitionPayload == "" {
+					return fmt.Errorf("请先识别号码，或手动填写完整号码后保存")
+				}
+				input.Entries, reserveErr = getRecognizedEntries(upload)
+				if reserveErr != nil {
+					return reserveErr
+				}
+			}
+		} else {
+			var resolveErr error
+			code, resolveErr = resolveCreateTicketCode(input.Code, "", recommendation)
+			if resolveErr != nil {
+				return resolveErr
+			}
+			source = "manual"
 		}
 
 		definition, definitionErr := GetDefinition(code)
@@ -168,27 +195,16 @@ func CreateTicket(ctx context.Context, input CreateTicketInput) (*TicketDetail, 
 			return definitionErr
 		}
 
-		entries := input.Entries
-		if len(entries) == 0 {
-			if upload.RecognitionPayload == "" {
-				return fmt.Errorf("请先识别号码，或手动填写完整号码后保存")
+		if len(input.Entries) > 0 {
+			normalized, normErr := normalizeParsedEntries(definition, input.Entries)
+			if normErr != nil {
+				return normErr
 			}
-			entries, reserveErr = getRecognizedEntries(upload)
-			if reserveErr != nil {
-				return reserveErr
-			}
+			input.Entries = normalized
 		}
 
-		if len(entries) > 0 {
-			entries, reserveErr = normalizeParsedEntries(definition, entries)
-			if reserveErr != nil {
-				return reserveErr
-			}
-		}
-
-		issue = input.Issue
-		if issue == "" {
-			issue = upload.RecognitionIssue
+		if input.Issue != "" {
+			issue = input.Issue
 		}
 		if issue == "" && recommendation != nil {
 			issue = recommendation.Issue
@@ -200,11 +216,11 @@ func CreateTicket(ctx context.Context, input CreateTicketInput) (*TicketDetail, 
 
 		drawDate := input.DrawDate
 
-		if reserveErr = validateDuplicateTicket(tx, input.UserID, code, issue, entries); reserveErr != nil {
+		if reserveErr := validateDuplicateTicket(tx, input.UserID, code, issue, input.Entries); reserveErr != nil {
 			return reserveErr
 		}
 
-		ticket, createErr := createTicketRecord(tx, input.UserID, code, recommendationID, issue, drawDate, "upload", upload.ImagePath, upload.RecognizedText, purchasedAt, input.CostAmount, input.Notes, entries)
+		ticket, createErr := createTicketRecord(tx, input.UserID, code, recommendationID, issue, drawDate, source, imagePath, recognizedText, purchasedAt, input.CostAmount, input.Notes, input.Entries)
 		if createErr != nil {
 			if isUniqueConstraintError(createErr) {
 				return ErrDuplicateTicket
@@ -212,19 +228,19 @@ func CreateTicket(ctx context.Context, input CreateTicketInput) (*TicketDetail, 
 			return createErr
 		}
 
-		upload.LotteryCode = code
-		upload.Status = TicketUploadStatusSaved
-		if err := tx.Model(&model.TicketUpload{}).
-			Where("id = ? AND status = ?", upload.Id, TicketUploadStatusSaving).
-			Updates(map[string]any{
-				"lottery_code": upload.LotteryCode,
-				"status":       upload.Status,
-			}).Error; err != nil {
-			return err
+		if input.UploadID != "" {
+			if err := tx.Model(&model.TicketUpload{}).
+				Where("id = ? AND status = ?", input.UploadID, TicketUploadStatusSaving).
+				Updates(map[string]any{
+					"lottery_code": code,
+					"status":       TicketUploadStatusSaved,
+				}).Error; err != nil {
+				return err
+			}
 		}
 
 		ticketID = ticket.Id.String()
-		shouldEvaluate = len(entries) > 0
+		shouldEvaluate = len(input.Entries) > 0
 		input.DrawDate = drawDate
 		return nil
 	}); err != nil {

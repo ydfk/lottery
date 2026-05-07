@@ -2,6 +2,7 @@ package lottery
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	model "go-fiber-starter/internal/model/lottery"
@@ -9,6 +10,34 @@ import (
 
 	"gorm.io/gorm"
 )
+
+func RecheckRecommendation(ctx context.Context, code string, recommendationID string, userID string) (*RecommendationDetail, error) {
+	recommendation := model.Recommendation{}
+	if err := currentUserScope(db.DB.Preload("Entries"), userID).First(&recommendation, "id = ? AND lottery_code = ?", recommendationID, code).Error; err != nil {
+		return nil, err
+	}
+
+	issue := normalizeIssueByCode(recommendation.LotteryCode, recommendation.Issue)
+	if issue == "" {
+		return nil, fmt.Errorf("推荐期号不能为空")
+	}
+	if issue != recommendation.Issue {
+		recommendation.Issue = issue
+		if err := db.DB.Omit("Entries").Save(&recommendation).Error; err != nil {
+			return nil, err
+		}
+	}
+
+	if err := findRecommendationSettlementDraw(recommendation.LotteryCode, issue, &model.DrawResult{}); err != nil {
+		if _, syncErr := SyncLatestDraw(ctx, recommendation.LotteryCode, issue); syncErr != nil {
+			return buildRecommendationDetail(recommendation, userID)
+		}
+	}
+	if err := EvaluateRecommendationsByIssue(recommendation.LotteryCode, issue); err != nil {
+		return nil, err
+	}
+	return GetRecommendationDetail(recommendation.LotteryCode, recommendation.Id.String(), userID)
+}
 
 func EvaluateRecommendationsByIssue(code string, issue string) error {
 	recommendations := make([]model.Recommendation, 0)

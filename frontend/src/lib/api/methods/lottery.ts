@@ -148,7 +148,7 @@ export function recognizeTicket(body: { uploadId: string; ocrText?: string }) {
 
 export function createTicket(body: {
   lotteryCode?: string;
-  uploadId: string;
+  uploadId?: string;
   recommendationId?: string;
   issue?: string;
   drawDate?: string;
@@ -166,7 +166,7 @@ export function createTicket(body: {
     Ticket,
     {
       lotteryCode?: string;
-      uploadId: string;
+      uploadId?: string;
       recommendationId?: string;
       issue?: string;
       drawDate?: string;
@@ -185,6 +185,12 @@ export function createTicket(body: {
 
 export function recheckTicket(ticketId: string) {
   return apiPost<Ticket>(`/api/lotteries/tickets/${ticketId}/recheck`);
+}
+
+export function recheckRecommendation(lotteryCode: string, recommendationId: string) {
+  return apiPost<Recommendation>(
+    `/api/lotteries/${lotteryCode}/recommendations/${recommendationId}/recheck`
+  );
 }
 
 export function deleteTicket(ticketId: string) {

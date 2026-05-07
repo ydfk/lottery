@@ -26,6 +26,7 @@ import {
   getRecommendations,
   generateRecommendation,
   getTicketHistory,
+  recheckRecommendation,
   recheckTicket,
   recognizeTicket,
   syncDrawIssue,
@@ -150,6 +151,7 @@ export default function App() {
   const [recognizePending, setRecognizePending] = useState(false);
   const [submitPending, setSubmitPending] = useState(false);
   const [recheckPending, setRecheckPending] = useState(false);
+  const [recommendationRecheckPendingId, setRecommendationRecheckPendingId] = useState("");
   const [deletePending, setDeletePending] = useState(false);
   const [generatingLotteryCode, setGeneratingLotteryCode] = useState("");
   const [recommendationLoading, setRecommendationLoading] = useState(false);
@@ -158,6 +160,7 @@ export default function App() {
   const [historyLoadingMore, setHistoryLoadingMore] = useState(false);
   const [drawLoading, setDrawLoading] = useState(false);
   const [drawCompletePendingId, setDrawCompletePendingId] = useState("");
+  const [drawSyncPending, setDrawSyncPending] = useState(false);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [drawResults, setDrawResults] = useState<DrawResultItem[]>([]);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
@@ -545,11 +548,6 @@ export default function App() {
   }
 
   async function handleCreateTicket() {
-    if (!selectedImage && !uploadedTicket) {
-      toast.error("请先选择彩票照片");
-      return;
-    }
-
     const entries = buildParsedEntriesFromDrafts(entryDrafts, lotteryCode);
     if (!lotteryCode.trim()) {
       toast.error("请确认彩票类型");
@@ -575,10 +573,10 @@ export default function App() {
 
     setSubmitPending(true);
     try {
-      const upload = uploadedTicket || (await uploadSelectedTicketImage());
+      const upload = uploadedTicket || (selectedImage ? await uploadSelectedTicketImage() : null);
       await createTicket({
         lotteryCode: lotteryCode || undefined,
-        uploadId: upload.id,
+        uploadId: upload?.id,
         recommendationId: purchaseRecommendation?.id,
         issue: issue || undefined,
         drawDate: drawDate || undefined,
@@ -728,6 +726,25 @@ export default function App() {
     }
   }
 
+  async function handleRecheckRecommendation(recommendation: Recommendation) {
+    setRecommendationRecheckPendingId(recommendation.id);
+    try {
+      const updatedRecommendation = await recheckRecommendation(
+        recommendation.lotteryCode,
+        recommendation.id
+      );
+      setRecommendations((items) => replaceRecommendation(items, updatedRecommendation));
+      if (selectedRecommendation?.id === updatedRecommendation.id) {
+        setSelectedRecommendation(updatedRecommendation);
+      }
+      toast.success("推荐判奖已更新");
+    } catch (error) {
+      handleRequestError(error, "推荐重新判奖失败");
+    } finally {
+      setRecommendationRecheckPendingId("");
+    }
+  }
+
   async function handleCompleteDrawInfo(draw: DrawResultItem) {
     setDrawCompletePendingId(draw.id);
     try {
@@ -741,6 +758,30 @@ export default function App() {
       handleRequestError(error, "补全开奖信息失败");
     } finally {
       setDrawCompletePendingId("");
+    }
+  }
+
+  async function handleSyncDrawIssue(lotteryCode: string, issue: string) {
+    setDrawSyncPending(true);
+    try {
+      const result = await syncDrawIssue(lotteryCode, issue);
+      const nextFilters = {
+        lotteryCode,
+        issue,
+        drawDate: "",
+        sort: "latest",
+      };
+      setDrawFilters(nextFilters);
+      await loadDrawResults(1, nextFilters);
+      if (result.syncedCount > 0) {
+        toast.success("开奖数据已同步");
+      } else {
+        toast.info("第三方暂未返回该期开奖数据");
+      }
+    } catch (error) {
+      handleRequestError(error, "同步开奖数据失败");
+    } finally {
+      setDrawSyncPending(false);
     }
   }
 
@@ -877,6 +918,7 @@ export default function App() {
           total={recommendationTotal}
           selectedRecommendation={selectedRecommendation}
           detailPending={detailPending}
+          recheckPendingId={recommendationRecheckPendingId}
           deletePending={deletePending}
           onFiltersChange={handleRecommendationFilterChange}
           onLoadMore={handleLoadMoreRecommendations}
@@ -885,6 +927,9 @@ export default function App() {
             void handleOpenRecommendation(recommendationId)
           }
           onRecordPurchase={handleRecordPurchase}
+          onRecheckRecommendation={(recommendation) =>
+            void handleRecheckRecommendation(recommendation)
+          }
           onDeleteRecommendation={(recommendation) =>
             void handleDeleteRecommendation(recommendation)
           }
@@ -938,8 +983,10 @@ export default function App() {
           pageSize={DRAW_PAGE_SIZE}
           total={drawTotal}
           completePendingId={drawCompletePendingId}
+          syncPending={drawSyncPending}
           onFiltersChange={handleDrawFilterChange}
           onPageChange={handleDrawPageChange}
+          onSyncIssue={(lotteryCode, issue) => void handleSyncDrawIssue(lotteryCode, issue)}
           onCompleteDraw={(draw) => void handleCompleteDrawInfo(draw)}
         />
       );

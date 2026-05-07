@@ -450,6 +450,7 @@ export function RecordPanel(props: RecordPanelProps) {
                 <>
                   <ImageUp className="size-7 text-slate-400" />
                   <p className="mt-1.5 text-sm font-medium text-slate-700">选择图片</p>
+                  <p className="mt-1 text-xs text-slate-400">可不上传，直接手动录入保存</p>
                 </>
               )}
               <input
@@ -492,6 +493,9 @@ export function RecordPanel(props: RecordPanelProps) {
                     </>
                   )}
                 </Button>
+                <p className="text-xs leading-5 text-slate-500">
+                  没有图片时跳过识别，填写下方信息后可直接保存票据。
+                </p>
               </div>
             </div>
           </div>
@@ -715,7 +719,7 @@ export function RecordPanel(props: RecordPanelProps) {
             type="button"
             variant="secondary"
             className="h-12 w-full rounded-2xl"
-            disabled={submitPending || (!uploadedTicket && !selectedImage)}
+            disabled={submitPending}
             onClick={onCreateTicket}
           >
             <Save className="mr-2 size-4" />

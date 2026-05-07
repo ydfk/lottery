@@ -21,9 +21,8 @@ type openAIMessage struct {
 }
 
 type openAIRequest struct {
-	Model       string          `json:"model"`
-	Messages    []openAIMessage `json:"messages"`
-	Temperature float64         `json:"temperature,omitempty"`
+	Model    string          `json:"model"`
+	Messages []openAIMessage `json:"messages"`
 }
 
 type openAIResponse struct {
@@ -102,9 +101,8 @@ func callOpenAICompatible(ctx context.Context, baseURL string, apiKey string, mo
 	}
 
 	requestBody := openAIRequest{
-		Model:       model,
-		Messages:    messages,
-		Temperature: 0.7,
+		Model:    model,
+		Messages: messages,
 	}
 	rawRequest, err := json.Marshal(requestBody)
 	if err != nil {
@@ -156,9 +154,8 @@ func callOpenAICompatible(ctx context.Context, baseURL string, apiKey string, mo
 
 func buildOpenAIRequestLog(request openAIRequest) map[string]any {
 	return map[string]any{
-		"model":       request.Model,
-		"temperature": request.Temperature,
-		"messages":    sanitizeOpenAIMessages(request.Messages),
+		"model":    request.Model,
+		"messages": sanitizeOpenAIMessages(request.Messages),
 	}
 }
 

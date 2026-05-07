@@ -44,8 +44,10 @@ interface DrawResultsPanelProps {
   pageSize: number;
   total: number;
   completePendingId: string;
+  syncPending: boolean;
   onFiltersChange: (filters: DrawResultFilters) => void;
   onPageChange: (page: number) => void;
+  onSyncIssue: (lotteryCode: string, issue: string) => void;
   onCompleteDraw: (draw: DrawResult) => void;
 }
 
@@ -321,12 +323,16 @@ export function DrawResultsPanel(props: DrawResultsPanelProps) {
     pageSize,
     total,
     completePendingId,
+    syncPending,
     onFiltersChange,
     onPageChange,
+    onSyncIssue,
     onCompleteDraw,
   } = props;
   const [selectedDraw, setSelectedDraw] = useState<DrawResult | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [syncLotteryCode, setSyncLotteryCode] = useState("");
+  const [syncIssue, setSyncIssue] = useState("");
   const [, startTransition] = useTransition();
   const deferredFilters = useDeferredValue(filters);
   const hasActiveFilters = Boolean(
@@ -378,6 +384,15 @@ export function DrawResultsPanel(props: DrawResultsPanelProps) {
     });
   }
 
+  function handleSyncIssue() {
+    const lotteryCode = syncLotteryCode.trim();
+    const issue = syncIssue.trim();
+    if (!lotteryCode || !issue || syncPending) {
+      return;
+    }
+    onSyncIssue(lotteryCode, issue);
+  }
+
   return (
     <div className="space-y-6">
       <section className="rounded-[1.6rem] border border-white/60 bg-white/88 p-4 shadow-[0_16px_40px_rgba(15,23,42,0.08)] backdrop-blur">
@@ -412,6 +427,45 @@ export function DrawResultsPanel(props: DrawResultsPanelProps) {
               />
             </button>
           </div>
+        </div>
+
+        <div className="mt-4 rounded-[1.25rem] border border-slate-200 bg-slate-50/90 p-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="min-w-[180px] flex-1">
+              <select
+                className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-slate-400"
+                value={syncLotteryCode}
+                onChange={(event) => setSyncLotteryCode(event.target.value)}
+              >
+                <option value="">选择彩票类型</option>
+                {lotteryDisplayOptions.map((item) => (
+                  <option key={item.code} value={item.code}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="min-w-[180px] flex-1">
+              <input
+                className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-slate-400"
+                value={syncIssue}
+                placeholder="输入期号，如 2026048"
+                onChange={(event) => setSyncIssue(event.target.value)}
+              />
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-11 rounded-2xl px-5"
+              disabled={syncPending || !syncLotteryCode || !syncIssue.trim()}
+              onClick={handleSyncIssue}
+            >
+              {syncPending ? "同步中..." : "同步开奖"}
+            </Button>
+          </div>
+          <p className="mt-2 text-xs text-slate-500">
+            手动调用第三方接口同步指定期号，已存在会覆盖，不存在会新增。
+          </p>
         </div>
 
         {filtersOpen ? (

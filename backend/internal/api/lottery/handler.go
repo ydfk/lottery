@@ -227,6 +227,29 @@ func DeleteRecommendation(c *fiber.Ctx) error {
 	return response.Success(c, fiber.Map{"deleted": true})
 }
 
+// @Summary 重新判奖推荐
+// @Description 按推荐期号重新同步开奖并再次判奖，适合补录开奖后修正推荐状态
+// @Tags lottery
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param code path string true "彩票编码，如 ssq、dlt"
+// @Param recommendationId path string true "推荐记录 ID"
+// @Success 200 {object} RecommendationDetailResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /lotteries/{code}/recommendations/{recommendationId}/recheck [post]
+func RecheckRecommendation(c *fiber.Ctx) error {
+	userID, err := currentUserID(c)
+	if err != nil {
+		return err
+	}
+	data, err := lotteryService.RecheckRecommendation(c.Context(), c.Params("code"), c.Params("recommendationId"), userID)
+	if err != nil {
+		return err
+	}
+	return response.Success(c, data)
+}
+
 // @Summary 生成推荐号码
 // @Description 按当前彩票配置的 AI 模型和提示词生成推荐号码
 // @Tags lottery
@@ -616,10 +639,6 @@ func CreateTicket(c *fiber.Ctx) error {
 	if err := c.BodyParser(&request); err != nil {
 		return response.Error(c, "参数不正确", fiber.StatusBadRequest)
 	}
-	if request.UploadID == "" {
-		return response.Error(c, "请先上传彩票图片", fiber.StatusBadRequest)
-	}
-
 	purchasedAt, err := parseOptionalTime(request.PurchasedAt)
 	if err != nil {
 		return response.Error(c, "购买时间格式不正确，应为 RFC3339", fiber.StatusBadRequest)
@@ -672,9 +691,6 @@ func CreateGenericTicket(c *fiber.Ctx) error {
 	request := CreateTicketRequest{}
 	if err := c.BodyParser(&request); err != nil {
 		return response.Error(c, "参数不正确", fiber.StatusBadRequest)
-	}
-	if request.UploadID == "" {
-		return response.Error(c, "请先上传彩票图片", fiber.StatusBadRequest)
 	}
 
 	purchasedAt, err := parseOptionalTime(request.PurchasedAt)

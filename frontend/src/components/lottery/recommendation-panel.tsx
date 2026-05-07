@@ -45,12 +45,14 @@ interface RecommendationPanelProps {
   total: number;
   selectedRecommendation: Recommendation | null;
   detailPending: boolean;
+  recheckPendingId: string;
   deletePending: boolean;
   onFiltersChange: (filters: RecommendationFilters) => void;
   onLoadMore: () => void;
   onPageChange: (page: number) => void;
   onSelectRecommendation: (recommendationId: string | null) => void;
   onRecordPurchase: (recommendation: Recommendation) => void;
+  onRecheckRecommendation: (recommendation: Recommendation) => void;
   onDeleteRecommendation: (recommendation: Recommendation) => void;
 }
 
@@ -256,8 +258,17 @@ function RecommendationTable(props: {
   onSelectRecommendation: (recommendationId: string) => void;
   onOpenStealth: (recommendationId: string) => void;
   onRecordPurchase: (recommendation: Recommendation) => void;
+  onRecheckRecommendation: (recommendation: Recommendation) => void;
+  recheckPendingId: string;
 }) {
-  const { items, onSelectRecommendation, onOpenStealth, onRecordPurchase } = props;
+  const {
+    items,
+    onSelectRecommendation,
+    onOpenStealth,
+    onRecordPurchase,
+    onRecheckRecommendation,
+    recheckPendingId,
+  } = props;
 
   return (
     <Card className="border-white/60 bg-white/85 shadow-[0_16px_40px_rgba(15,23,42,0.08)] backdrop-blur">
@@ -271,7 +282,7 @@ function RecommendationTable(props: {
               <TableHead>购买</TableHead>
               <TableHead>奖金</TableHead>
               <TableHead>生成时间</TableHead>
-              <TableHead className="w-[230px] pr-4 text-right">操作</TableHead>
+              <TableHead className="w-[300px] pr-4 text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -332,6 +343,16 @@ function RecommendationTable(props: {
                         variant="outline"
                         size="sm"
                         className="h-8 rounded-full"
+                        disabled={recheckPendingId === recommendation.id}
+                        onClick={() => onRecheckRecommendation(recommendation)}
+                      >
+                        {recheckPendingId === recommendation.id ? "判奖中" : "重判"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 rounded-full"
                         onClick={() => onOpenStealth(recommendation.id)}
                       >
                         隐览
@@ -361,12 +382,14 @@ export function RecommendationPanel(props: RecommendationPanelProps) {
     total,
     selectedRecommendation,
     detailPending,
+    recheckPendingId,
     deletePending,
     onFiltersChange,
     onLoadMore,
     onPageChange,
     onSelectRecommendation,
     onRecordPurchase,
+    onRecheckRecommendation,
     onDeleteRecommendation,
   } = props;
   const loadMoreTriggerRef = useRef<HTMLDivElement | null>(null);
@@ -570,6 +593,8 @@ export function RecommendationPanel(props: RecommendationPanelProps) {
                 }
                 onOpenStealth={(recommendationId) => setStealthRecommendationId(recommendationId)}
                 onRecordPurchase={onRecordPurchase}
+                onRecheckRecommendation={onRecheckRecommendation}
+                recheckPendingId={recheckPendingId}
               />
             ) : (
               <>
@@ -683,6 +708,15 @@ export function RecommendationPanel(props: RecommendationPanelProps) {
                 onClick={() => onRecordPurchase(selectedRecommendation)}
               >
                 {selectedRecommendation.isPurchased ? "续记" : "购买"}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-11 rounded-full px-3 text-sm text-slate-700"
+                disabled={deletePending || recheckPendingId === selectedRecommendation.id}
+                onClick={() => onRecheckRecommendation(selectedRecommendation)}
+              >
+                {recheckPendingId === selectedRecommendation.id ? "判奖中" : "重判"}
               </Button>
               <Button
                 type="button"
