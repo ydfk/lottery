@@ -17,7 +17,7 @@ database:
   # 数据库驱动，支持 sqlite / postgres。
   driver: "sqlite"
   # SQLite 数据库文件路径。
-  path: "data/db.sqlite"
+  path: "data/lottery.sqlite"
   # PostgreSQL 连接串，填写后优先使用。
   dsn: ""
   # PostgreSQL 主机地址。

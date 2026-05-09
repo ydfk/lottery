@@ -42,6 +42,9 @@ func Init() error {
 	}
 	DB = db
 	configureConnectionPool(db)
+	if err := configureSQLiteJournalMode(db); err != nil {
+		return err
+	}
 	if err := autoMigrate(); err != nil {
 		return fmt.Errorf("数据库迁移失败: %v", err)
 	}
@@ -160,6 +163,17 @@ func configureConnectionPool(db *gorm.DB) {
 
 	applyPoolSetting(rawDB, config.Current.Database.MaxIdleConns, (*sql.DB).SetMaxIdleConns)
 	applyPoolSetting(rawDB, config.Current.Database.MaxOpenConns, (*sql.DB).SetMaxOpenConns)
+}
+
+func configureSQLiteJournalMode(db *gorm.DB) error {
+	if currentDriver() != "sqlite" {
+		return nil
+	}
+
+	if err := db.Exec("PRAGMA journal_mode=DELETE").Error; err != nil {
+		return fmt.Errorf("设置 SQLite 日志模式失败: %w", err)
+	}
+	return nil
 }
 
 func applyPoolSetting(database *sql.DB, value int, setter func(*sql.DB, int)) {

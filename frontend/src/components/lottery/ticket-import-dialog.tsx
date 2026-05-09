@@ -1,5 +1,5 @@
 import { useMemo, useState, type ChangeEvent } from "react";
-import { FileArchive, FileSpreadsheet, UploadCloud } from "lucide-react";
+import { Download, FileArchive, FileSpreadsheet, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ interface TicketImportDialogProps {
 
 const workbookAccept = ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const imagesZipAccept = ".zip,application/zip,application/x-zip-compressed";
+const importTemplateUrl = `${import.meta.env.BASE_URL}ticket-import-template.xlsx`;
 
 function formatFileSize(size: number) {
   if (size < 1024) {
@@ -166,6 +167,26 @@ export function TicketImportDialog(props: TicketImportDialogProps) {
         </DialogHeader>
 
         <div className="space-y-4 px-6 py-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.4rem] border border-slate-200 bg-white p-4">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-900">导入模板</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                下载后按模板列填写历史票据，再上传 Excel 工作簿。
+              </p>
+            </div>
+            <Button
+              asChild
+              variant="outline"
+              size="sm"
+              className="h-10 rounded-full px-4"
+            >
+              <a href={importTemplateUrl} download="ticket-import-template.xlsx">
+                <Download className="size-4" />
+                下载导入模板
+              </a>
+            </Button>
+          </div>
+
           <div className="grid gap-4 md:grid-cols-2">
             <FilePickerCard
               title="Excel 工作簿"

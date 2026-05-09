@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/xuri/excelize/v2"
@@ -21,12 +22,20 @@ func main() {
 	}
 	file.SetActiveSheet(sheetIndex)
 
-	outputPath := filepath.Join("..", "docs", "ticket-import-template.xlsx")
-	if err := file.SaveAs(outputPath); err != nil {
-		panic(err)
+	outputPaths := []string{
+		filepath.Join("..", "docs", "ticket-import-template.xlsx"),
+		filepath.Join("..", "frontend", "public", "ticket-import-template.xlsx"),
 	}
 
-	fmt.Println(outputPath)
+	for _, outputPath := range outputPaths {
+		if err := os.MkdirAll(filepath.Dir(outputPath), 0755); err != nil {
+			panic(err)
+		}
+		if err := file.SaveAs(outputPath); err != nil {
+			panic(err)
+		}
+		fmt.Println(outputPath)
+	}
 }
 
 func createImportSheet(file *excelize.File) {
@@ -48,9 +57,9 @@ func createImportSheet(file *excelize.File) {
 	}
 	rows := [][]string{
 		headers,
-		{"福彩双色球", "2026031", "2026-03-22", "2026-03-20 19:35", "02,06,10,13,22,31", "04", "2", "否", "4", "同一期同一张票第1注", "ssq-001.jpg"},
-		{"福彩双色球", "2026031", "2026-03-22", "2026-03-20 19:35", "03,09,15,19,25,30", "10", "2", "否", "4", "同一期同一张票第2注，会合并到上一行购买记录", "ssq-001.jpg"},
-		{"体彩大乐透", "2026030", "2026-03-23", "2026-03-22 18:20", "03,11,18,26,32", "04,09", "2", "是", "6", "大乐透示例", "dlt-001.jpg"},
+		{"ssq", "2026031", "2026-03-22", "2026-03-20 19:35", "02,06,10,13,22,31", "04", "2", "否", "", "金额留空时按倍数自动计算", "ssq-001.jpg"},
+		{"福彩双色球", "2026031", "2026/03/22", "", "030915192530", "10", "2", "否", "", "购买时间留空时使用开奖日期，号码可连续填写", "ssq-001.jpg"},
+		{"dlt", "26030", "2026/03/23", "2026-03-22 18:20", "0311182632", "0409", "2", "是", "", "大乐透追加会按 3 元/注自动计算", "dlt-001.jpg"},
 	}
 	writeRows(file, sheet, rows)
 	styleSheet(file, sheet, len(headers))
@@ -66,8 +75,10 @@ func createReadmeSheet(file *excelize.File) {
 		{"导入规则", "一行就是一注号码，不再区分单注模板和多注模板。"},
 		{"合并规则", "同一用户、同一彩票类型、同一期号的多行，会自动合并为一次购买记录。"},
 		{"彩票类型", "支持：福彩双色球 / 体彩大乐透，也支持 ssq / dlt。"},
-		{"开奖日期", "建议格式：2026-03-22。"},
-		{"购买时间", "建议格式：2026-03-20 19:35 或 RFC3339。"},
+		{"开奖日期", "支持 2026-03-22、2026/03/22、2026/3/22、20260322。"},
+		{"购买时间", "可留空，留空时使用开奖日期；填写时建议格式：2026-03-20 19:35 或 RFC3339。"},
+		{"号码", "支持逗号、空格或连续两位一组填写，例如 01,02,03、01 02 03、010203。"},
+		{"金额", "可留空，留空或小于等于 0 时按号码、倍数、追加自动计算；双色球 2 元/注，大乐透普通 2 元/注、追加 3 元/注。"},
 		{"图片名", "如果同时上传图片 ZIP，这里填 ZIP 内文件名，例如 ssq-001.jpg。"},
 		{"追加列", "支持：是/否、true/false、1/0、追加/不追加。"},
 		{"推荐关联", "无需手填推荐ID。系统会按彩票类型、期号和号码自动匹配推荐；只比较红球和蓝球，不比较倍数和追加。"},

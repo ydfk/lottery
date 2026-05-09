@@ -129,6 +129,161 @@ func TestImportTicketsOverwriteExistingTicket(t *testing.T) {
 	}
 }
 
+func TestImportTicketsAutoFieldsAndCodeAlias(t *testing.T) {
+	setupImportTicketTestDB(t)
+
+	userID := uuid.New().String()
+	workbook := buildImportWorkbook(t, []importWorkbookRow{
+		{
+			LotteryCode: "dlt",
+			Issue:       "26030",
+			DrawDate:    "2099/03/23",
+			RedNumbers:  "0311182632",
+			BlueNumbers: "0409",
+			Multiple:    "2",
+			Additional:  "是",
+			Notes:       "auto fields",
+		},
+		{
+			LotteryCode: "dlt",
+			Issue:       "26030",
+			DrawDate:    "2099/03/23",
+			RedNumbers:  "0614212934",
+			BlueNumbers: "0211",
+			Multiple:    "1",
+			Additional:  "否",
+			Notes:       "same issue merge",
+		},
+	})
+
+	result, err := ImportTickets(context.Background(), ImportTicketsInput{
+		UserID:   userID,
+		Workbook: workbook,
+	})
+
+	if err != nil {
+		t.Fatalf("import failed: %v", err)
+	}
+	if result.SuccessCount != 2 || result.FailedCount != 0 {
+		t.Fatalf("unexpected import result: %+v", result)
+	}
+
+	ticket := querySingleTicketByUser(t, userID)
+	if ticket.LotteryCode != "dlt" {
+		t.Fatalf("lottery code not normalized: %s", ticket.LotteryCode)
+	}
+	if ticket.Issue != "2026030" {
+		t.Fatalf("dlt issue not normalized: %s", ticket.Issue)
+	}
+	if ticket.CostAmount != 8 {
+		t.Fatalf("cost amount should be calculated by entries: %v", ticket.CostAmount)
+	}
+	if ticket.ManualDrawDate == nil || ticket.ManualDrawDate.Format("2006-01-02") != "2099-03-23" {
+		t.Fatalf("slash draw date not parsed correctly: %v", ticket.ManualDrawDate)
+	}
+	if ticket.PurchasedAt.Format("2006-01-02") != "2099-03-23" {
+		t.Fatalf("purchased_at should use draw date when empty, got %s", ticket.PurchasedAt.Format("2006-01-02"))
+	}
+	if len(ticket.Entries) != 2 || !ticket.Entries[0].IsAdditional || ticket.Entries[0].Multiple != 2 {
+		t.Fatalf("entry additional or multiple not imported correctly: %+v", ticket.Entries)
+	}
+}
+
+func TestImportTicketsOverwriteSameIssueWithImportedEntries(t *testing.T) {
+	setupImportTicketTestDB(t)
+
+	userID := uuid.New().String()
+	firstWorkbook := buildImportWorkbook(t, []importWorkbookRow{
+		{
+			LotteryCode: "ssq",
+			Issue:       "2026051",
+			DrawDate:    "2026/5/7",
+			RedNumbers:  "010203040506",
+			BlueNumbers: "07",
+			Multiple:    "1",
+			Notes:       "old entry",
+		},
+	})
+	if _, err := ImportTickets(context.Background(), ImportTicketsInput{UserID: userID, Workbook: firstWorkbook}); err != nil {
+		t.Fatalf("first import failed: %v", err)
+	}
+
+	secondWorkbook := buildImportWorkbook(t, []importWorkbookRow{
+		{
+			LotteryCode: "ssq",
+			Issue:       "2026051",
+			DrawDate:    "2026/5/7",
+			RedNumbers:  "020914222530",
+			BlueNumbers: "10",
+			Multiple:    "2",
+			Notes:       "new entry one",
+		},
+		{
+			LotteryCode: "ssq",
+			Issue:       "2026051",
+			DrawDate:    "2026/5/7",
+			RedNumbers:  "030613182433",
+			BlueNumbers: "04",
+			Multiple:    "2",
+			Notes:       "new entry two",
+		},
+	})
+	result, err := ImportTickets(context.Background(), ImportTicketsInput{UserID: userID, Workbook: secondWorkbook})
+	if err != nil {
+		t.Fatalf("second import failed: %v", err)
+	}
+	if result.SuccessCount != 2 || result.FailedCount != 0 {
+		t.Fatalf("unexpected second import result: %+v", result)
+	}
+
+	ticket := querySingleTicketByUser(t, userID)
+	if ticket.CostAmount != 8 {
+		t.Fatalf("cost amount should be overwritten by imported entries: %v", ticket.CostAmount)
+	}
+	if ticket.Notes != "new entry one\nnew entry two" {
+		t.Fatalf("notes should be overwritten by imported rows: %q", ticket.Notes)
+	}
+	if len(ticket.Entries) != 2 {
+		t.Fatalf("same issue should keep one ticket with 2 imported entries, got %d", len(ticket.Entries))
+	}
+	if ticket.Entries[0].RedNumbers != "02,09,14,22,25,30" || ticket.Entries[0].BlueNumbers != "10" {
+		t.Fatalf("old entries were not replaced: %+v", ticket.Entries)
+	}
+	if ticket.Entries[1].RedNumbers != "03,06,13,18,24,33" || ticket.Entries[1].BlueNumbers != "04" {
+		t.Fatalf("second imported entry missing: %+v", ticket.Entries)
+	}
+}
+
+func TestImportTicketParsersSupportSlashDateAndCompactNumbers(t *testing.T) {
+	for _, value := range []string{"2026/05/09", "2026/5/9"} {
+		drawDate, err := parseImportDate(value)
+		if err != nil {
+			t.Fatalf("slash date should be parsed: %v", err)
+		}
+		if drawDate.Format("2006-01-02") != "2026-05-09" {
+			t.Fatalf("unexpected slash date parse result: %s", drawDate.Format("2006-01-02"))
+		}
+	}
+	excelDrawDate, err := parseImportDate("46151")
+	if err != nil {
+		t.Fatalf("excel date serial should be parsed: %v", err)
+	}
+	if excelDrawDate.Format("2006-01-02") != "2026-05-09" {
+		t.Fatalf("unexpected excel date serial parse result: %s", excelDrawDate.Format("2006-01-02"))
+	}
+
+	cases := map[string]string{
+		"0102030405":   "01,02,03,04,05",
+		"010203040506": "01,02,03,04,05,06",
+		"0409":         "04,09",
+	}
+	for input, expected := range cases {
+		if actual := normalizeImportedNumbers(input); actual != expected {
+			t.Fatalf("compact numbers not normalized: %s got %s want %s", input, actual, expected)
+		}
+	}
+}
+
 func setupImportTicketTestDB(t *testing.T) {
 	t.Helper()
 
@@ -138,15 +293,29 @@ func setupImportTicketTestDB(t *testing.T) {
 	})
 	config.Current.Lotteries = []config.LotteryConfig{
 		{
-			Code:     "ssq",
-			Name:     "双色球",
-			Enabled:  true,
-			RedCount: 6,
+			Code:      "ssq",
+			Name:      "双色球",
+			Enabled:   true,
+			RedCount:  6,
 			BlueCount: 1,
-			RedMin:   1,
-			RedMax:   33,
-			BlueMin:  1,
-			BlueMax:  16,
+			RedMin:    1,
+			RedMax:    33,
+			BlueMin:   1,
+			BlueMax:   16,
+			DrawSchedule: config.LotteryDrawScheduleConfig{
+				Time: "21:15",
+			},
+		},
+		{
+			Code:      "dlt",
+			Name:      "体彩大乐透",
+			Enabled:   true,
+			RedCount:  5,
+			BlueCount: 2,
+			RedMin:    1,
+			RedMax:    35,
+			BlueMin:   1,
+			BlueMax:   12,
 			DrawSchedule: config.LotteryDrawScheduleConfig{
 				Time: "21:15",
 			},

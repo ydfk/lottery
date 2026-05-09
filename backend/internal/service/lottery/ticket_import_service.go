@@ -4,7 +4,6 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -229,7 +228,7 @@ func importTicketGroupWithImage(ctx context.Context, userID string, group import
 
 	purchasedAt := payload.PurchasedAt
 	if purchasedAt.IsZero() {
-		purchasedAt = time.Now()
+		purchasedAt = resolveImportPurchasedAt(payload.DrawDate)
 	}
 
 	ticketID := ""
@@ -246,12 +245,16 @@ func importTicketGroupWithImage(ctx context.Context, userID string, group import
 	}
 
 	if err := db.DB.Transaction(func(tx *gorm.DB) error {
-		ticket, exists, findErr := findImportDuplicateTicket(tx, userID, code, issue, entries)
+		tickets, findErr := findImportExistingTickets(tx, userID, code, issue)
 		if findErr != nil {
 			return findErr
 		}
 
-		if exists {
+		if len(tickets) > 0 {
+			ticket := tickets[0]
+			if cleanupErr := deleteImportedDuplicateTickets(tx, tickets[1:]); cleanupErr != nil {
+				return cleanupErr
+			}
 			if updateErr := updateImportedTicketRecord(tx, ticket.Id.String(), recommendationID, issue, drawDate, payload.ImagePath, purchasedAt, costAmount, payload.Notes, entries); updateErr != nil {
 				return updateErr
 			}
@@ -303,26 +306,36 @@ func importTicketGroupWithImage(ctx context.Context, userID string, group import
 	return GetTicketDetail(ticketID, userID)
 }
 
-func findImportDuplicateTicket(tx *gorm.DB, userID string, code string, issue string, entries []ParsedEntry) (model.Ticket, bool, error) {
-	if len(entries) == 0 {
-		return model.Ticket{}, false, nil
+func resolveImportPurchasedAt(drawDate time.Time) time.Time {
+	if !drawDate.IsZero() {
+		return drawDate
 	}
+	return time.Now()
+}
 
-	signature := buildTicketEntriesHash(entries)
-	ticket := model.Ticket{}
+func findImportExistingTickets(tx *gorm.DB, userID string, code string, issue string) ([]model.Ticket, error) {
+	tickets := make([]model.Ticket, 0)
 	err := currentUserScope(tx, userID).
-		Where("lottery_code = ? AND issue IN ? AND entry_signature = ?", code, issueAliases(code, issue), signature).
+		Where("lottery_code = ? AND issue IN ?", code, issueAliases(code, issue)).
 		Order("updated_at desc").
 		Order("created_at desc").
-		First(&ticket).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return model.Ticket{}, false, nil
-	}
-	if err != nil {
-		return model.Ticket{}, false, err
+		Find(&tickets).Error
+	return tickets, err
+}
+
+func deleteImportedDuplicateTickets(tx *gorm.DB, tickets []model.Ticket) error {
+	if len(tickets) == 0 {
+		return nil
 	}
 
-	return ticket, true, nil
+	ids := make([]uuid.UUID, 0, len(tickets))
+	for _, ticket := range tickets {
+		ids = append(ids, ticket.Id)
+	}
+	if err := tx.Where("ticket_id IN ?", ids).Delete(&model.TicketEntry{}).Error; err != nil {
+		return err
+	}
+	return tx.Where("id IN ?", ids).Delete(&model.Ticket{}).Error
 }
 
 func updateImportedTicketRecord(tx *gorm.DB, ticketID string, recommendationID *uuid.UUID, issue string, drawDate time.Time, imagePath string, purchasedAt time.Time, costAmount float64, notes string, entries []ParsedEntry) error {
@@ -337,11 +350,13 @@ func updateImportedTicketRecord(tx *gorm.DB, ticketID string, recommendationID *
 		manualDrawDate = &value
 	}
 
+	entrySignature := buildTicketEntriesHash(entries)
 	if err := tx.Model(&model.Ticket{}).
 		Where("id = ?", ticketID).
 		Updates(map[string]any{
 			"recommendation_id": recommendationID,
 			"issue":             issue,
+			"entry_signature":   entrySignature,
 			"manual_draw_date":  manualDrawDate,
 			"source":            "import",
 			"image_path":        imagePath,
@@ -353,7 +368,38 @@ func updateImportedTicketRecord(tx *gorm.DB, ticketID string, recommendationID *
 		return err
 	}
 
+	if err := replaceImportedTicketEntries(tx, ticketID, entries); err != nil {
+		return err
+	}
 	return resetTicketPendingWithDB(tx, ticketID)
+}
+
+func replaceImportedTicketEntries(tx *gorm.DB, ticketID string, entries []ParsedEntry) error {
+	parsedTicketID, err := uuid.Parse(ticketID)
+	if err != nil {
+		return err
+	}
+
+	if err := tx.Where("ticket_id = ?", parsedTicketID).Delete(&model.TicketEntry{}).Error; err != nil {
+		return err
+	}
+
+	records := make([]model.TicketEntry, 0, len(entries))
+	for index, item := range entries {
+		records = append(records, model.TicketEntry{
+			TicketID:     parsedTicketID,
+			Sequence:     index + 1,
+			RedNumbers:   formatNumbers(item.Red),
+			BlueNumbers:  formatNumbers(item.Blue),
+			Multiple:     resolveEntryMultiple(item),
+			IsAdditional: item.IsAdditional,
+			MatchSummary: "待开奖",
+		})
+	}
+	if len(records) == 0 {
+		return nil
+	}
+	return tx.Create(&records).Error
 }
 
 func parseImportTicketRow(row []string, headerMap map[string]int) (importTicketRow, bool, error) {
@@ -501,6 +547,13 @@ func normalizeImportedNumbers(value string) string {
 	if strings.Contains(compact, ",") {
 		return compact
 	}
+	if isDigits(compact) && len(compact)%2 == 0 {
+		parts := make([]string, 0, len(compact)/2)
+		for index := 0; index < len(compact); index += 2 {
+			parts = append(parts, compact[index:index+2])
+		}
+		return strings.Join(parts, ",")
+	}
 	tokens := numberPattern.FindAllString(compact, -1)
 	return strings.Join(tokens, ",")
 }
@@ -594,11 +647,14 @@ func parseImportDate(value string) (time.Time, error) {
 	if value == "" {
 		return time.Time{}, nil
 	}
-	for _, layout := range []string{"2006-01-02", "2006/01/02", "20060102"} {
+	for _, layout := range []string{"2006-01-02", "2006/01/02", "2006/1/2", "20060102"} {
 		timestamp, err := time.ParseInLocation(layout, value, time.Local)
 		if err == nil {
 			return timestamp, nil
 		}
+	}
+	if timestamp, ok := parseImportExcelDate(value); ok {
+		return normalizeDateOnly(timestamp), nil
 	}
 	return time.Time{}, fmt.Errorf("invalid date")
 }
@@ -614,14 +670,43 @@ func parseImportDateTime(value string) (time.Time, error) {
 		"2006-01-02 15:04",
 		"2006/01/02 15:04:05",
 		"2006/01/02 15:04",
+		"2006/1/2 15:04:05",
+		"2006/1/2 15:04",
 		"2006-01-02",
+		"2006/01/02",
+		"2006/1/2",
 	} {
 		timestamp, err := time.ParseInLocation(layout, value, time.Local)
 		if err == nil {
 			return timestamp, nil
 		}
 	}
+	if timestamp, ok := parseImportExcelDate(value); ok {
+		return timestamp, nil
+	}
 	return time.Time{}, fmt.Errorf("invalid time")
+}
+
+func parseImportExcelDate(value string) (time.Time, bool) {
+	serial, err := strconv.ParseFloat(value, 64)
+	if err != nil || serial < 20000 || serial > 80000 {
+		return time.Time{}, false
+	}
+
+	timestamp, err := excelize.ExcelDateToTime(serial, false)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return time.Date(
+		timestamp.Year(),
+		timestamp.Month(),
+		timestamp.Day(),
+		timestamp.Hour(),
+		timestamp.Minute(),
+		timestamp.Second(),
+		timestamp.Nanosecond(),
+		time.Local,
+	), true
 }
 
 func parseImportFloat(value string) (float64, error) {

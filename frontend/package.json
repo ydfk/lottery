@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@10.6.2",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -86,14 +87,11 @@
     "tailwindcss": "^4.1.18",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "~5.9.3",
-    "vite": "^8.0.0",
-    "vitest": "^4.0.18"
+    "vite": "^8.0.11",
+    "vitest": "^4.1.5"
   },
   "volta": {
     "node": "22.14.0",
     "pnpm": "10.6.2"
-  },
-  "pnpm": {
-    "ignoredBuiltDependencies": []
   }
 }

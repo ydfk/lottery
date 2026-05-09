@@ -68,6 +68,11 @@ Rules:
 - One row equals one single entry
 - There is no separate single-entry vs multi-entry template anymore
 - Rows with the same user, lottery type, and issue are merged into one purchase record
+- `lotteryCode` accepts Chinese names as well as `ssq` / `dlt`
+- `drawDate` accepts `2026-05-09`, `2026/05/09`, `2026/5/9`, and `20260509`
+- `redNumbers` / `blueNumbers` accept comma-separated, space-separated, or compact two-digit groups such as `01,02,03`, `01 02 03`, and `010203`
+- `purchasedAt` can be empty; the draw date will be used
+- `costAmount` can be empty or less than/equal to 0; it will be calculated from multiple and additional flags
 - Images are optional and can be matched by the `imageName` column when uploading a ZIP file
 - Recommendations are matched automatically
 
