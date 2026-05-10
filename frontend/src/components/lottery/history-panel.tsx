@@ -8,7 +8,7 @@ import {
   type MouseEvent,
 } from "react";
 import { format } from "date-fns";
-import { ArrowDownWideNarrow, ChevronDown, SlidersHorizontal } from "lucide-react";
+import { ArrowDownWideNarrow, ChevronDown, Pencil, SlidersHorizontal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -63,6 +63,7 @@ interface HistoryPanelProps {
   onImportTickets: (workbook: File, imagesZip: File | null) => Promise<TicketImportResult>;
   onOpenRecord: () => void;
   onSelectTicket: (ticket: Ticket | null) => void;
+  onEditTicket: (ticket: Ticket) => void;
   onRecheckTicket: (ticketId: string) => void;
   onDeleteTicket: (ticket: Ticket) => void;
 }
@@ -85,9 +86,10 @@ function HistoryTable(props: {
   items: Ticket[];
   recheckPending: boolean;
   onSelectTicket: (ticket: Ticket) => void;
+  onEditTicket: (ticket: Ticket) => void;
   onRecheckTicket: (ticketId: string) => void;
 }) {
-  const { items, recheckPending, onSelectTicket, onRecheckTicket } = props;
+  const { items, recheckPending, onSelectTicket, onEditTicket, onRecheckTicket } = props;
 
   return (
     <Card className="border-white/60 bg-white/85 shadow-[0_16px_40px_rgba(15,23,42,0.08)] backdrop-blur">
@@ -170,6 +172,16 @@ function HistoryTable(props: {
                     </Button>
                     <Button
                       type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 rounded-full"
+                      onClick={() => onEditTicket(ticket)}
+                    >
+                      <Pencil className="mr-1 size-3.5" />
+                      编辑
+                    </Button>
+                    <Button
+                      type="button"
                       variant="outline"
                       size="sm"
                       className="h-8 rounded-full"
@@ -209,6 +221,7 @@ export function HistoryPanel(props: HistoryPanelProps) {
     onImportTickets,
     onOpenRecord,
     onSelectTicket,
+    onEditTicket,
     onRecheckTicket,
     onDeleteTicket,
   } = props;
@@ -408,6 +421,7 @@ export function HistoryPanel(props: HistoryPanelProps) {
               items={tickets}
               recheckPending={recheckPending}
               onSelectTicket={onSelectTicket}
+              onEditTicket={onEditTicket}
               onRecheckTicket={onRecheckTicket}
             />
           ) : (
@@ -543,6 +557,16 @@ export function HistoryPanel(props: HistoryPanelProps) {
         rightAction={
           selectedTicket ? (
             <>
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-11 rounded-full px-3 text-sm text-slate-700"
+                disabled={recheckPending || deletePending}
+                onClick={() => onEditTicket(selectedTicket)}
+              >
+                <Pencil className="mr-1.5 size-4" />
+                编辑
+              </Button>
               <Button
                 type="button"
                 variant="ghost"

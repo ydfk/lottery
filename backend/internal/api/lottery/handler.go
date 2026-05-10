@@ -727,6 +727,77 @@ func CreateGenericTicket(c *fiber.Ctx) error {
 	return response.Success(c, data, fiber.StatusCreated)
 }
 
+// @Summary 更新票据
+// @Description 编辑已录入的购买记录，保存后会重置并重新判奖
+// @Tags lottery
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param code path string true "彩票编码，如 ssq"
+// @Param ticketId path string true "票据 ID"
+// @Param request body CreateTicketRequest true "更新参数"
+// @Success 200 {object} TicketDetailResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /lotteries/{code}/tickets/{ticketId} [put]
+func UpdateTicket(c *fiber.Ctx) error {
+	userID, err := currentUserID(c)
+	if err != nil {
+		return err
+	}
+	request := CreateTicketRequest{}
+	if err := c.BodyParser(&request); err != nil {
+		return response.Error(c, "参数不正确", fiber.StatusBadRequest)
+	}
+
+	input, err := buildUpdateTicketInput(userID, c.Params("ticketId"), firstNonEmpty(c.Params("code"), request.LotteryCode), request)
+	if err != nil {
+		return response.Error(c, err.Error(), fiber.StatusBadRequest)
+	}
+	data, err := lotteryService.UpdateTicket(c.Context(), input)
+	if err != nil {
+		if errors.Is(err, lotteryService.ErrDuplicateTicket) {
+			return response.Error(c, err.Error(), fiber.StatusConflict)
+		}
+		return err
+	}
+	return response.Success(c, data)
+}
+
+// @Summary 通用票据更新
+// @Description 编辑已录入的购买记录，保存后会重置并重新判奖
+// @Tags lottery
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param ticketId path string true "票据 ID"
+// @Param request body CreateTicketRequest true "更新参数"
+// @Success 200 {object} TicketDetailResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /lotteries/tickets/{ticketId} [put]
+func UpdateGenericTicket(c *fiber.Ctx) error {
+	userID, err := currentUserID(c)
+	if err != nil {
+		return err
+	}
+	request := CreateTicketRequest{}
+	if err := c.BodyParser(&request); err != nil {
+		return response.Error(c, "参数不正确", fiber.StatusBadRequest)
+	}
+
+	input, err := buildUpdateTicketInput(userID, c.Params("ticketId"), request.LotteryCode, request)
+	if err != nil {
+		return response.Error(c, err.Error(), fiber.StatusBadRequest)
+	}
+	data, err := lotteryService.UpdateTicket(c.Context(), input)
+	if err != nil {
+		if errors.Is(err, lotteryService.ErrDuplicateTicket) {
+			return response.Error(c, err.Error(), fiber.StatusConflict)
+		}
+		return err
+	}
+	return response.Success(c, data)
+}
+
 // @Summary 扫描彩票票据
 // @Description 上传票据图片并识别号码，识别成功后自动入库并尝试判奖
 // @Tags lottery
@@ -791,6 +862,34 @@ func saveTicketImage(c *fiber.Ctx) (*multipart.FileHeader, string, error) {
 		return nil, "", err
 	}
 	return file, imagePath, nil
+}
+
+func buildUpdateTicketInput(userID string, ticketID string, code string, request CreateTicketRequest) (lotteryService.UpdateTicketInput, error) {
+	purchasedAt, err := parseOptionalTime(request.PurchasedAt)
+	if err != nil {
+		return lotteryService.UpdateTicketInput{}, fmt.Errorf("购买时间格式不正确，应为 RFC3339")
+	}
+	drawDate, err := parseOptionalDate(request.DrawDate)
+	if err != nil {
+		return lotteryService.UpdateTicketInput{}, fmt.Errorf("开奖日期格式不正确，应为 YYYY-MM-DD")
+	}
+	entries, err := parseCreateTicketEntries(request.Entries)
+	if err != nil {
+		return lotteryService.UpdateTicketInput{}, err
+	}
+
+	return lotteryService.UpdateTicketInput{
+		UserID:           userID,
+		TicketID:         ticketID,
+		Code:             code,
+		RecommendationID: request.RecommendationID,
+		Issue:            request.Issue,
+		DrawDate:         drawDate,
+		PurchasedAt:      purchasedAt,
+		CostAmount:       request.CostAmount,
+		Notes:            request.Notes,
+		Entries:          entries,
+	}, nil
 }
 
 func parseCreateTicketEntries(items []CreateTicketEntryRequest) ([]lotteryService.ParsedEntry, error) {

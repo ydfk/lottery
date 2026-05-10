@@ -139,15 +139,18 @@ export interface Ticket {
   recommendationId?: string;
   recommendation?: TicketRecommendation;
   issue: string;
+  source?: string;
   status: string;
   costAmount: number;
   prizeAmount: number;
   purchasedAt: string;
+  manualDrawDate?: string;
   drawDate?: string;
   drawRedNumbers?: string;
   drawBlueNumbers?: string;
   recognizedText: string;
   imageUrl: string;
+  notes?: string;
   entries: TicketEntry[];
 }
 

@@ -41,6 +41,15 @@ export async function apiPost<T, B = unknown>(url: string, body?: B): Promise<T>
   return parseResponse<T>(response);
 }
 
+export async function apiPut<T, B = unknown>(url: string, body?: B): Promise<T> {
+  const response = await fetch(url, {
+    method: "PUT",
+    headers: getRequestHeaders(body),
+    body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
+  });
+  return parseResponse<T>(response);
+}
+
 export async function apiDelete<T>(url: string): Promise<T> {
   const response = await fetch(url, {
     method: "DELETE",

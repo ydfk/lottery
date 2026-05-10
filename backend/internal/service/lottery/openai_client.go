@@ -132,15 +132,16 @@ func callOpenAICompatible(ctx context.Context, baseURL string, apiKey string, mo
 		return "", err
 	}
 	if response.StatusCode >= http.StatusBadRequest {
-		requestErr := fmt.Errorf("模型请求失败: %s", string(body))
+		requestErr := buildOpenAIHTTPError(response.StatusCode, response.Header.Get("Content-Type"), body)
 		logThirdPartyFailure("openai-compatible", http.MethodPost, endpoint, buildOpenAIRequestLog(requestBody), body, response.StatusCode, startedAt, requestErr)
 		return "", requestErr
 	}
 
 	parsed := openAIResponse{}
 	if err := json.Unmarshal(body, &parsed); err != nil {
-		logThirdPartyFailure("openai-compatible", http.MethodPost, endpoint, buildOpenAIRequestLog(requestBody), body, response.StatusCode, startedAt, err)
-		return "", err
+		requestErr := buildOpenAIJSONError(response.StatusCode, response.Header.Get("Content-Type"), body, err)
+		logThirdPartyFailure("openai-compatible", http.MethodPost, endpoint, buildOpenAIRequestLog(requestBody), body, response.StatusCode, startedAt, requestErr)
+		return "", requestErr
 	}
 	if len(parsed.Choices) == 0 {
 		requestErr := fmt.Errorf("模型未返回内容")
@@ -150,6 +151,33 @@ func callOpenAICompatible(ctx context.Context, baseURL string, apiKey string, mo
 
 	logThirdPartySuccess("openai-compatible", http.MethodPost, endpoint, buildOpenAIRequestLog(requestBody), body, response.StatusCode, startedAt)
 	return stripJSONFence(parsed.Choices[0].Message.Content), nil
+}
+
+func buildOpenAIHTTPError(statusCode int, contentType string, body []byte) error {
+	return fmt.Errorf(
+		"模型请求失败: HTTP %d, Content-Type=%s, 响应=%s",
+		statusCode,
+		resolveValue(contentType, "unknown"),
+		formatOpenAIResponsePreview(body),
+	)
+}
+
+func buildOpenAIJSONError(statusCode int, contentType string, body []byte, err error) error {
+	return fmt.Errorf(
+		"模型响应不是 JSON: HTTP %d, Content-Type=%s, 响应=%s, 解析错误=%w。请检查 ai.baseURL 是否为 OpenAI 兼容的 /v1 地址，或直接指向 /chat/completions。",
+		statusCode,
+		resolveValue(contentType, "unknown"),
+		formatOpenAIResponsePreview(body),
+		err,
+	)
+}
+
+func formatOpenAIResponsePreview(body []byte) string {
+	preview := strings.TrimSpace(string(body))
+	if preview == "" {
+		return "<empty>"
+	}
+	return truncateLogValue(preview)
 }
 
 func buildOpenAIRequestLog(request openAIRequest) map[string]any {

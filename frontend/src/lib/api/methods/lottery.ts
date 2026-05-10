@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPost } from "../client";
+import { apiDelete, apiGet, apiPost, apiPut } from "../client";
 import type {
   DashboardData,
   DrawResultFilters,
@@ -181,6 +181,27 @@ export function createTicket(body: {
       }>;
     }
   >(`/api/lotteries/tickets`, body);
+}
+
+export function updateTicket(
+  ticketId: string,
+  body: {
+    lotteryCode?: string;
+    recommendationId?: string;
+    issue?: string;
+    drawDate?: string;
+    purchasedAt?: string;
+    costAmount?: number;
+    notes?: string;
+    entries?: Array<{
+      redNumbers: string;
+      blueNumbers: string;
+      multiple?: number;
+      isAdditional?: boolean;
+    }>;
+  }
+) {
+  return apiPut<Ticket, typeof body>(`/api/lotteries/tickets/${ticketId}`, body);
 }
 
 export function recheckTicket(ticketId: string) {

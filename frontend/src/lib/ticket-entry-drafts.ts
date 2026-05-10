@@ -1,4 +1,4 @@
-import type { ParsedEntry, RecommendationEntry, TicketEntryDraft } from "@/types/lottery";
+import type { ParsedEntry, RecommendationEntry, TicketEntry, TicketEntryDraft } from "@/types/lottery";
 
 const NUMBER_SPLIT_PATTERN = /[\s,，、;；|/]+/;
 
@@ -82,6 +82,19 @@ export function buildDraftsFromRecommendationEntries(entries: RecommendationEntr
     blueNumbers: entry.blueNumbers,
     multiple: 1,
     isAdditional: false,
+  }));
+}
+
+export function buildDraftsFromTicketEntries(entries: TicketEntry[]) {
+  if (entries.length === 0) {
+    return [createEmptyEntryDraft()];
+  }
+
+  return entries.map((entry) => ({
+    redNumbers: entry.redNumbers,
+    blueNumbers: entry.blueNumbers,
+    multiple: Math.max(1, entry.multiple || 1),
+    isAdditional: Boolean(entry.isAdditional),
   }));
 }
 

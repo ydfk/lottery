@@ -30,8 +30,10 @@ import type {
 
 interface RecordPanelProps {
   displayMode: LotteryDisplayMode;
+  mode?: "create" | "edit";
   selectedRecommendation: Recommendation | null;
   previewUrl: string;
+  existingImageUrl?: string;
   selectedImage: File | null;
   uploadPending: boolean;
   uploadedTicket: TicketUpload | null;
@@ -40,6 +42,7 @@ interface RecordPanelProps {
   recognizePending: boolean;
   issue: string;
   drawDate: string;
+  purchasedAt: string;
   costAmount: string;
   notes: string;
   entryDrafts: TicketEntryDraft[];
@@ -49,6 +52,7 @@ interface RecordPanelProps {
   onRecognize: () => void;
   onIssueChange: (value: string) => void;
   onDrawDateChange: (value: string) => void;
+  onPurchasedAtChange: (value: string) => void;
   onCostAmountChange: (value: string) => void;
   onNotesChange: (value: string) => void;
   onEntryFieldChange: (index: number, field: "redNumbers" | "blueNumbers", value: string) => void;
@@ -57,6 +61,7 @@ interface RecordPanelProps {
   onAddEntry: () => void;
   onRemoveEntry: (index: number) => void;
   onCreateTicket: () => void;
+  onCancelEdit?: () => void;
   onClearRecommendation: () => void;
 }
 
@@ -64,32 +69,37 @@ function RecordBasicInfoTable(props: {
   lotteryCode: string;
   issue: string;
   drawDate: string;
+  purchasedAt: string;
   costAmount: string;
   onLotteryCodeChange: (value: string) => void;
   onIssueChange: (value: string) => void;
   onDrawDateChange: (value: string) => void;
+  onPurchasedAtChange: (value: string) => void;
   onCostAmountChange: (value: string) => void;
 }) {
   const {
     lotteryCode,
     issue,
     drawDate,
+    purchasedAt,
     costAmount,
     onLotteryCodeChange,
     onIssueChange,
     onDrawDateChange,
+    onPurchasedAtChange,
     onCostAmountChange,
   } = props;
 
   return (
     <Card className="border-slate-200 bg-slate-50/90 shadow-none">
       <CardContent className="p-0">
-        <Table className="min-w-[760px]">
+        <Table className="min-w-[940px]">
           <TableHeader>
             <TableRow className="bg-white/80">
               <TableHead className="pl-4">彩票类型</TableHead>
               <TableHead>期号</TableHead>
               <TableHead>开奖日期</TableHead>
+              <TableHead>购买时间</TableHead>
               <TableHead className="pr-4">金额</TableHead>
             </TableRow>
           </TableHeader>
@@ -122,6 +132,14 @@ function RecordBasicInfoTable(props: {
                   type="date"
                   value={drawDate}
                   onChange={(event) => onDrawDateChange(event.target.value)}
+                />
+              </TableCell>
+              <TableCell>
+                <Input
+                  className="h-9 min-w-[190px] bg-white"
+                  type="datetime-local"
+                  value={purchasedAt}
+                  onChange={(event) => onPurchasedAtChange(event.target.value)}
                 />
               </TableCell>
               <TableCell className="pr-4">
@@ -291,8 +309,10 @@ function RecordEntryTable(props: {
 export function RecordPanel(props: RecordPanelProps) {
   const {
     displayMode,
+    mode = "create",
     selectedRecommendation,
     previewUrl,
+    existingImageUrl,
     selectedImage,
     uploadPending,
     uploadedTicket,
@@ -301,6 +321,7 @@ export function RecordPanel(props: RecordPanelProps) {
     recognizePending,
     issue,
     drawDate,
+    purchasedAt,
     costAmount,
     notes,
     entryDrafts,
@@ -310,6 +331,7 @@ export function RecordPanel(props: RecordPanelProps) {
     onRecognize,
     onIssueChange,
     onDrawDateChange,
+    onPurchasedAtChange,
     onCostAmountChange,
     onNotesChange,
     onEntryFieldChange,
@@ -318,6 +340,7 @@ export function RecordPanel(props: RecordPanelProps) {
     onAddEntry,
     onRemoveEntry,
     onCreateTicket,
+    onCancelEdit,
     onClearRecommendation,
   } = props;
 
@@ -325,6 +348,8 @@ export function RecordPanel(props: RecordPanelProps) {
   const recognizeLabel = recognitionDraft ? "重新识别" : "开始识别";
   const recognizeBusy = uploadPending || recognizePending;
   const isWebDisplay = displayMode === "web";
+  const isEditing = mode === "edit";
+  const imagePreviewUrl = previewUrl || existingImageUrl || "";
 
   return (
     <div className="space-y-6">
@@ -332,15 +357,29 @@ export function RecordPanel(props: RecordPanelProps) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Badge className="bg-slate-900 text-white hover:bg-slate-900">记录</Badge>
-            <h2 className="text-base font-semibold text-slate-950">录入</h2>
+            <h2 className="text-base font-semibold text-slate-950">
+              {isEditing ? "编辑" : "录入"}
+            </h2>
           </div>
           <div className="flex items-center gap-2">
+            {isEditing ? <Badge variant="secondary">编辑历史记录</Badge> : null}
             {recognitionDraft ? (
               <Badge variant="secondary">
                 识别 {(recognitionDraft.confidence * 100).toFixed(0)}%
               </Badge>
             ) : null}
             {uploadedTicket ? <Badge variant="secondary">图片已上传</Badge> : null}
+            {isEditing && onCancelEdit ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-9 rounded-full"
+                onClick={onCancelEdit}
+              >
+                取消
+              </Button>
+            ) : null}
           </div>
         </div>
       </section>
@@ -439,10 +478,14 @@ export function RecordPanel(props: RecordPanelProps) {
       <Card className="border-white/60 bg-white/85 shadow-[0_20px_50px_rgba(15,23,42,0.08)] backdrop-blur">
         <CardContent className="space-y-5">
           <div className="grid gap-3 lg:grid-cols-[0.88fr_1.12fr]">
-            <label className="flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-[1.45rem] border border-dashed border-slate-300 bg-slate-50 p-3 text-center">
-              {previewUrl ? (
+            <label
+              className={`flex min-h-40 flex-col items-center justify-center rounded-[1.45rem] border border-dashed border-slate-300 bg-slate-50 p-3 text-center ${
+                isEditing ? "cursor-default" : "cursor-pointer"
+              }`}
+            >
+              {imagePreviewUrl ? (
                 <img
-                  src={previewUrl}
+                  src={imagePreviewUrl}
                   alt="彩票预览"
                   className="h-32 w-full rounded-[1.1rem] object-cover"
                 />
@@ -453,12 +496,14 @@ export function RecordPanel(props: RecordPanelProps) {
                   <p className="mt-1 text-xs text-slate-400">可不上传，直接手动录入保存</p>
                 </>
               )}
-              <input
-                className="hidden"
-                type="file"
-                accept="image/*"
-                onChange={(event) => onSelectImage(event.target.files?.[0] || null)}
-              />
+              {isEditing ? null : (
+                <input
+                  className="hidden"
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => onSelectImage(event.target.files?.[0] || null)}
+                />
+              )}
             </label>
 
             <div className="space-y-3 rounded-[1.45rem] bg-slate-50 p-3">
@@ -472,7 +517,7 @@ export function RecordPanel(props: RecordPanelProps) {
                 <Button
                   type="button"
                   className="h-10 rounded-[1rem]"
-                  disabled={(!selectedImage && !uploadedTicket) || recognizeBusy}
+                  disabled={isEditing || (!selectedImage && !uploadedTicket) || recognizeBusy}
                   onClick={onRecognize}
                 >
                   {recognizeBusy ? (
@@ -494,7 +539,9 @@ export function RecordPanel(props: RecordPanelProps) {
                   )}
                 </Button>
                 <p className="text-xs leading-5 text-slate-500">
-                  没有图片时跳过识别，填写下方信息后可直接保存票据。
+                  {isEditing
+                    ? "编辑历史记录时沿用原图，可调整期号、号码、金额和时间。"
+                    : "没有图片时跳过识别，填写下方信息后可直接保存票据。"}
                 </p>
               </div>
             </div>
@@ -506,10 +553,12 @@ export function RecordPanel(props: RecordPanelProps) {
                 lotteryCode={lotteryCode}
                 issue={issue}
                 drawDate={drawDate}
+                purchasedAt={purchasedAt}
                 costAmount={costAmount}
                 onLotteryCodeChange={onLotteryCodeChange}
                 onIssueChange={onIssueChange}
                 onDrawDateChange={onDrawDateChange}
+                onPurchasedAtChange={onPurchasedAtChange}
                 onCostAmountChange={onCostAmountChange}
               />
             ) : (
@@ -562,6 +611,16 @@ export function RecordPanel(props: RecordPanelProps) {
                       onChange={(event) => onCostAmountChange(event.target.value)}
                     />
                   </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-slate-700">购买时间</label>
+                  <Input
+                    className="h-9 min-w-0"
+                    type="datetime-local"
+                    value={purchasedAt}
+                    onChange={(event) => onPurchasedAtChange(event.target.value)}
+                  />
                 </div>
                 <p className="text-[11px] leading-4 text-slate-400">
                   金额会按号码、倍数和追加自动计算，也可手动修改。
@@ -723,7 +782,7 @@ export function RecordPanel(props: RecordPanelProps) {
             onClick={onCreateTicket}
           >
             <Save className="mr-2 size-4" />
-            {submitPending ? "保存中..." : "保存票据"}
+            {submitPending ? "保存中..." : isEditing ? "保存修改" : "保存票据"}
           </Button>
         </CardContent>
       </Card>

@@ -30,12 +30,14 @@ import {
   recheckTicket,
   recognizeTicket,
   syncDrawIssue,
+  updateTicket,
   uploadTicketImage,
 } from "@/lib/api/methods/lottery";
 import { formatLotteryDrawDate } from "@/lib/lottery-display";
 import {
   buildDraftsFromParsedEntries,
   buildDraftsFromRecommendationEntries,
+  buildDraftsFromTicketEntries,
   buildParsedEntriesFromDrafts,
   createEmptyEntryDraft,
   normalizeDraftsForLottery,
@@ -138,6 +140,26 @@ function getStoredDisplayMode(): LotteryDisplayMode {
   return window.localStorage.getItem(DISPLAY_MODE_STORAGE_KEY) === "web" ? "web" : "app";
 }
 
+function formatDateTimeInput(value?: string) {
+  if (!value) {
+    return "";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return offsetDate.toISOString().slice(0, 16);
+}
+
+function toISODateTime(value: string) {
+  if (!value) {
+    return "";
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+}
+
 export default function App() {
   const [displayMode, setDisplayMode] = useState<LotteryDisplayMode>(() => getStoredDisplayMode());
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
@@ -181,6 +203,7 @@ export default function App() {
   const [drawTotal, setDrawTotal] = useState(0);
   const [selectedRecommendation, setSelectedRecommendation] = useState<Recommendation | null>(null);
   const [selectedHistoryTicket, setSelectedHistoryTicket] = useState<TicketRecord | null>(null);
+  const [editingTicket, setEditingTicket] = useState<TicketRecord | null>(null);
   const [purchaseRecommendation, setPurchaseRecommendation] = useState<Recommendation | null>(null);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
@@ -189,6 +212,7 @@ export default function App() {
   const [lotteryCode, setLotteryCode] = useState("");
   const [issue, setIssue] = useState("");
   const [drawDate, setDrawDate] = useState("");
+  const [purchasedAt, setPurchasedAt] = useState("");
   const [costAmount, setCostAmount] = useState("");
   const [costAmountEdited, setCostAmountEdited] = useState(false);
   const [notes, setNotes] = useState("");
@@ -221,6 +245,7 @@ export default function App() {
     setHistoryTotal(0);
     setSelectedRecommendation(null);
     setSelectedHistoryTicket(null);
+    setEditingTicket(null);
     setPurchaseRecommendation(null);
     setActiveTab("dashboard");
   }
@@ -233,6 +258,7 @@ export default function App() {
     setLotteryCode("");
     setIssue("");
     setDrawDate("");
+    setPurchasedAt("");
     setCostAmount("");
     setCostAmountEdited(false);
     setNotes("");
@@ -483,6 +509,7 @@ export default function App() {
 
   function handleRecordPurchase(recommendation: Recommendation) {
     setSelectedRecommendation(null);
+    setEditingTicket(null);
     setPurchaseRecommendation(recommendation);
     setLotteryCode(recommendation.lotteryCode || "");
     setIssue(recommendation.issue || "");
@@ -491,6 +518,32 @@ export default function App() {
     setCostAmountEdited(false);
     setActiveTab("records");
     toast.success("已切换到记录页，接下来上传这条推荐的购买票据即可");
+  }
+
+  function handleEditTicket(ticket: TicketRecord) {
+    setSelectedHistoryTicket(null);
+    setPurchaseRecommendation(null);
+    setEditingTicket(ticket);
+    setSelectedImage(null);
+    setPreviewUrl("");
+    setUploadedTicket(null);
+    setRecognitionDraft(null);
+    setLotteryCode(ticket.lotteryCode || "");
+    setIssue(ticket.issue || "");
+    setDrawDate(formatLotteryDrawDate(ticket.drawDate || ticket.manualDrawDate));
+    setPurchasedAt(formatDateTimeInput(ticket.purchasedAt));
+    setCostAmount(ticket.costAmount > 0 ? ticket.costAmount.toFixed(2) : "");
+    setCostAmountEdited(true);
+    setNotes(ticket.notes || "");
+    setEntryDrafts(buildDraftsFromTicketEntries(ticket.entries));
+    setActiveTab("records");
+    toast.success("已进入历史记录编辑");
+  }
+
+  function handleCancelEditTicket() {
+    setEditingTicket(null);
+    resetTicketWorkflow();
+    setActiveTab("history");
   }
 
   function handleSelectImage(file: File | null) {
@@ -574,13 +627,12 @@ export default function App() {
     setSubmitPending(true);
     try {
       const upload = uploadedTicket || (selectedImage ? await uploadSelectedTicketImage() : null);
-      await createTicket({
+      const payload = {
         lotteryCode: lotteryCode || undefined,
-        uploadId: upload?.id,
-        recommendationId: purchaseRecommendation?.id,
+        recommendationId: editingTicket?.recommendationId || purchaseRecommendation?.id,
         issue: issue || undefined,
         drawDate: drawDate || undefined,
-        purchasedAt: new Date().toISOString(),
+        purchasedAt: toISODateTime(purchasedAt) || new Date().toISOString(),
         costAmount:
           Number.isFinite(manualCostAmount) && manualCostAmount > 0 ? manualCostAmount : undefined,
         notes: notes || undefined,
@@ -589,11 +641,24 @@ export default function App() {
           multiple: entry.multiple,
           isAdditional: entry.isAdditional,
         })),
-      });
-      toast.success("票据已入库并完成判奖检查");
+      };
+      if (editingTicket) {
+        await updateTicket(editingTicket.id, payload);
+        toast.success("历史记录已更新");
+      } else {
+        await createTicket({
+          ...payload,
+          uploadId: upload?.id,
+        });
+        toast.success("票据已入库并完成判奖检查");
+      }
       resetTicketWorkflow();
+      setEditingTicket(null);
       setPurchaseRecommendation(null);
       await loadData(false);
+      if (editingTicket) {
+        setActiveTab("history");
+      }
     } catch (error) {
       handleRequestError(error, "入库失败");
     } finally {
@@ -886,6 +951,7 @@ export default function App() {
 
   function handleOpenRecordPanel() {
     setSelectedHistoryTicket(null);
+    setEditingTicket(null);
     setActiveTab("records");
   }
 
@@ -942,7 +1008,9 @@ export default function App() {
         <RecordPanel
           displayMode={displayMode}
           selectedRecommendation={purchaseRecommendation}
+          mode={editingTicket ? "edit" : "create"}
           previewUrl={previewUrl}
+          existingImageUrl={editingTicket?.imageUrl}
           selectedImage={selectedImage}
           uploadPending={uploadPending}
           uploadedTicket={uploadedTicket}
@@ -951,6 +1019,7 @@ export default function App() {
           recognizePending={recognizePending}
           issue={issue}
           drawDate={drawDate}
+          purchasedAt={purchasedAt}
           costAmount={costAmount}
           notes={notes}
           entryDrafts={entryDrafts}
@@ -960,6 +1029,7 @@ export default function App() {
           onRecognize={() => void handleRecognizeTicket()}
           onIssueChange={setIssue}
           onDrawDateChange={setDrawDate}
+          onPurchasedAtChange={setPurchasedAt}
           onCostAmountChange={handleChangeCostAmount}
           onNotesChange={setNotes}
           onEntryFieldChange={handleChangeEntryField}
@@ -968,6 +1038,7 @@ export default function App() {
           onAddEntry={handleAddEntry}
           onRemoveEntry={handleRemoveEntry}
           onCreateTicket={() => void handleCreateTicket()}
+          onCancelEdit={editingTicket ? handleCancelEditTicket : undefined}
           onClearRecommendation={() => setPurchaseRecommendation(null)}
         />
       );
@@ -1012,6 +1083,7 @@ export default function App() {
         onImportTickets={handleImportTickets}
         onOpenRecord={handleOpenRecordPanel}
         onSelectTicket={setSelectedHistoryTicket}
+        onEditTicket={handleEditTicket}
         onRecheckTicket={(ticketId) => void handleRecheckTicket(ticketId)}
         onDeleteTicket={(ticket) => void handleDeleteTicket(ticket)}
       />

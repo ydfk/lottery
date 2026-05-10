@@ -55,6 +55,19 @@ type CreateTicketInput struct {
 	Entries          []ParsedEntry
 }
 
+type UpdateTicketInput struct {
+	UserID           string
+	TicketID         string
+	Code             string
+	RecommendationID string
+	Issue            string
+	DrawDate         time.Time
+	PurchasedAt      time.Time
+	CostAmount       float64
+	Notes            string
+	Entries          []ParsedEntry
+}
+
 type TicketUploadDetail struct {
 	model.TicketUpload
 	ImageURL string `json:"imageUrl"`
@@ -259,6 +272,67 @@ func CreateTicket(ctx context.Context, input CreateTicketInput) (*TicketDetail, 
 	return GetTicketDetail(ticketID, input.UserID)
 }
 
+func UpdateTicket(ctx context.Context, input UpdateTicketInput) (*TicketDetail, error) {
+	if input.TicketID == "" {
+		return nil, fmt.Errorf("票据 ID 不能为空")
+	}
+
+	ticket := model.Ticket{}
+	if err := currentUserScope(db.DB.Preload("Entries"), input.UserID).First(&ticket, "id = ?", input.TicketID).Error; err != nil {
+		return nil, err
+	}
+
+	code := resolveValue(input.Code, ticket.LotteryCode)
+	definition, err := GetDefinition(code)
+	if err != nil {
+		return nil, err
+	}
+
+	entries, err := normalizeParsedEntries(definition, input.Entries)
+	if err != nil {
+		return nil, err
+	}
+
+	issue := normalizeIssueByCode(code, resolveValue(input.Issue, ticket.Issue))
+	if issue == "" {
+		return nil, fmt.Errorf("票据期号不能为空")
+	}
+
+	purchasedAt := input.PurchasedAt
+	if purchasedAt.IsZero() {
+		purchasedAt = ticket.PurchasedAt
+	}
+	if purchasedAt.IsZero() {
+		purchasedAt = time.Now()
+	}
+
+	recommendationID, err := resolveUpdateRecommendationID(input, ticket, code)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := db.DB.Transaction(func(tx *gorm.DB) error {
+		if err := validateDuplicateTicketExcept(tx, input.UserID, input.TicketID, code, issue, entries); err != nil {
+			return err
+		}
+		if err := updateTicketRecord(tx, ticket, code, recommendationID, issue, input.DrawDate, purchasedAt, input.CostAmount, input.Notes, entries); err != nil {
+			return err
+		}
+		return replaceTicketEntries(tx, ticket.Id, entries)
+	}); err != nil {
+		return nil, err
+	}
+
+	if shouldDeferSettlement(code, &input.DrawDate) {
+		return GetTicketDetail(input.TicketID, input.UserID)
+	}
+	ensureIssueDrawSynced(ctx, code, issue)
+	if err := EvaluateTicket(input.TicketID); err != nil {
+		logger.Warn("编辑票据后自动判奖失败 %s/%s: %v", code, input.TicketID, err)
+	}
+	return GetTicketDetail(input.TicketID, input.UserID)
+}
+
 func createTicketRecord(tx *gorm.DB, userID string, code string, recommendationID *uuid.UUID, issue string, drawDate time.Time, source string, imagePath string, recognizedText string, purchasedAt time.Time, costAmount float64, notes string, entries []ParsedEntry) (*model.Ticket, error) {
 	userUUID, err := parseRequiredUserID(userID)
 	if err != nil {
@@ -322,22 +396,84 @@ func createTicketRecord(tx *gorm.DB, userID string, code string, recommendationI
 	return &ticket, nil
 }
 
+func resolveUpdateRecommendationID(input UpdateTicketInput, ticket model.Ticket, code string) (*uuid.UUID, error) {
+	if input.RecommendationID != "" {
+		_, recommendationID, err := resolveRecommendation(input.UserID, code, input.RecommendationID)
+		return recommendationID, err
+	}
+	return ticket.RecommendationID, nil
+}
+
+func updateTicketRecord(tx *gorm.DB, ticket model.Ticket, code string, recommendationID *uuid.UUID, issue string, drawDate time.Time, purchasedAt time.Time, costAmount float64, notes string, entries []ParsedEntry) error {
+	totalCost := costAmount
+	if totalCost <= 0 {
+		totalCost = calculateEntriesCost(entries)
+	}
+
+	var manualDrawDate *time.Time
+	if !drawDate.IsZero() {
+		value := drawDate
+		manualDrawDate = &value
+	}
+
+	signature := buildTicketEntriesHash(entries)
+	ticket.LotteryCode = code
+	ticket.RecommendationID = recommendationID
+	ticket.Issue = issue
+	ticket.EntrySignature = &signature
+	ticket.ManualDrawDate = manualDrawDate
+	ticket.Status = TicketStatusPending
+	ticket.CostAmount = totalCost
+	ticket.PrizeAmount = 0
+	ticket.PurchasedAt = purchasedAt
+	ticket.CheckedAt = nil
+	ticket.Notes = notes
+	return tx.Omit("Entries").Save(&ticket).Error
+}
+
 func validateDuplicateTicket(tx *gorm.DB, userID string, code string, issue string, entries []ParsedEntry) error {
+	return validateDuplicateTicketExcept(tx, userID, "", code, issue, entries)
+}
+
+func validateDuplicateTicketExcept(tx *gorm.DB, userID string, ticketID string, code string, issue string, entries []ParsedEntry) error {
 	if len(entries) == 0 {
 		return nil
 	}
 
 	signature := buildTicketEntriesHash(entries)
 	var count int64
-	if err := currentUserScope(tx.Model(&model.Ticket{}), userID).
-		Where("lottery_code = ? AND issue IN ? AND entry_signature = ?", code, issueAliases(code, issue), signature).
-		Count(&count).Error; err != nil {
+	query := currentUserScope(tx.Model(&model.Ticket{}), userID).
+		Where("lottery_code = ? AND issue IN ? AND entry_signature = ?", code, issueAliases(code, issue), signature)
+	if ticketID != "" {
+		query = query.Where("id <> ?", ticketID)
+	}
+	if err := query.Count(&count).Error; err != nil {
 		return err
 	}
 	if count > 0 {
 		return ErrDuplicateTicket
 	}
 	return nil
+}
+
+func replaceTicketEntries(tx *gorm.DB, ticketID uuid.UUID, entries []ParsedEntry) error {
+	if err := tx.Where("ticket_id = ?", ticketID).Delete(&model.TicketEntry{}).Error; err != nil {
+		return err
+	}
+
+	records := make([]model.TicketEntry, 0, len(entries))
+	for index, item := range entries {
+		records = append(records, model.TicketEntry{
+			TicketID:     ticketID,
+			Sequence:     index + 1,
+			RedNumbers:   formatNumbers(item.Red),
+			BlueNumbers:  formatNumbers(item.Blue),
+			Multiple:     resolveEntryMultiple(item),
+			IsAdditional: item.IsAdditional,
+			MatchSummary: "待开奖",
+		})
+	}
+	return tx.Create(&records).Error
 }
 
 func reserveTicketUpload(tx *gorm.DB, userID string, code string, uploadID string) (model.TicketUpload, error) {
