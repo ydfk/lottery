@@ -345,7 +345,7 @@ export function RecordPanel(props: RecordPanelProps) {
   } = props;
 
   const showAdditionalToggle = lotteryCode === "dlt";
-  const recognizeLabel = recognitionDraft ? "重新识别" : "开始识别";
+  const recognizeLabel = recognitionDraft ? "重新识别" : "图片识别";
   const recognizeBusy = uploadPending || recognizePending;
   const isWebDisplay = displayMode === "web";
   const isEditing = mode === "edit";
@@ -477,76 +477,6 @@ export function RecordPanel(props: RecordPanelProps) {
 
       <Card className="border-white/60 bg-white/85 shadow-[0_20px_50px_rgba(15,23,42,0.08)] backdrop-blur">
         <CardContent className="space-y-5">
-          <div className="grid gap-3 lg:grid-cols-[0.88fr_1.12fr]">
-            <label
-              className={`flex min-h-40 flex-col items-center justify-center rounded-[1.45rem] border border-dashed border-slate-300 bg-slate-50 p-3 text-center ${
-                isEditing ? "cursor-default" : "cursor-pointer"
-              }`}
-            >
-              {imagePreviewUrl ? (
-                <img
-                  src={imagePreviewUrl}
-                  alt="彩票预览"
-                  className="h-32 w-full rounded-[1.1rem] object-cover"
-                />
-              ) : (
-                <>
-                  <ImageUp className="size-7 text-slate-400" />
-                  <p className="mt-1.5 text-sm font-medium text-slate-700">选择图片</p>
-                  <p className="mt-1 text-xs text-slate-400">可不上传，直接手动录入保存</p>
-                </>
-              )}
-              {isEditing ? null : (
-                <input
-                  className="hidden"
-                  type="file"
-                  accept="image/*"
-                  onChange={(event) => onSelectImage(event.target.files?.[0] || null)}
-                />
-              )}
-            </label>
-
-            <div className="space-y-3 rounded-[1.45rem] bg-slate-50 p-3">
-              {selectedImage && (
-                <div className="rounded-[1rem] border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
-                  {selectedImage.name}
-                </div>
-              )}
-
-              <div className="grid gap-3 sm:grid-cols-1">
-                <Button
-                  type="button"
-                  className="h-10 rounded-[1rem]"
-                  disabled={isEditing || (!selectedImage && !uploadedTicket) || recognizeBusy}
-                  onClick={onRecognize}
-                >
-                  {recognizeBusy ? (
-                    uploadPending ? (
-                      "上传中..."
-                    ) : (
-                      "识别中..."
-                    )
-                  ) : recognitionDraft ? (
-                    <>
-                      <RotateCcw className="mr-2 size-4" />
-                      {recognizeLabel}
-                    </>
-                  ) : (
-                    <>
-                      <ScanSearch className="mr-2 size-4" />
-                      {recognizeLabel}
-                    </>
-                  )}
-                </Button>
-                <p className="text-xs leading-5 text-slate-500">
-                  {isEditing
-                    ? "编辑历史记录时沿用原图，可调整期号、号码、金额和时间。"
-                    : "没有图片时跳过识别，填写下方信息后可直接保存票据。"}
-                </p>
-              </div>
-            </div>
-          </div>
-
           <div className="space-y-4">
             {isWebDisplay ? (
               <RecordBasicInfoTable
@@ -762,6 +692,79 @@ export function RecordPanel(props: RecordPanelProps) {
                 })}
               </div>
             )}
+          </div>
+
+          <div className="space-y-3">
+            <label className="text-sm font-medium text-slate-700">图片识别辅助</label>
+            <div className="grid gap-3 rounded-[1.45rem] bg-slate-50 p-3 lg:grid-cols-[0.88fr_1.12fr]">
+              <label
+                className={`flex min-h-40 flex-col items-center justify-center rounded-[1.2rem] border border-dashed border-slate-300 bg-white p-3 text-center ${
+                  isEditing ? "cursor-default" : "cursor-pointer"
+                }`}
+              >
+                {imagePreviewUrl ? (
+                  <img
+                    src={imagePreviewUrl}
+                    alt="彩票预览"
+                    className="h-32 w-full rounded-[1rem] object-cover"
+                  />
+                ) : (
+                  <>
+                    <ImageUp className="size-7 text-slate-400" />
+                    <p className="mt-1.5 text-sm font-medium text-slate-700">可选上传图片</p>
+                    <p className="mt-1 text-xs text-slate-400">用于辅助识别，不影响手动保存</p>
+                  </>
+                )}
+                {isEditing ? null : (
+                  <input
+                    className="hidden"
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) => onSelectImage(event.target.files?.[0] || null)}
+                  />
+                )}
+              </label>
+
+              <div className="space-y-3 rounded-[1.2rem] bg-white p-3">
+                {selectedImage && (
+                  <div className="rounded-[1rem] border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                    {selectedImage.name}
+                  </div>
+                )}
+
+                <div className="grid gap-3 sm:grid-cols-1">
+                  <Button
+                    type="button"
+                    className="h-10 rounded-[1rem]"
+                    disabled={isEditing || (!selectedImage && !uploadedTicket) || recognizeBusy}
+                    onClick={onRecognize}
+                  >
+                    {recognizeBusy ? (
+                      uploadPending ? (
+                        "上传中..."
+                      ) : (
+                        "识别中..."
+                      )
+                    ) : recognitionDraft ? (
+                      <>
+                        <RotateCcw className="mr-2 size-4" />
+                        {recognizeLabel}
+                      </>
+                    ) : (
+                      <>
+                        <ScanSearch className="mr-2 size-4" />
+                        {recognizeLabel}
+                      </>
+                    )}
+                  </Button>
+                  <p className="text-xs leading-5 text-slate-500">
+                    {isEditing
+                      ? "编辑历史记录时沿用原图，可调整期号、号码、金额和时间。"
+                      : "先手动填写信息；如有图片，可用识别结果回填表单。"}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="space-y-2">

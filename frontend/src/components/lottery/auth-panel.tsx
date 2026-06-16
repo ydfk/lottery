@@ -100,7 +100,7 @@ export function AuthPanel(props: AuthPanelProps) {
                 <div className="grid gap-3 sm:grid-cols-3">
                   {[
                     ["推荐", "集中查看每期推荐结果"],
-                    ["录票", "上传图片并识别号码"],
+                    ["录票", "手动录入，图片辅助识别"],
                     ["兑奖", "追踪历史与中奖状态"],
                   ].map(([title, description]) => (
                     <div

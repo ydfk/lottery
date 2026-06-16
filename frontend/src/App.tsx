@@ -79,7 +79,7 @@ const tabs: LotteryShellTab<TabKey>[] = [
   {
     key: "records",
     label: "记录",
-    description: "上传票据并录入号码",
+    description: "手动录入号码，可选图片识别",
     icon: ReceiptText,
   },
   {
@@ -282,11 +282,11 @@ export default function App() {
     try {
       const [dashboardResult, drawResult, recommendationResult, historyResult] =
         await Promise.allSettled([
-        getDashboard(),
-        getDrawResults(1, DRAW_PAGE_SIZE, drawFilters),
-        getRecommendations(1, RECOMMENDATION_PAGE_SIZE, recommendationFilters),
-        getTicketHistory(1, HISTORY_PAGE_SIZE, historyFilters),
-      ]);
+          getDashboard(),
+          getDrawResults(1, DRAW_PAGE_SIZE, drawFilters),
+          getRecommendations(1, RECOMMENDATION_PAGE_SIZE, recommendationFilters),
+          getTicketHistory(1, HISTORY_PAGE_SIZE, historyFilters),
+        ]);
 
       if (dashboardResult.status === "fulfilled") {
         setDashboard(dashboardResult.value);
@@ -517,7 +517,7 @@ export default function App() {
     setEntryDrafts(buildDraftsFromRecommendationEntries(recommendation.entries));
     setCostAmountEdited(false);
     setActiveTab("records");
-    toast.success("已切换到记录页，接下来上传这条推荐的购买票据即可");
+    toast.success("已切换到记录页，可手动确认购买信息后保存");
   }
 
   function handleEditTicket(ticket: TicketRecord) {
