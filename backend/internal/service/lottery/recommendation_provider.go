@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -28,8 +29,13 @@ type RecommendationResult struct {
 	Numbers []RecommendationNumber `json:"numbers"`
 }
 
+type RecommendationBlocklist struct {
+	RecentRecommendations []string
+	HistoryDraws          []string
+}
+
 type RecommendationProvider interface {
-	Generate(ctx context.Context, definition Definition, lotteryType model.LotteryType, history []model.DrawResult, count int) (*RecommendationResult, error)
+	Generate(ctx context.Context, definition Definition, lotteryType model.LotteryType, history []model.DrawResult, blocklist RecommendationBlocklist, count int) (*RecommendationResult, error)
 }
 
 type openAIRecommendationProvider struct{}
@@ -41,8 +47,8 @@ func newRecommendationProvider(provider string) RecommendationProvider {
 	return &openAIRecommendationProvider{}
 }
 
-func (provider *openAIRecommendationProvider) Generate(ctx context.Context, definition Definition, _ model.LotteryType, history []model.DrawResult, count int) (*RecommendationResult, error) {
-	content, err := callRecommendationModel(ctx, definition.Recommendation.Model, buildRecommendationPrompt(definition, history, count))
+func (provider *openAIRecommendationProvider) Generate(ctx context.Context, definition Definition, _ model.LotteryType, history []model.DrawResult, blocklist RecommendationBlocklist, count int) (*RecommendationResult, error) {
+	content, err := callRecommendationModel(ctx, definition.Recommendation.Model, buildRecommendationPrompt(definition, history, blocklist, count))
 	if err != nil {
 		return nil, err
 	}
@@ -54,38 +60,28 @@ func (provider *openAIRecommendationProvider) Generate(ctx context.Context, defi
 	if len(result.Numbers) == 0 {
 		return nil, fmt.Errorf("AI 未返回推荐号码")
 	}
-	result.Numbers = normalizeRecommendationNumbers(result.Numbers, count)
-	if len(result.Numbers) == 0 {
-		return nil, fmt.Errorf("AI 返回的推荐号码为空")
+	result.Numbers, err = normalizeRecommendationNumbers(definition, result.Numbers, count, blocklist)
+	if err != nil {
+		return nil, err
 	}
 	return &result, nil
 }
 
-func buildRecommendationPrompt(definition Definition, history []model.DrawResult, count int) string {
+func buildRecommendationPrompt(definition Definition, history []model.DrawResult, blocklist RecommendationBlocklist, count int) string {
 	lines := make([]string, 0, len(history))
 	for _, draw := range history {
 		lines = append(lines, fmt.Sprintf("%s: 红球[%s] 蓝球[%s]", draw.Issue, draw.RedNumbers, draw.BlueNumbers))
 	}
 
-	if definition.Recommendation.Prompt != "" {
-		return fmt.Sprintf(
-			"%s\n请严格生成 %d 组推荐号码，不能多也不能少。\n规则：红球 %d 个(%d-%d)，蓝球 %d 个(%d-%d)。\n最近开奖如下：\n%s\n请只返回 JSON：{\"summary\":\"\",\"basis\":\"\",\"numbers\":[{\"red\":[1,2,3,4,5,6],\"blue\":[7],\"confidence\":0.8,\"reason\":\"\"}]}，其中 numbers 数组长度必须等于 %d。",
-			definition.Recommendation.Prompt,
-			count,
-			definition.RedCount,
-			definition.RedMin,
-			definition.RedMax,
-			definition.BlueCount,
-			definition.BlueMin,
-			definition.BlueMax,
-			strings.Join(lines, "\n"),
-			count,
-		)
+	basePrompt := strings.TrimSpace(definition.Recommendation.Prompt)
+	if basePrompt == "" {
+		basePrompt = fmt.Sprintf("你是%s推荐助手。请结合最近开奖历史，为用户输出结构化 JSON 推荐结果。", definition.Name)
 	}
 
 	return fmt.Sprintf(
-		"请为%s生成 %d 组推荐号码，不能多也不能少。规则：红球 %d 个(%d-%d)，蓝球 %d 个(%d-%d)。最近开奖如下：\n%s\n请只返回 JSON：{\"summary\":\"\",\"basis\":\"\",\"numbers\":[{\"red\":[1,2,3,4,5,6],\"blue\":[7],\"confidence\":0.8,\"reason\":\"\"}]}，其中 numbers 数组长度必须等于 %d。",
-		definition.Name,
+		"%s\n\n请生成 %d 组候选号码，系统会从中筛选 %d 组最终推荐。\n硬性规则：\n1. 红球必须恰好 %d 个，范围 %d-%d，组内不能重复。\n2. 蓝球必须恰好 %d 个，范围 %d-%d，组内不能重复。\n3. numbers 内不能出现完全相同的红球+蓝球组合。\n4. 不要与“近期已推荐”和“最近开奖”中的完整组合重复。\n5. 不要使用 01,02,03 这类机械连续模板作为主要策略，需兼顾奇偶、大小区间、冷热号和分散度。\n6. reason 用一句话说明选号依据，confidence 使用 0.55-0.95 之间的小数。\n最近开奖：\n%s\n\n近期已推荐：\n%s\n\n请只返回 JSON：%s，其中 numbers 数组长度必须等于 %d。",
+		basePrompt,
+		recommendationCandidateCount(count),
 		count,
 		definition.RedCount,
 		definition.RedMin,
@@ -93,16 +89,148 @@ func buildRecommendationPrompt(definition Definition, history []model.DrawResult
 		definition.BlueCount,
 		definition.BlueMin,
 		definition.BlueMax,
-		strings.Join(lines, "\n"),
-		count,
+		formatPromptList(lines),
+		formatPromptList(blocklist.RecentRecommendations),
+		buildRecommendationJSONExample(definition),
+		recommendationCandidateCount(count),
 	)
 }
 
-func normalizeRecommendationNumbers(items []RecommendationNumber, count int) []RecommendationNumber {
-	if count <= 0 || len(items) <= count {
-		return items
+func recommendationCandidateCount(count int) int {
+	if count <= 0 {
+		count = 1
 	}
-	return items[:count]
+	candidateCount := max(count+4, count*4)
+	if candidateCount > 50 {
+		return 50
+	}
+	return candidateCount
+}
+
+func formatPromptList(items []string) string {
+	if len(items) == 0 {
+		return "无"
+	}
+	return strings.Join(items, "\n")
+}
+
+func buildRecommendationJSONExample(definition Definition) string {
+	red := make([]int, 0, definition.RedCount)
+	for number := definition.RedMin; number <= definition.RedMax && len(red) < definition.RedCount; number++ {
+		red = append(red, number)
+	}
+	blue := make([]int, 0, definition.BlueCount)
+	for number := definition.BlueMin; number <= definition.BlueMax && len(blue) < definition.BlueCount; number++ {
+		blue = append(blue, number)
+	}
+
+	return mustJSON(RecommendationResult{
+		Summary: "简要说明本次推荐策略",
+		Basis:   "说明参考的历史窗口、冷热号和分布依据",
+		Numbers: []RecommendationNumber{
+			{
+				Red:        red,
+				Blue:       blue,
+				Confidence: 0.72,
+				Reason:     "示例：冷热搭配，区间分布均衡",
+			},
+		},
+	})
+}
+
+func normalizeRecommendationNumbers(definition Definition, items []RecommendationNumber, count int, blocklist RecommendationBlocklist) ([]RecommendationNumber, error) {
+	if count <= 0 {
+		count = 1
+	}
+
+	blocked := buildRecommendationSignatureSet(blocklist)
+	seen := make(map[string]struct{}, len(items))
+	result := make([]RecommendationNumber, 0, count)
+	for _, item := range items {
+		normalized, err := normalizeRecommendationNumber(definition, item)
+		if err != nil {
+			continue
+		}
+
+		signature := recommendationNumberSignature(normalized)
+		if _, exists := blocked[signature]; exists {
+			continue
+		}
+		if _, exists := seen[signature]; exists {
+			continue
+		}
+
+		seen[signature] = struct{}{}
+		result = append(result, normalized)
+		if len(result) == count {
+			return result, nil
+		}
+	}
+
+	return nil, fmt.Errorf("AI 推荐候选不足：需要 %d 组，筛选后仅 %d 组，请重试", count, len(result))
+}
+
+func normalizeRecommendationNumber(definition Definition, item RecommendationNumber) (RecommendationNumber, error) {
+	if len(item.Red) != definition.RedCount {
+		return RecommendationNumber{}, fmt.Errorf("红球数量不正确")
+	}
+	if len(item.Blue) != definition.BlueCount {
+		return RecommendationNumber{}, fmt.Errorf("蓝球数量不正确")
+	}
+	if containsDuplicate(item.Red) {
+		return RecommendationNumber{}, fmt.Errorf("红球号码不能重复")
+	}
+	if containsDuplicate(item.Blue) {
+		return RecommendationNumber{}, fmt.Errorf("蓝球号码不能重复")
+	}
+	for _, number := range item.Red {
+		if number < definition.RedMin || number > definition.RedMax {
+			return RecommendationNumber{}, fmt.Errorf("红球号码超出范围")
+		}
+	}
+	for _, number := range item.Blue {
+		if number < definition.BlueMin || number > definition.BlueMax {
+			return RecommendationNumber{}, fmt.Errorf("蓝球号码超出范围")
+		}
+	}
+
+	normalized := item
+	normalized.Red = append([]int(nil), item.Red...)
+	normalized.Blue = append([]int(nil), item.Blue...)
+	slices.Sort(normalized.Red)
+	slices.Sort(normalized.Blue)
+	normalized.Confidence = normalizeRecommendationConfidence(item.Confidence)
+	normalized.Reason = strings.TrimSpace(item.Reason)
+	return normalized, nil
+}
+
+func normalizeRecommendationConfidence(value float64) float64 {
+	if value <= 0 {
+		return 0.6
+	}
+	if value > 1 {
+		return 1
+	}
+	return value
+}
+
+func buildRecommendationSignatureSet(blocklist RecommendationBlocklist) map[string]struct{} {
+	result := make(map[string]struct{}, len(blocklist.RecentRecommendations)+len(blocklist.HistoryDraws))
+	for _, signature := range blocklist.RecentRecommendations {
+		result[signature] = struct{}{}
+	}
+	for _, signature := range blocklist.HistoryDraws {
+		result[signature] = struct{}{}
+	}
+	return result
+}
+
+func recommendationNumberSignature(item RecommendationNumber) string {
+	return formatRecommendationSignature(formatNumbers(item.Red), formatNumbers(item.Blue))
+}
+
+func formatRecommendationSignature(redNumbers string, blueNumbers string) string {
+	return fmt.Sprintf("红球[%s] 蓝球[%s]", redNumbers, blueNumbers)
 }
 
 func GenerateRecommendation(ctx context.Context, code string, count int, userID string) (*model.Recommendation, error) {
@@ -148,7 +276,11 @@ func GenerateRecommendation(ctx context.Context, code string, count int, userID 
 	if provider == nil {
 		return nil, fmt.Errorf("未配置可用的推荐模型提供方")
 	}
-	result, err := provider.Generate(ctx, definition, lotteryType, history, count)
+	blocklist, err := buildRecommendationBlocklist(userUUID, code, history)
+	if err != nil {
+		return nil, err
+	}
+	result, err := provider.Generate(ctx, definition, lotteryType, history, blocklist, count)
 	if err != nil {
 		return nil, err
 	}
@@ -234,4 +366,52 @@ func findExistingRecommendationWithDB(database *gorm.DB, userID uuid.UUID, code 
 		return nil, err
 	}
 	return &recommendation, nil
+}
+
+func buildRecommendationBlocklist(userID uuid.UUID, code string, history []model.DrawResult) (RecommendationBlocklist, error) {
+	recent, err := loadRecentRecommendationSignatures(userID, code, 20)
+	if err != nil {
+		return RecommendationBlocklist{}, err
+	}
+
+	blocklist := buildRecommendationBlocklistFromHistory(history)
+	blocklist.RecentRecommendations = recent
+	return blocklist, nil
+}
+
+func buildRecommendationBlocklistFromHistory(history []model.DrawResult) RecommendationBlocklist {
+	historyDraws := make([]string, 0, len(history))
+	for _, draw := range history {
+		historyDraws = append(historyDraws, formatRecommendationSignature(draw.RedNumbers, draw.BlueNumbers))
+	}
+
+	return RecommendationBlocklist{
+		HistoryDraws: historyDraws,
+	}
+}
+
+func loadRecentRecommendationSignatures(userID uuid.UUID, code string, limit int) ([]string, error) {
+	recommendations := make([]model.Recommendation, 0)
+	if err := db.DB.Preload("Entries").
+		Where("user_id = ? AND lottery_code = ?", userID, code).
+		Order("created_at desc").
+		Order("id desc").
+		Limit(max(1, limit)).
+		Find(&recommendations).Error; err != nil {
+		return nil, err
+	}
+
+	signatures := make([]string, 0)
+	seen := make(map[string]struct{})
+	for _, recommendation := range recommendations {
+		for _, entry := range recommendation.Entries {
+			signature := formatRecommendationSignature(entry.RedNumbers, entry.BlueNumbers)
+			if _, exists := seen[signature]; exists {
+				continue
+			}
+			seen[signature] = struct{}{}
+			signatures = append(signatures, signature)
+		}
+	}
+	return signatures, nil
 }
