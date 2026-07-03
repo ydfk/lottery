@@ -27,6 +27,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
 
 export async function apiGet<T>(url: string): Promise<T> {
   const response = await fetch(url, {
+    cache: "no-store",
     headers: getRequestHeaders(),
   });
   return parseResponse<T>(response);

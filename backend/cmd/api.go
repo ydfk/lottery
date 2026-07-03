@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	urlpath "path"
 	"path/filepath"
 	"strings"
 
@@ -65,6 +66,7 @@ func registerFrontend(app *fiber.App) {
 		return
 	}
 
+	app.Use(applyFrontendCacheHeaders)
 	app.Static("/", webRoot, fiber.Static{
 		Compress:  true,
 		ByteRange: true,
@@ -74,6 +76,37 @@ func registerFrontend(app *fiber.App) {
 		if strings.HasPrefix(c.Path(), "/api") || strings.HasPrefix(c.Path(), "/swagger") || strings.HasPrefix(c.Path(), "/uploads") {
 			return fiber.ErrNotFound
 		}
+		setNoStoreHeaders(c)
 		return c.SendFile(indexPath)
 	})
+}
+
+func applyFrontendCacheHeaders(c *fiber.Ctx) error {
+	requestPath := c.Path()
+	if isNoStoreFrontendPath(requestPath) {
+		setNoStoreHeaders(c)
+		return c.Next()
+	}
+	if strings.HasPrefix(requestPath, "/assets/") {
+		c.Set("Cache-Control", "public, max-age=31536000, immutable")
+	}
+	return c.Next()
+}
+
+func isNoStoreFrontendPath(requestPath string) bool {
+	if requestPath == "/" || requestPath == "/index.html" || requestPath == "/app-version.json" {
+		return true
+	}
+	if strings.HasPrefix(requestPath, "/api") ||
+		strings.HasPrefix(requestPath, "/swagger") ||
+		strings.HasPrefix(requestPath, "/uploads") {
+		return false
+	}
+	return urlpath.Ext(requestPath) == ""
+}
+
+func setNoStoreHeaders(c *fiber.Ctx) {
+	c.Set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate")
+	c.Set("Pragma", "no-cache")
+	c.Set("Expires", "0")
 }

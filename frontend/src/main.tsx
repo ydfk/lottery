@@ -4,6 +4,9 @@ import "./index.css";
 import App from "./App";
 import { ThemeProvider } from "./components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
+import { initAppVersionCheck } from "@/lib/app-version-check";
+
+initAppVersionCheck();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
