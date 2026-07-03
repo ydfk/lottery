@@ -1,6 +1,8 @@
 package lottery
 
 import (
+	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -92,5 +94,130 @@ func TestBuildRecommendationBlocklistIncludesHistoryDraws(t *testing.T) {
 	}
 	if blocklist.HistoryDraws[0] != "红球[01,02,03,04,05,06] 蓝球[07]" {
 		t.Fatalf("unexpected history signature: %s", blocklist.HistoryDraws[0])
+	}
+}
+
+func TestRecommendationGenerateCompensatesInvalidJSON(t *testing.T) {
+	restoreRecommendationModelCaller(t)
+	calls := 0
+	recommendationModelCaller = func(ctx context.Context, model string, prompt string) (string, error) {
+		calls++
+		if calls == 1 {
+			return "这不是 JSON", nil
+		}
+		if !strings.Contains(prompt, "补偿修复要求") {
+			t.Fatalf("expected compensation prompt, got: %s", prompt)
+		}
+		return `{"summary":"ok","basis":"retry","numbers":[{"red":[1,9,16,22,28,31],"blue":[6],"confidence":0.8,"reason":"补偿生成"},{"red":[4,11,18,23,27,32],"blue":[15],"confidence":0.7,"reason":"补偿生成"}]}`, nil
+	}
+
+	result, err := (&openAIRecommendationProvider{}).Generate(
+		context.Background(),
+		testSSQRecommendationDefinition(),
+		model.LotteryType{},
+		nil,
+		RecommendationBlocklist{},
+		2,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("unexpected call count: %d", calls)
+	}
+	if len(result.Numbers) != 2 {
+		t.Fatalf("unexpected recommendation count: %d", len(result.Numbers))
+	}
+}
+
+func TestRecommendationGenerateCompensatesInsufficientCandidates(t *testing.T) {
+	restoreRecommendationModelCaller(t)
+	calls := 0
+	recommendationModelCaller = func(ctx context.Context, model string, prompt string) (string, error) {
+		calls++
+		if calls == 1 {
+			return `{"summary":"bad","basis":"重复","numbers":[{"red":[1,2,3,4,5,6],"blue":[7],"confidence":0.8,"reason":"重复"}]}`, nil
+		}
+		if !strings.Contains(prompt, "候选不足") {
+			t.Fatalf("expected failure reason in compensation prompt, got: %s", prompt)
+		}
+		return `{"summary":"ok","basis":"retry","numbers":[{"red":[1,9,16,22,28,31],"blue":[6],"confidence":0.8,"reason":"补偿生成"}]}`, nil
+	}
+
+	result, err := (&openAIRecommendationProvider{}).Generate(
+		context.Background(),
+		testSSQRecommendationDefinition(),
+		model.LotteryType{},
+		nil,
+		RecommendationBlocklist{
+			RecentRecommendations: []string{
+				formatRecommendationSignature("01,02,03,04,05,06", "07"),
+			},
+		},
+		1,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("unexpected call count: %d", calls)
+	}
+	if recommendationNumberSignature(result.Numbers[0]) != "红球[01,09,16,22,28,31] 蓝球[06]" {
+		t.Fatalf("unexpected recommendation: %s", recommendationNumberSignature(result.Numbers[0]))
+	}
+}
+
+func TestRecommendationGenerateDoesNotRetryConfigError(t *testing.T) {
+	restoreRecommendationModelCaller(t)
+	calls := 0
+	recommendationModelCaller = func(ctx context.Context, model string, prompt string) (string, error) {
+		calls++
+		return "", fmt.Errorf("未配置 OpenAI 兼容模型")
+	}
+
+	_, err := (&openAIRecommendationProvider{}).Generate(
+		context.Background(),
+		testSSQRecommendationDefinition(),
+		model.LotteryType{},
+		nil,
+		RecommendationBlocklist{},
+		1,
+	)
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if calls != 1 {
+		t.Fatalf("config error should not retry, got calls: %d", calls)
+	}
+	if !strings.Contains(err.Error(), "AI 模型连接配置不完整") {
+		t.Fatalf("expected config failure reason, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "已尝试 1 次") {
+		t.Fatalf("expected actual attempt count, got: %v", err)
+	}
+}
+
+func restoreRecommendationModelCaller(t *testing.T) {
+	t.Helper()
+	original := recommendationModelCaller
+	t.Cleanup(func() {
+		recommendationModelCaller = original
+	})
+}
+
+func testSSQRecommendationDefinition() Definition {
+	return Definition{
+		Code:      "ssq",
+		Name:      "福彩双色球",
+		RedCount:  6,
+		RedMin:    1,
+		RedMax:    33,
+		BlueCount: 1,
+		BlueMin:   1,
+		BlueMax:   16,
+		Recommendation: RecommendationSettings{
+			Model:  "test-model",
+			Prompt: "你是双色球推荐助手。",
+		},
 	}
 }

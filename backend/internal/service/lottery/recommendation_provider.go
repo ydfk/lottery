@@ -11,6 +11,7 @@ import (
 
 	model "go-fiber-starter/internal/model/lottery"
 	"go-fiber-starter/pkg/db"
+	"go-fiber-starter/pkg/logger"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -40,6 +41,10 @@ type RecommendationProvider interface {
 
 type openAIRecommendationProvider struct{}
 
+const recommendationGenerateMaxAttempts = 3
+
+var recommendationModelCaller = callRecommendationModel
+
 func newRecommendationProvider(provider string) RecommendationProvider {
 	if provider != ProviderOpenAICompatible {
 		return nil
@@ -48,26 +53,78 @@ func newRecommendationProvider(provider string) RecommendationProvider {
 }
 
 func (provider *openAIRecommendationProvider) Generate(ctx context.Context, definition Definition, _ model.LotteryType, history []model.DrawResult, blocklist RecommendationBlocklist, count int) (*RecommendationResult, error) {
-	content, err := callRecommendationModel(ctx, definition.Recommendation.Model, buildRecommendationPrompt(definition, history, blocklist, count))
-	if err != nil {
-		return nil, err
+	prompt := buildRecommendationPrompt(definition, history, blocklist, count)
+	var lastErr error
+	var lastContent string
+	attempted := 0
+	for attempt := 1; attempt <= recommendationGenerateMaxAttempts; attempt++ {
+		attempted = attempt
+		result, content, err := provider.generateOnce(ctx, definition, prompt, blocklist, count)
+		if err == nil {
+			if attempt > 1 {
+				logger.Info("AI 推荐生成第 %d 次补偿成功", attempt)
+			}
+			return result, nil
+		}
+
+		lastErr = err
+		lastContent = content
+		if !isRepairableRecommendationError(err) || attempt == recommendationGenerateMaxAttempts {
+			break
+		}
+
+		logger.Warn("AI 推荐生成第 %d 次失败，将补偿重试: %s", attempt, detectRecommendationFailureCause(err))
+		prompt = buildRecommendationCompensationPrompt(definition, history, blocklist, count, attempt, err, content)
 	}
 
-	result := RecommendationResult{}
-	if err := json.Unmarshal([]byte(content), &result); err != nil {
-		return nil, err
+	return nil, fmt.Errorf(
+		"AI 推荐生成失败，已尝试 %d 次，最后原因：%s，响应片段：%s: %w",
+		attempted,
+		detectRecommendationFailureCause(lastErr),
+		formatRecommendationResponsePreview(lastContent),
+		lastErr,
+	)
+}
+
+func (provider *openAIRecommendationProvider) generateOnce(ctx context.Context, definition Definition, prompt string, blocklist RecommendationBlocklist, count int) (*RecommendationResult, string, error) {
+	content, err := recommendationModelCaller(ctx, definition.Recommendation.Model, prompt)
+	if err != nil {
+		return nil, "", err
 	}
-	if len(result.Numbers) == 0 {
-		return nil, fmt.Errorf("AI 未返回推荐号码")
+
+	result, err := parseRecommendationResult(content)
+	if err != nil {
+		return nil, content, err
 	}
 	result.Numbers, err = normalizeRecommendationNumbers(definition, result.Numbers, count, blocklist)
 	if err != nil {
-		return nil, err
+		return nil, content, err
+	}
+	return result, content, nil
+}
+
+func parseRecommendationResult(content string) (*RecommendationResult, error) {
+	result := RecommendationResult{}
+	if err := json.Unmarshal([]byte(content), &result); err != nil {
+		return nil, fmt.Errorf("AI 返回内容不是合法 JSON: %w", err)
+	}
+	if len(result.Numbers) == 0 {
+		return nil, fmt.Errorf("AI 未返回推荐号码")
 	}
 	return &result, nil
 }
 
 func buildRecommendationPrompt(definition Definition, history []model.DrawResult, blocklist RecommendationBlocklist, count int) string {
+	return buildRecommendationPromptWithCandidateCount(
+		definition,
+		history,
+		blocklist,
+		count,
+		recommendationCandidateCount(count),
+	)
+}
+
+func buildRecommendationPromptWithCandidateCount(definition Definition, history []model.DrawResult, blocklist RecommendationBlocklist, count int, candidateCount int) string {
 	lines := make([]string, 0, len(history))
 	for _, draw := range history {
 		lines = append(lines, fmt.Sprintf("%s: 红球[%s] 蓝球[%s]", draw.Issue, draw.RedNumbers, draw.BlueNumbers))
@@ -81,7 +138,7 @@ func buildRecommendationPrompt(definition Definition, history []model.DrawResult
 	return fmt.Sprintf(
 		"%s\n\n请生成 %d 组候选号码，系统会从中筛选 %d 组最终推荐。\n硬性规则：\n1. 红球必须恰好 %d 个，范围 %d-%d，组内不能重复。\n2. 蓝球必须恰好 %d 个，范围 %d-%d，组内不能重复。\n3. numbers 内不能出现完全相同的红球+蓝球组合。\n4. 不要与“近期已推荐”和“最近开奖”中的完整组合重复。\n5. 不要使用 01,02,03 这类机械连续模板作为主要策略，需兼顾奇偶、大小区间、冷热号和分散度。\n6. reason 用一句话说明选号依据，confidence 使用 0.55-0.95 之间的小数。\n最近开奖：\n%s\n\n近期已推荐：\n%s\n\n请只返回 JSON：%s，其中 numbers 数组长度必须等于 %d。",
 		basePrompt,
-		recommendationCandidateCount(count),
+		candidateCount,
 		count,
 		definition.RedCount,
 		definition.RedMin,
@@ -92,7 +149,19 @@ func buildRecommendationPrompt(definition Definition, history []model.DrawResult
 		formatPromptList(lines),
 		formatPromptList(blocklist.RecentRecommendations),
 		buildRecommendationJSONExample(definition),
-		recommendationCandidateCount(count),
+		candidateCount,
+	)
+}
+
+func buildRecommendationCompensationPrompt(definition Definition, history []model.DrawResult, blocklist RecommendationBlocklist, count int, attempt int, lastErr error, lastContent string) string {
+	candidateCount := recommendationCompensationCandidateCount(count, attempt)
+	basePrompt := buildRecommendationPromptWithCandidateCount(definition, history, blocklist, count, candidateCount)
+	return fmt.Sprintf(
+		"%s\n\n补偿修复要求：\n上一次生成失败原因：%s。\n上一次响应片段：%s。\n请针对失败原因修补：如果是 JSON 问题，只输出一个完整 JSON 对象；如果是候选不足、重复、越界或数量错误，请重新生成 %d 组全新候选，并主动避开所有已列出的完整组合。不要解释，不要 Markdown，不要代码块。",
+		basePrompt,
+		detectRecommendationFailureCause(lastErr),
+		formatRecommendationResponsePreview(lastContent),
+		candidateCount,
 	)
 }
 
@@ -103,6 +172,17 @@ func recommendationCandidateCount(count int) int {
 	candidateCount := max(count+4, count*4)
 	if candidateCount > 50 {
 		return 50
+	}
+	return candidateCount
+}
+
+func recommendationCompensationCandidateCount(count int, attempt int) int {
+	if count <= 0 {
+		count = 1
+	}
+	candidateCount := recommendationCandidateCount(count) + count*max(1, attempt)*2
+	if candidateCount > 80 {
+		return 80
 	}
 	return candidateCount
 }
@@ -146,17 +226,21 @@ func normalizeRecommendationNumbers(definition Definition, items []Recommendatio
 	blocked := buildRecommendationSignatureSet(blocklist)
 	seen := make(map[string]struct{}, len(items))
 	result := make([]RecommendationNumber, 0, count)
+	failureCounts := make(map[string]int)
 	for _, item := range items {
 		normalized, err := normalizeRecommendationNumber(definition, item)
 		if err != nil {
+			failureCounts[err.Error()]++
 			continue
 		}
 
 		signature := recommendationNumberSignature(normalized)
 		if _, exists := blocked[signature]; exists {
+			failureCounts["与近期推荐或历史开奖完整重复"]++
 			continue
 		}
 		if _, exists := seen[signature]; exists {
+			failureCounts["候选内完整组合重复"]++
 			continue
 		}
 
@@ -167,7 +251,12 @@ func normalizeRecommendationNumbers(definition Definition, items []Recommendatio
 		}
 	}
 
-	return nil, fmt.Errorf("AI 推荐候选不足：需要 %d 组，筛选后仅 %d 组，请重试", count, len(result))
+	return nil, fmt.Errorf(
+		"AI 推荐候选不足：需要 %d 组，筛选后仅 %d 组，过滤原因：%s",
+		count,
+		len(result),
+		formatRecommendationFailureCounts(failureCounts),
+	)
 }
 
 func normalizeRecommendationNumber(definition Definition, item RecommendationNumber) (RecommendationNumber, error) {
@@ -231,6 +320,85 @@ func recommendationNumberSignature(item RecommendationNumber) string {
 
 func formatRecommendationSignature(redNumbers string, blueNumbers string) string {
 	return fmt.Sprintf("红球[%s] 蓝球[%s]", redNumbers, blueNumbers)
+}
+
+func formatRecommendationFailureCounts(items map[string]int) string {
+	if len(items) == 0 {
+		return "没有足够候选"
+	}
+
+	keys := make([]string, 0, len(items))
+	for key := range items {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, fmt.Sprintf("%s %d 组", key, items[key]))
+	}
+	return strings.Join(parts, "；")
+}
+
+func detectRecommendationFailureCause(err error) string {
+	if err == nil {
+		return "未知原因"
+	}
+	if errors.Is(err, context.Canceled) {
+		return "请求已取消"
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "模型请求超时"
+	}
+
+	message := err.Error()
+	switch {
+	case strings.Contains(message, "未配置 OpenAI 兼容模型"):
+		return "AI 模型连接配置不完整"
+	case strings.Contains(message, "HTTP 401") || strings.Contains(message, "HTTP 403"):
+		return "AI 接口鉴权失败"
+	case strings.Contains(message, "HTTP 400") || strings.Contains(message, "HTTP 404"):
+		return "AI 请求参数或模型地址可能不兼容"
+	case strings.Contains(message, "HTTP 429"):
+		return "AI 接口限流"
+	case strings.Contains(message, "HTTP 5"):
+		return "AI 服务端临时错误"
+	case strings.Contains(message, "不是合法 JSON"):
+		return "模型没有返回合法 JSON"
+	case strings.Contains(message, "未返回推荐号码"):
+		return "模型返回 JSON 中缺少 numbers 候选"
+	case strings.Contains(message, "候选不足"):
+		return message
+	default:
+		return message
+	}
+}
+
+func isRepairableRecommendationError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) {
+		return false
+	}
+
+	message := err.Error()
+	if strings.Contains(message, "未配置 OpenAI 兼容模型") ||
+		strings.Contains(message, "HTTP 400") ||
+		strings.Contains(message, "HTTP 401") ||
+		strings.Contains(message, "HTTP 404") ||
+		strings.Contains(message, "HTTP 403") {
+		return false
+	}
+	return true
+}
+
+func formatRecommendationResponsePreview(content string) string {
+	preview := strings.TrimSpace(content)
+	if preview == "" {
+		return "<empty>"
+	}
+	return truncateLogValue(preview)
 }
 
 func GenerateRecommendation(ctx context.Context, code string, count int, userID string) (*model.Recommendation, error) {
