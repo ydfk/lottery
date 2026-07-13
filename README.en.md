@@ -293,7 +293,12 @@ The scripts generate:
 
 ## Tag-based Releases
 
-The repository uses [release.yml](.github/workflows/release.yml) to manage releases through Git tags. Only semantic version tags in the `vX.Y.Z` format are accepted.
+The repository uses [release.yml](.github/workflows/release.yml) to manage releases through Git tags. Semantic version tags in the `vX.Y.Z` and `vX.Y.Z-rc.1` formats are accepted.
+
+Configure these Actions secrets in the GitHub repository first:
+
+- `DOCKERHUB_USERNAME`: Docker Hub username
+- `DOCKERHUB_TOKEN`: Docker Hub access token
 
 Publish a release:
 
@@ -307,30 +312,23 @@ The workflow then:
 - validates the tag and resolves the application version as `1.2.3`
 - runs backend and frontend tests, frontend lint, and the frontend build
 - builds the Docker image with the resolved application version
-- pushes `ghcr.io/ydfk/lottery:1.2.3` and `ghcr.io/ydfk/lottery:latest`
+- pushes the Docker Hub tags `ydfk/lottery:1.2.3`, `ydfk/lottery:1.2`, `ydfk/lottery:1`, and `ydfk/lottery:latest`
 - creates or reuses the `v1.2.3` GitHub Release with generated release notes
 
 Default image:
 
 ```text
-ghcr.io/ydfk/lottery
+ydfk/lottery
 ```
 
-The workflow now pushes to GitHub Container Registry instead of Docker Hub.
-
-No extra container registry secret is required by default. The workflow uses GitHub's built-in `GITHUB_TOKEN` to push packages to GHCR.
-
-Make sure:
-
-- the workflow has permission to write packages
-- the repository is allowed to publish GitHub Packages
-
 The frontend displays the semantic version without the `v` prefix, so tag `v1.2.3` produces application version `1.2.3`.
+
+Prerelease tags publish prerelease images and a GitHub Prerelease without replacing the stable `latest` tag.
 
 Pull example:
 
 ```bash
-docker pull ghcr.io/ydfk/lottery:latest
+docker pull ydfk/lottery:latest
 ```
 
 ## Main APIs

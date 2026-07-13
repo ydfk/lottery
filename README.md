@@ -285,7 +285,12 @@ docker compose up -d --build
 
 ## Tag 发布
 
-仓库通过 [release.yml](./.github/workflows/release.yml) 使用 Git tag 管理发布版本，仅接受 `vX.Y.Z` 格式的语义化版本标签。
+仓库通过 [release.yml](./.github/workflows/release.yml) 使用 Git tag 管理发布版本，接受 `vX.Y.Z` 和 `vX.Y.Z-rc.1` 格式的语义化版本标签。
+
+需要先在 GitHub 仓库的 Actions secrets 中配置：
+
+- `DOCKERHUB_USERNAME`：Docker Hub 用户名
+- `DOCKERHUB_TOKEN`：Docker Hub Access Token
 
 发布新版本：
 
@@ -299,16 +304,18 @@ Action 会依次执行：
 - 校验 tag 格式并提取应用版本 `1.2.3`
 - 执行前后端测试、前端 lint 和构建
 - 构建 Docker 镜像，将应用版本注入前端
-- 推送 `ghcr.io/ydfk/lottery:1.2.3` 和 `ghcr.io/ydfk/lottery:latest`
+- 推送 Docker Hub 镜像 `ydfk/lottery:1.2.3`、`ydfk/lottery:1.2`、`ydfk/lottery:1` 和 `ydfk/lottery:latest`
 - 创建或复用 `v1.2.3` GitHub Release，并自动生成发布说明
 
 镜像仓库：
 
 ```text
-ghcr.io/ydfk/lottery
+ydfk/lottery
 ```
 
 前端显示的版本号来自 tag 去掉 `v` 后的语义化版本，例如 tag `v1.2.3` 对应应用版本 `1.2.3`。
+
+预发布标签会生成预发布镜像和 GitHub Prerelease，但不会覆盖稳定版本的 `latest` 标签。
 
 ## 常用接口
 
