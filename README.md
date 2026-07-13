@@ -283,18 +283,24 @@ docker compose up -d --build
 - 上传的彩票原图
 - 服务日志
 
-## 自动构建镜像
+## Tag 发布
 
-仓库已经集成 GitHub Actions：
+仓库通过 [release.yml](./.github/workflows/release.yml) 使用 Git tag 管理发布版本，仅接受 `vX.Y.Z` 格式的语义化版本标签。
 
-- [docker-image.yml](./.github/workflows/docker-image.yml)
+发布新版本：
 
-默认行为：
+```bash
+git tag v1.2.3
+git push origin v1.2.3
+```
 
-- `push main`：自动校验、构建并推送镜像
-- `push tag`：自动构建并推送版本镜像
-- `pull_request`：只校验和构建，不推送
-- `workflow_dispatch`：支持手动触发
+Action 会依次执行：
+
+- 校验 tag 格式并提取应用版本 `1.2.3`
+- 执行前后端测试、前端 lint 和构建
+- 构建 Docker 镜像，将应用版本注入前端
+- 推送 `ghcr.io/ydfk/lottery:1.2.3` 和 `ghcr.io/ydfk/lottery:latest`
+- 创建或复用 `v1.2.3` GitHub Release，并自动生成发布说明
 
 镜像仓库：
 
@@ -302,10 +308,7 @@ docker compose up -d --build
 ghcr.io/ydfk/lottery
 ```
 
-前端版本号会随镜像构建自动更新：
-
-- `main` 分支：`YYYYMMDD-HHMMSS-<short sha>`
-- Git 标签：直接显示标签名
+前端显示的版本号来自 tag 去掉 `v` 后的语义化版本，例如 tag `v1.2.3` 对应应用版本 `1.2.3`。
 
 ## 常用接口
 

@@ -26,7 +26,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { LotteryNumberTrend } from "@/components/lottery/lottery-number-trend";
 import { NumberBalls } from "@/components/lottery/number-balls";
+import type { LotteryDisplayMode } from "@/components/lottery/display-mode-toggle";
+import type { LotteryNumberTrendMap, TrendLotteryCode } from "@/hooks/use-lottery-number-trends";
 import {
   formatLotteryDateTime,
   formatLotteryDrawDate,
@@ -34,10 +37,13 @@ import {
   getLotteryDisplayName,
   lotteryDisplayOptions,
 } from "@/lib/lottery-display";
+import { cn } from "@/lib/utils";
 import type { DrawResult, DrawResultFilters } from "@/types/lottery";
 
 interface DrawResultsPanelProps {
+  displayMode: LotteryDisplayMode;
   items: DrawResult[];
+  numberTrends: LotteryNumberTrendMap;
   filters: DrawResultFilters;
   loading: boolean;
   page: number;
@@ -47,6 +53,7 @@ interface DrawResultsPanelProps {
   syncPending: boolean;
   onFiltersChange: (filters: DrawResultFilters) => void;
   onPageChange: (page: number) => void;
+  onRetryTrend: (lotteryCode: TrendLotteryCode) => void;
   onSyncIssue: (lotteryCode: string, issue: string) => void;
   onCompleteDraw: (draw: DrawResult) => void;
 }
@@ -316,7 +323,9 @@ function DrawDetailDialog(props: {
 
 export function DrawResultsPanel(props: DrawResultsPanelProps) {
   const {
+    displayMode,
     items,
+    numberTrends,
     filters,
     loading,
     page,
@@ -326,15 +335,18 @@ export function DrawResultsPanel(props: DrawResultsPanelProps) {
     syncPending,
     onFiltersChange,
     onPageChange,
+    onRetryTrend,
     onSyncIssue,
     onCompleteDraw,
   } = props;
   const [selectedDraw, setSelectedDraw] = useState<DrawResult | null>(null);
+  const [viewMode, setViewMode] = useState<"trend" | "list">("trend");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [syncLotteryCode, setSyncLotteryCode] = useState("");
   const [syncIssue, setSyncIssue] = useState("");
   const [, startTransition] = useTransition();
   const deferredFilters = useDeferredValue(filters);
+  const showTrend = displayMode === "web" && viewMode === "trend";
   const hasActiveFilters = Boolean(
     deferredFilters.lotteryCode ||
     deferredFilters.issue ||
@@ -399,11 +411,45 @@ export function DrawResultsPanel(props: DrawResultsPanelProps) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Badge className="bg-slate-900 text-white hover:bg-slate-900">开奖</Badge>
-            <h2 className="text-base font-semibold text-slate-950">历史列表</h2>
-            <span className="text-xs text-slate-500">{total} 期</span>
+            <h2 className="text-base font-semibold text-slate-950">
+              {showTrend ? "号码走势" : "历史列表"}
+            </h2>
+            <span className="text-xs text-slate-500">
+              {showTrend ? "最近 50 期" : `${total} 期`}
+            </span>
           </div>
           <div className="flex items-center gap-2">
-            {hasActiveFilters && !filtersOpen ? (
+            {displayMode === "web" ? (
+              <div className="flex items-center rounded-full border border-slate-200 bg-slate-100 p-1">
+                <button
+                  type="button"
+                  aria-pressed={viewMode === "trend"}
+                  className={cn(
+                    "rounded-full px-4 py-1.5 text-sm font-medium transition",
+                    viewMode === "trend"
+                      ? "bg-slate-950 text-white shadow-sm"
+                      : "text-slate-500 hover:text-slate-900"
+                  )}
+                  onClick={() => setViewMode("trend")}
+                >
+                  号码走势
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={viewMode === "list"}
+                  className={cn(
+                    "rounded-full px-4 py-1.5 text-sm font-medium transition",
+                    viewMode === "list"
+                      ? "bg-white text-slate-950 shadow-sm"
+                      : "text-slate-500 hover:text-slate-900"
+                  )}
+                  onClick={() => setViewMode("list")}
+                >
+                  开奖列表
+                </button>
+              </div>
+            ) : null}
+            {!showTrend && hasActiveFilters && !filtersOpen ? (
               <div className="hidden items-center gap-2 sm:flex">
                 {activeFilterLabels.map((label) => (
                   <span
@@ -415,60 +461,64 @@ export function DrawResultsPanel(props: DrawResultsPanelProps) {
                 ))}
               </div>
             ) : null}
-            <button
-              type="button"
-              className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-              onClick={() => setFiltersOpen((value) => !value)}
-            >
-              <SlidersHorizontal className="size-4 text-slate-400" />
-              筛选
-              <ChevronDown
-                className={`size-4 text-slate-400 transition ${filtersOpen ? "rotate-180" : ""}`}
-              />
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-4 rounded-[1.25rem] border border-slate-200 bg-slate-50/90 p-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="min-w-[180px] flex-1">
-              <select
-                className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-slate-400"
-                value={syncLotteryCode}
-                onChange={(event) => setSyncLotteryCode(event.target.value)}
+            {!showTrend ? (
+              <button
+                type="button"
+                className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                onClick={() => setFiltersOpen((value) => !value)}
               >
-                <option value="">选择彩票类型</option>
-                {lotteryDisplayOptions.map((item) => (
-                  <option key={item.code} value={item.code}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="min-w-[180px] flex-1">
-              <input
-                className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-slate-400"
-                value={syncIssue}
-                placeholder="输入期号，如 2026048"
-                onChange={(event) => setSyncIssue(event.target.value)}
-              />
-            </div>
-            <Button
-              type="button"
-              variant="secondary"
-              className="h-11 rounded-2xl px-5"
-              disabled={syncPending || !syncLotteryCode || !syncIssue.trim()}
-              onClick={handleSyncIssue}
-            >
-              {syncPending ? "同步中..." : "同步开奖"}
-            </Button>
+                <SlidersHorizontal className="size-4 text-slate-400" />
+                筛选
+                <ChevronDown
+                  className={`size-4 text-slate-400 transition ${filtersOpen ? "rotate-180" : ""}`}
+                />
+              </button>
+            ) : null}
           </div>
-          <p className="mt-2 text-xs text-slate-500">
-            手动调用第三方接口同步指定期号，已存在会覆盖，不存在会新增。
-          </p>
         </div>
 
-        {filtersOpen ? (
+        {!showTrend ? (
+          <div className="mt-4 rounded-[1.25rem] border border-slate-200 bg-slate-50/90 p-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="min-w-[180px] flex-1">
+                <select
+                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-slate-400"
+                  value={syncLotteryCode}
+                  onChange={(event) => setSyncLotteryCode(event.target.value)}
+                >
+                  <option value="">选择彩票类型</option>
+                  {lotteryDisplayOptions.map((item) => (
+                    <option key={item.code} value={item.code}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="min-w-[180px] flex-1">
+                <input
+                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-slate-400"
+                  value={syncIssue}
+                  placeholder="输入期号，如 2026048"
+                  onChange={(event) => setSyncIssue(event.target.value)}
+                />
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-11 rounded-2xl px-5"
+                disabled={syncPending || !syncLotteryCode || !syncIssue.trim()}
+                onClick={handleSyncIssue}
+              >
+                {syncPending ? "同步中..." : "同步开奖"}
+              </Button>
+            </div>
+            <p className="mt-2 text-xs text-slate-500">
+              手动调用第三方接口同步指定期号，已存在会覆盖，不存在会新增。
+            </p>
+          </div>
+        ) : null}
+
+        {!showTrend && filtersOpen ? (
           <div className="mt-4 space-y-3">
             <div className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_1fr]">
               <select
@@ -529,7 +579,9 @@ export function DrawResultsPanel(props: DrawResultsPanelProps) {
         ) : null}
       </section>
 
-      {loading ? (
+      {showTrend ? (
+        <LotteryNumberTrend trends={numberTrends} onRetry={onRetryTrend} />
+      ) : loading ? (
         <Card className="border-white/60 bg-white/85 backdrop-blur">
           <CardContent className="py-14 text-center text-sm text-slate-500">
             开奖历史加载中...

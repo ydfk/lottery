@@ -291,18 +291,24 @@ The scripts generate:
 - a primary tag such as `latest`
 - a short Git SHA tag such as `a1b2c3d`
 
-## GitHub Actions Docker Automation
+## Tag-based Releases
 
-The repository now includes a GitHub Actions workflow:
+The repository uses [release.yml](.github/workflows/release.yml) to manage releases through Git tags. Only semantic version tags in the `vX.Y.Z` format are accepted.
 
-- [docker-image.yml](.github/workflows/docker-image.yml)
+Publish a release:
 
-Default behavior:
+```bash
+git tag v1.2.3
+git push origin v1.2.3
+```
 
-- `push` to `main`: verify, build, and push the Docker image
-- Git tag push such as `v1.0.0`: build and push a tagged image
-- `pull_request` to `main`: verify and build only, without pushing
-- `workflow_dispatch`: manual trigger support
+The workflow then:
+
+- validates the tag and resolves the application version as `1.2.3`
+- runs backend and frontend tests, frontend lint, and the frontend build
+- builds the Docker image with the resolved application version
+- pushes `ghcr.io/ydfk/lottery:1.2.3` and `ghcr.io/ydfk/lottery:latest`
+- creates or reuses the `v1.2.3` GitHub Release with generated release notes
 
 Default image:
 
@@ -319,16 +325,7 @@ Make sure:
 - the workflow has permission to write packages
 - the repository is allowed to publish GitHub Packages
 
-The workflow automatically generates:
-
-- `latest` for the default branch
-- `sha-<short commit>` for each commit
-- `v*` tags when Git tags are pushed
-
-Frontend version display format:
-
-- default branch image: `YYYYMMDD-HHMMSS-<short sha>`, generated in `Asia/Shanghai`
-- tag image: the Git tag itself
+The frontend displays the semantic version without the `v` prefix, so tag `v1.2.3` produces application version `1.2.3`.
 
 Pull example:
 

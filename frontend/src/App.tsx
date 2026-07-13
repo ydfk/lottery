@@ -12,6 +12,7 @@ import { HistoryPanel } from "@/components/lottery/history-panel";
 import { LotteryShell, type LotteryShellTab } from "@/components/lottery/lottery-shell";
 import { RecommendationPanel } from "@/components/lottery/recommendation-panel";
 import { RecordPanel } from "@/components/lottery/record-panel";
+import { isTrendLotteryCode, useLotteryNumberTrends } from "@/hooks/use-lottery-number-trends";
 import { getStoredToken } from "@/lib/api/client";
 import { getProfile, loginAndStoreToken, logout } from "@/lib/api/methods/auth";
 import {
@@ -226,6 +227,9 @@ export default function App() {
       : displayMode === "app" && activeTab === "draws"
         ? "dashboard"
         : activeTab;
+  const { trends: numberTrends, reloadTrend } = useLotteryNumberTrends(
+    Boolean(currentUser) && displayMode === "web" && activeTab === "draws"
+  );
 
   function resetLotteryState() {
     setDashboard(null);
@@ -817,7 +821,10 @@ export default function App() {
       if (result.syncedCount <= 0) {
         throw new Error("第三方接口暂未返回当前期完整开奖信息");
       }
-      await loadDrawResults(drawPage, drawFilters);
+      await Promise.all([
+        loadDrawResults(drawPage, drawFilters),
+        isTrendLotteryCode(draw.lotteryCode) ? reloadTrend(draw.lotteryCode) : Promise.resolve(),
+      ]);
       toast.success("开奖信息已补全");
     } catch (error) {
       handleRequestError(error, "补全开奖信息失败");
@@ -837,7 +844,10 @@ export default function App() {
         sort: "latest",
       };
       setDrawFilters(nextFilters);
-      await loadDrawResults(1, nextFilters);
+      await Promise.all([
+        loadDrawResults(1, nextFilters),
+        isTrendLotteryCode(lotteryCode) ? reloadTrend(lotteryCode) : Promise.resolve(),
+      ]);
       if (result.syncedCount > 0) {
         toast.success("开奖数据已同步");
       } else {
@@ -1047,7 +1057,9 @@ export default function App() {
     if (activeTab === "draws") {
       return (
         <DrawResultsPanel
+          displayMode={displayMode}
           items={drawResults}
+          numberTrends={numberTrends}
           filters={drawFilters}
           loading={drawLoading}
           page={drawPage}
@@ -1057,6 +1069,7 @@ export default function App() {
           syncPending={drawSyncPending}
           onFiltersChange={handleDrawFilterChange}
           onPageChange={handleDrawPageChange}
+          onRetryTrend={(lotteryCode) => void reloadTrend(lotteryCode)}
           onSyncIssue={(lotteryCode, issue) => void handleSyncDrawIssue(lotteryCode, issue)}
           onCompleteDraw={(draw) => void handleCompleteDrawInfo(draw)}
         />
