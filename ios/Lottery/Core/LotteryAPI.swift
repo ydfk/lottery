@@ -41,10 +41,16 @@ extension APIClient {
         try await request("lotteries/")
     }
 
-    func recommendations(page: Int, lottery: String, status: String, sort: String) async throws -> RecommendationPage {
+    func recommendations(
+        page: Int,
+        lottery: String,
+        status: String,
+        sort: String,
+        pageSize: Int = 20
+    ) async throws -> RecommendationPage {
         var query = [
             URLQueryItem(name: "page", value: String(page)),
-            URLQueryItem(name: "pageSize", value: "20"),
+            URLQueryItem(name: "pageSize", value: String(pageSize)),
             URLQueryItem(name: "sort", value: sort),
         ]
         if !lottery.isEmpty { query.append(URLQueryItem(name: "lotteryCode", value: lottery)) }
@@ -119,14 +125,19 @@ extension APIClient {
         )
     }
 
-    func draws(page: Int, lottery: String, issue: String = "") async throws -> DrawPage {
+    func draws(_ options: DrawQuery) async throws -> DrawPage {
         var query = [
-            URLQueryItem(name: "page", value: String(page)),
-            URLQueryItem(name: "pageSize", value: "20"),
-            URLQueryItem(name: "sort", value: "latest"),
+            URLQueryItem(name: "page", value: String(options.page)),
+            URLQueryItem(name: "pageSize", value: String(options.pageSize)),
+            URLQueryItem(name: "sort", value: options.sort),
         ]
-        if !lottery.isEmpty { query.append(URLQueryItem(name: "lotteryCode", value: lottery)) }
-        if !issue.isEmpty { query.append(URLQueryItem(name: "issue", value: issue)) }
+        if !options.lotteryCode.isEmpty {
+            query.append(URLQueryItem(name: "lotteryCode", value: options.lotteryCode))
+        }
+        if !options.issue.isEmpty { query.append(URLQueryItem(name: "issue", value: options.issue)) }
+        if !options.drawDate.isEmpty {
+            query.append(URLQueryItem(name: "drawDate", value: options.drawDate))
+        }
         return try await request("lotteries/draws/history", query: query)
     }
 
@@ -140,14 +151,4 @@ extension APIClient {
         )
     }
 
-    func importTickets(workbook: MultipartPart, imagesZip: MultipartPart?) async throws -> ImportResult {
-        let multipart = multipartBody(parts: [workbook, imagesZip].compactMap { $0 })
-        return try await request(
-            "lotteries/tickets/import",
-            method: "POST",
-            body: multipart.data,
-            contentType: multipart.contentType
-        )
-    }
 }
-

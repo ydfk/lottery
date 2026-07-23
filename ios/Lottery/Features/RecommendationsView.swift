@@ -211,6 +211,10 @@ struct RecommendationsView: View {
                     }
                     if !item.summary.isEmpty { Text(item.summary).font(.subheadline) }
                 }
+                Section("日期") {
+                    LabeledContent("生成时间", value: LotteryFormatters.displayDateTime(item.createdAt))
+                    LabeledContent("开奖日期", value: LotteryFormatters.displayDate(item.drawDate))
+                }
                 Section("推荐号码") {
                     ForEach(item.entries) { entry in
                         VStack(alignment: .leading, spacing: 8) {
@@ -264,6 +268,7 @@ private struct RecommendationRow: View {
                 Spacer()
                 StatusPill(status: recommendation.checkedAt == nil ? "pending" : recommendation.prizeAmount > 0 ? "won" : "not_won")
             }
+            LotteryDateStrip(createdAt: recommendation.createdAt, drawDate: recommendation.drawDate)
             if let first = recommendation.entries.first {
                 NumberBalls(redNumbers: first.redNumbers, blueNumbers: first.blueNumbers, compact: true)
             }
@@ -328,4 +333,3 @@ private struct StealthRecommendationView: View {
         }
     }
 }
-

@@ -620,7 +620,7 @@ func RecognizeGenericTicket(c *fiber.Ctx) error {
 }
 
 // @Summary 确认入库并判奖
-// @Description 基于上传记录和识别结果确认票据入库，并在已开奖时自动判奖
+// @Description 基于上传记录和识别结果确认票据入库，金额按号码、倍数和追加由服务端核算，并在已开奖时自动判奖
 // @Tags lottery
 // @Accept json
 // @Produce json
@@ -674,7 +674,7 @@ func CreateTicket(c *fiber.Ctx) error {
 }
 
 // @Summary 通用票据入库并判奖
-// @Description 基于上传记录和识别结果确认票据入库，彩种由识别结果或推荐记录自动决定
+// @Description 基于上传记录和识别结果确认票据入库，彩种自动决定，金额由服务端核算
 // @Tags lottery
 // @Accept json
 // @Produce json
@@ -728,7 +728,7 @@ func CreateGenericTicket(c *fiber.Ctx) error {
 }
 
 // @Summary 更新票据
-// @Description 编辑已录入的购买记录，保存后会重置并重新判奖
+// @Description 编辑已录入的购买记录，金额由服务端重新核算，保存后会重置并重新判奖
 // @Tags lottery
 // @Accept json
 // @Produce json
@@ -764,7 +764,7 @@ func UpdateTicket(c *fiber.Ctx) error {
 }
 
 // @Summary 通用票据更新
-// @Description 编辑已录入的购买记录，保存后会重置并重新判奖
+// @Description 编辑已录入的购买记录，金额由服务端重新核算，保存后会重置并重新判奖
 // @Tags lottery
 // @Accept json
 // @Produce json

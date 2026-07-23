@@ -70,6 +70,9 @@ private struct MainTabView: View {
             Tab("历史", systemImage: "clock.arrow.circlepath", value: AppTab.history) {
                 NavigationStack { HistoryView() }
             }
+            Tab("开奖", systemImage: "chart.xyaxis.line", value: AppTab.draws) {
+                NavigationStack { DrawResultsView() }
+            }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
     }

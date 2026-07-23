@@ -233,7 +233,7 @@ func CreateTicket(ctx context.Context, input CreateTicketInput) (*TicketDetail, 
 			return reserveErr
 		}
 
-		ticket, createErr := createTicketRecord(tx, input.UserID, code, recommendationID, issue, drawDate, source, imagePath, recognizedText, purchasedAt, input.CostAmount, input.Notes, input.Entries)
+		ticket, createErr := createTicketRecord(tx, input.UserID, code, recommendationID, issue, drawDate, source, imagePath, recognizedText, purchasedAt, calculateEntriesCost(input.Entries), input.Notes, input.Entries)
 		if createErr != nil {
 			if isUniqueConstraintError(createErr) {
 				return ErrDuplicateTicket
@@ -315,7 +315,7 @@ func UpdateTicket(ctx context.Context, input UpdateTicketInput) (*TicketDetail, 
 		if err := validateDuplicateTicketExcept(tx, input.UserID, input.TicketID, code, issue, entries); err != nil {
 			return err
 		}
-		if err := updateTicketRecord(tx, ticket, code, recommendationID, issue, input.DrawDate, purchasedAt, input.CostAmount, input.Notes, entries); err != nil {
+		if err := updateTicketRecord(tx, ticket, code, recommendationID, issue, input.DrawDate, purchasedAt, input.Notes, entries); err != nil {
 			return err
 		}
 		return replaceTicketEntries(tx, ticket.Id, entries)
@@ -404,11 +404,8 @@ func resolveUpdateRecommendationID(input UpdateTicketInput, ticket model.Ticket,
 	return ticket.RecommendationID, nil
 }
 
-func updateTicketRecord(tx *gorm.DB, ticket model.Ticket, code string, recommendationID *uuid.UUID, issue string, drawDate time.Time, purchasedAt time.Time, costAmount float64, notes string, entries []ParsedEntry) error {
-	totalCost := costAmount
-	if totalCost <= 0 {
-		totalCost = calculateEntriesCost(entries)
-	}
+func updateTicketRecord(tx *gorm.DB, ticket model.Ticket, code string, recommendationID *uuid.UUID, issue string, drawDate time.Time, purchasedAt time.Time, notes string, entries []ParsedEntry) error {
+	totalCost := calculateEntriesCost(entries)
 
 	var manualDrawDate *time.Time
 	if !drawDate.IsZero() {

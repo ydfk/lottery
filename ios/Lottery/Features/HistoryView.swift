@@ -72,7 +72,6 @@ struct HistoryView: View {
     @State private var model = HistoryModel()
     @State private var selected: Ticket?
     @State private var deleteCandidate: Ticket?
-    @State private var showsImport = false
 
     var body: some View {
         List {
@@ -133,7 +132,6 @@ struct HistoryView: View {
             }
         }
         .navigationTitle("历史")
-        .toolbar { Button("导入", systemImage: "square.and.arrow.down") { showsImport = true } }
         .refreshable { await model.load(using: session.api, reset: true) }
         .task { await model.load(using: session.api, reset: true) }
         .onChange(of: model.lottery) { _, _ in reload() }
@@ -141,12 +139,6 @@ struct HistoryView: View {
         .onChange(of: model.sort) { _, _ in reload() }
         .onChange(of: session.selectedTab) { _, tab in if tab == .history { reload() } }
         .sheet(item: $selected) { ticketDetail($0) }
-        .sheet(isPresented: $showsImport) {
-            ImportTicketsView {
-                showsImport = false
-                reload()
-            }
-        }
         .confirmationDialog(
             "删除这条票据记录？",
             isPresented: Binding(get: { deleteCandidate != nil }, set: { if !$0 { deleteCandidate = nil } }),
@@ -178,6 +170,14 @@ struct HistoryView: View {
                         NumberBalls(redNumbers: ticket.drawRedNumbers, blueNumbers: ticket.drawBlueNumbers)
                     }
                 }
+                Section("日期") {
+                    LabeledContent("生成时间", value: LotteryFormatters.displayDateTime(ticket.createdAt))
+                    LabeledContent("购买时间", value: LotteryFormatters.displayDateTime(ticket.purchasedAt))
+                    LabeledContent(
+                        "开奖日期",
+                        value: LotteryFormatters.displayDate(ticket.drawDate ?? ticket.manualDrawDate)
+                    )
+                }
                 Section("购买号码") {
                     ForEach(ticket.entries) { entry in
                         VStack(alignment: .leading, spacing: 8) {
@@ -196,6 +196,14 @@ struct HistoryView: View {
                 Section("金额") {
                     LabeledContent("花费", value: LotteryFormatters.currency(ticket.costAmount))
                     LabeledContent("中奖", value: LotteryFormatters.currency(ticket.prizeAmount))
+                }
+                if let recommendation = ticket.recommendation {
+                    recommendationSection(recommendation)
+                } else if ticket.recommendationId != nil {
+                    Section("关联推荐") {
+                        Label("关联推荐暂不可用", systemImage: "link.badge.plus")
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 if !ticket.imageUrl.isEmpty {
                     Section("票据原图") { RemoteTicketImage(path: ticket.imageUrl) }
@@ -216,6 +224,39 @@ struct HistoryView: View {
         .presentationDetents([.medium, .large])
     }
 
+    private func recommendationSection(_ recommendation: TicketRecommendation) -> some View {
+        Section("关联推荐") {
+            HStack {
+                Label("已关联推荐", systemImage: "link.circle.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(LotteryPalette.blue)
+                Spacer()
+                Text("第 \(recommendation.issue) 期").foregroundStyle(.secondary)
+            }
+            LotteryDateStrip(createdAt: recommendation.createdAt, drawDate: recommendation.drawDate)
+            if !recommendation.summary.isEmpty {
+                Text(recommendation.summary).font(.subheadline)
+            }
+            ForEach(recommendation.entries) { entry in
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack {
+                        Text("推荐 \(entry.sequence)").font(.caption.weight(.semibold))
+                        Spacer()
+                        if !entry.prizeName.isEmpty {
+                            Text(entry.prizeName).foregroundStyle(LotteryPalette.jade)
+                        }
+                    }
+                    NumberBalls(
+                        redNumbers: entry.redNumbers,
+                        blueNumbers: entry.blueNumbers,
+                        compact: true
+                    )
+                }
+                .padding(.vertical, 3)
+            }
+        }
+    }
+
     private func reload() {
         Task { await model.load(using: session.api, reset: true) }
     }
@@ -231,6 +272,18 @@ private struct TicketRow: View {
                 Text("第 \(ticket.issue) 期").foregroundStyle(.secondary)
                 Spacer()
                 StatusPill(status: ticket.status)
+            }
+            LotteryDateStrip(
+                createdAt: ticket.createdAt,
+                drawDate: ticket.drawDate ?? ticket.manualDrawDate
+            )
+            if ticket.recommendation != nil || ticket.recommendationId != nil {
+                Label("关联推荐", systemImage: "link.circle.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(LotteryPalette.blue)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(LotteryPalette.blue.opacity(0.1), in: .capsule)
             }
             if !ticket.drawRedNumbers.isEmpty {
                 NumberBalls(redNumbers: ticket.drawRedNumbers, blueNumbers: ticket.drawBlueNumbers, compact: true)
@@ -266,4 +319,3 @@ private struct RemoteTicketImage: View {
         .task { url = await session.api?.absoluteImageURL(path) }
     }
 }
-

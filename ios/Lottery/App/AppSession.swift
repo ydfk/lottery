@@ -13,6 +13,7 @@ enum AppTab: Hashable {
     case recommendations
     case record
     case history
+    case draws
 }
 
 @MainActor
@@ -21,6 +22,7 @@ final class AppSession {
     private(set) var state: SessionState = .checking
     private(set) var user: UserProfile?
     let api: APIClient?
+    let isUITestSession: Bool
 
     var selectedTab = AppTab.dashboard
     var ticketDraft = TicketDraft()
@@ -31,12 +33,25 @@ final class AppSession {
     var message: String?
 
     init(bundle: Bundle = .main) {
-        if ProcessInfo.processInfo.arguments.contains("UITEST_RESET_SESSION") {
+        let launchArguments = ProcessInfo.processInfo.arguments
+        let launchEnvironment = ProcessInfo.processInfo.environment
+        let shouldResetSession = launchArguments.contains("UITEST_RESET_SESSION")
+            || launchEnvironment["UITEST_RESET_SESSION"] == "1"
+        let shouldUseTestSession = launchArguments.contains("UITEST_SIGNED_IN")
+            || launchEnvironment["UITEST_SIGNED_IN"] == "1"
+        isUITestSession = shouldUseTestSession
+
+        if shouldResetSession {
             KeychainStore().deleteToken()
         }
         do {
             api = APIClient(configuration: try APIConfiguration.current(bundle: bundle))
-            Task { await restoreSession() }
+            if shouldUseTestSession {
+                user = UserProfile(id: "ui-test", username: "测试用户")
+                state = .signedIn
+            } else {
+                Task { await restoreSession() }
+            }
         } catch {
             api = nil
             state = .configurationError(error.localizedDescription)
@@ -69,7 +84,6 @@ final class AppSession {
             issue: recommendation.issue,
             drawDate: recommendation.drawDate.flatMap(DateParser.date) ?? Date(),
             purchasedAt: Date(),
-            costAmount: 0,
             notes: "",
             entries: recommendation.entries.map { entry in
                 TicketEntryDraft(
@@ -79,7 +93,6 @@ final class AppSession {
             },
             recommendationId: recommendation.id
         )
-        ticketDraft.costAmount = ticketDraft.calculatedCost
         editingTicket = nil
         selectedTab = .record
     }
@@ -91,13 +104,12 @@ final class AppSession {
             issue: ticket.issue,
             drawDate: (ticket.drawDate ?? ticket.manualDrawDate).flatMap(DateParser.date) ?? Date(),
             purchasedAt: DateParser.date(ticket.purchasedAt) ?? Date(),
-            costAmount: ticket.costAmount,
             notes: ticket.notes,
             entries: ticket.entries.map { entry in
                 TicketEntryDraft(
                     red: Set(entry.redNumbers.lotteryNumbers),
                     blue: Set(entry.blueNumbers.lotteryNumbers),
-                    multiple: max(1, entry.multiple),
+                    multiple: TicketEntryDraft.clampedMultiple(entry.multiple),
                     isAdditional: entry.isAdditional
                 )
             },

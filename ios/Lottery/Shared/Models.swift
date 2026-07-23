@@ -85,7 +85,17 @@ struct DrawResult: Codable, Identifiable, Sendable {
     let firstPrizeAmount: Double?
     let secondPrizeAmount: Double?
     let source: String
+    let rawPayload: String
     let prizeDetails: [DrawPrize]
+}
+
+struct DrawQuery: Equatable, Sendable {
+    var page = 1
+    var pageSize = 20
+    var lotteryCode = ""
+    var issue = ""
+    var drawDate = ""
+    var sort = "latest"
 }
 
 struct DrawPrize: Codable, Identifiable, Sendable {
@@ -151,6 +161,8 @@ struct RecommendationPage: Codable, Sendable {
 
 struct Ticket: Codable, Identifiable, Sendable {
     let id: String
+    let createdAt: String?
+    let updatedAt: String?
     let lotteryCode: String
     let recommendationId: String?
     let issue: String
@@ -241,23 +253,6 @@ struct ParsedEntry: Codable, Sendable {
     let isAdditional: Bool
 }
 
-struct ImportResult: Codable, Sendable {
-    let totalCount: Int
-    let successCount: Int
-    let failedCount: Int
-    let rows: [ImportRow]
-}
-
-struct ImportRow: Codable, Identifiable, Sendable {
-    var id: Int { row }
-    let row: Int
-    let lotteryCode: String?
-    let issue: String?
-    let ticketId: String?
-    let status: String
-    let message: String?
-}
-
 struct SyncResult: Codable, Sendable {
     let lotteryCode: String
     let issue: String?
@@ -268,4 +263,3 @@ struct SyncResult: Codable, Sendable {
 struct DeleteResult: Codable, Sendable {
     let deleted: Bool
 }
-

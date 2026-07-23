@@ -13,7 +13,7 @@ struct TicketEditorView: View {
     @State private var isRecognizing = false
     @State private var errorMessage: String?
     @State private var successMessage: String?
-    @State private var costManuallyEdited = false
+    @State private var recognizedCost: Double?
     private let draftStore = TicketDraftStore()
 
     var body: some View {
@@ -31,14 +31,18 @@ struct TicketEditorView: View {
                     .keyboardType(.numberPad)
                 DatePicker("开奖日期", selection: $session.ticketDraft.drawDate, displayedComponents: .date)
                 DatePicker("购买时间", selection: $session.ticketDraft.purchasedAt)
-                HStack {
-                    Text("金额")
-                    Spacer()
-                    TextField("0.00", value: $session.ticketDraft.costAmount, format: .number.precision(.fractionLength(2)))
-                        .keyboardType(.decimalPad)
-                        .multilineTextAlignment(.trailing)
-                        .onChange(of: session.ticketDraft.costAmount) { _, _ in costManuallyEdited = true }
-                    Text("元").foregroundStyle(.secondary)
+                LabeledContent("应付金额", value: LotteryFormatters.currency(session.ticketDraft.calculatedCost))
+                    .accessibilityIdentifier("ticket-cost")
+                if let recognizedCost,
+                   session.ticketDraft.recognizedCostDiffers(from: recognizedCost) {
+                    Label {
+                        Text("票面识别为 \(LotteryFormatters.currency(recognizedCost))，以规则金额为准。")
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                    }
+                    .font(.footnote)
+                    .foregroundStyle(LotteryPalette.amber)
+                    .accessibilityLabel("识别金额与规则金额不一致，以规则金额为准")
                 }
             }
 
@@ -54,6 +58,17 @@ struct TicketEditorView: View {
                 Text("号码")
             } footer: {
                 Text("号码按规则自动排序；金额会根据注数、倍数和追加自动计算。")
+            }
+
+            Section("投注合计") {
+                LabeledContent("有效注数", value: "\(session.ticketDraft.validEntryCount) 注")
+                LabeledContent("总投注倍数", value: "\(session.ticketDraft.totalMultiple) 倍")
+                LabeledContent {
+                    Text(LotteryFormatters.currency(session.ticketDraft.calculatedCost))
+                        .font(.title3.monospacedDigit().weight(.bold))
+                } label: {
+                    Text("最终应付")
+                }
             }
 
             imageSection
@@ -85,7 +100,6 @@ struct TicketEditorView: View {
             }
         }
         .onChange(of: photoItem) { _, item in loadPhoto(item) }
-        .onChange(of: session.ticketDraft.entries) { _, _ in updateCalculatedCost() }
         .onChange(of: session.ticketDraft.lottery) { _, _ in normalizeEntries() }
         .onChange(of: session.ticketDraft) { _, draft in
             session.editorCanSave = draft.isValid
@@ -124,9 +138,22 @@ struct TicketEditorView: View {
                 }
             }
             .buttonStyle(.plain)
-            Stepper("倍数：\(entry.wrappedValue.multiple)", value: entry.multiple, in: 1...99)
+            MultipleControl(multiple: entry.multiple)
             if kind == .dlt {
-                Toggle("追加投注", isOn: entry.isAdditional)
+                Toggle(isOn: entry.isAdditional) {
+                    HStack(spacing: 8) {
+                        Label("追加投注", systemImage: "plus.circle.fill")
+                        Spacer()
+                        Text("+1 元/注")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .toggleStyle(.button)
+                .buttonStyle(.bordered)
+                .tint(entry.wrappedValue.isAdditional ? LotteryPalette.blue : .secondary)
+                .accessibilityHint("开启后每注由 2 元变为 3 元")
             }
         }
         .padding(.vertical, 5)
@@ -181,6 +208,7 @@ struct TicketEditorView: View {
         imageData = data
         upload = nil
         confidence = nil
+        recognizedCost = nil
         errorMessage = nil
     }
 
@@ -212,17 +240,16 @@ struct TicketEditorView: View {
         session.ticketDraft.issue = recognized.issue
         session.ticketDraft.drawDate = LotteryFormatters.dateOnly.date(from: recognized.drawDate) ?? session.ticketDraft.drawDate
         session.ticketDraft.entries = recognized.entries.map {
-            TicketEntryDraft(red: Set($0.red), blue: Set($0.blue), multiple: max(1, $0.multiple), isAdditional: $0.isAdditional)
+            TicketEntryDraft(
+                red: Set($0.red),
+                blue: Set($0.blue),
+                multiple: TicketEntryDraft.clampedMultiple($0.multiple),
+                isAdditional: $0.isAdditional
+            )
         }
         session.ticketDraft.uploadId = recognized.upload.id
-        session.ticketDraft.costAmount = recognized.costAmount > 0 ? recognized.costAmount : session.ticketDraft.calculatedCost
+        recognizedCost = recognized.costAmount > 0 ? recognized.costAmount : nil
         confidence = recognized.confidence
-        costManuallyEdited = recognized.costAmount > 0
-    }
-
-    private func updateCalculatedCost() {
-        guard !costManuallyEdited else { return }
-        session.ticketDraft.costAmount = session.ticketDraft.calculatedCost
     }
 
     private func normalizeEntries() {
@@ -232,8 +259,6 @@ struct TicketEditorView: View {
             session.ticketDraft.entries[index].blue = Set(session.ticketDraft.entries[index].blue.filter { rules.blueMin...rules.blueMax ~= $0 })
             if session.ticketDraft.lottery == .ssq { session.ticketDraft.entries[index].isAdditional = false }
         }
-        costManuallyEdited = false
-        updateCalculatedCost()
     }
 
     private func save() {
@@ -252,16 +277,17 @@ struct TicketEditorView: View {
                     issue: draft.issue,
                     drawDate: LotteryFormatters.dateOnly.string(from: draft.drawDate),
                     purchasedAt: ISO8601DateFormatter().string(from: draft.purchasedAt),
-                    costAmount: draft.costAmount,
+                    costAmount: draft.calculatedCost,
                     notes: draft.notes,
                     entries: draft.entries.map { $0.payload() }
                 )
-                if let editingID { _ = try await api.updateTicket(id: editingID, payload: payload) }
-                else { _ = try await api.createTicket(payload) }
+                let saved: Ticket
+                if let editingID { saved = try await api.updateTicket(id: editingID, payload: payload) }
+                else { saved = try await api.createTicket(payload) }
                 draftStore.clear()
                 resetEditor()
                 session.selectedTab = .history
-                session.message = editingID == nil ? "票据已保存并完成判奖检查。" : "票据修改已保存。"
+                session.message = "已保存，服务端确认金额为 \(LotteryFormatters.currency(saved.costAmount))。"
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -273,8 +299,45 @@ struct TicketEditorView: View {
         imageData = nil
         upload = nil
         confidence = nil
-        costManuallyEdited = false
+        recognizedCost = nil
         session.resetEditor()
+    }
+}
+
+private struct MultipleControl: View {
+    @Binding var multiple: Int
+
+    var body: some View {
+        HStack {
+            Label("投注倍数", systemImage: "multiply.circle")
+                .font(.subheadline.weight(.semibold))
+            Spacer()
+            ControlGroup {
+                Button("减少倍数", systemImage: "minus") {
+                    multiple = TicketEntryDraft.clampedMultiple(multiple - 1)
+                }
+                .disabled(multiple <= 1)
+
+                Text("\(multiple) 倍")
+                    .font(.body.monospacedDigit().weight(.semibold))
+                    .frame(minWidth: 52)
+
+                Button("增加倍数", systemImage: "plus") {
+                    multiple = TicketEntryDraft.clampedMultiple(multiple + 1)
+                }
+                .disabled(multiple >= 99)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("投注倍数")
+        .accessibilityValue("\(multiple) 倍")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: multiple = TicketEntryDraft.clampedMultiple(multiple + 1)
+            case .decrement: multiple = TicketEntryDraft.clampedMultiple(multiple - 1)
+            @unknown default: break
+            }
+        }
     }
 }
 

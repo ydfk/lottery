@@ -35,6 +35,7 @@ import {
   uploadTicketImage,
 } from "@/lib/api/methods/lottery";
 import { formatLotteryDrawDate } from "@/lib/lottery-display";
+import { calculateEntriesCost } from "@/lib/lottery-cost";
 import {
   buildDraftsFromParsedEntries,
   buildDraftsFromRecommendationEntries,
@@ -115,13 +116,6 @@ const DEFAULT_DRAW_FILTERS: DrawResultFilters = {
   drawDate: "",
   sort: "latest",
 };
-
-function calculateEntriesCost(entries: Array<{ multiple: number; isAdditional: boolean }>) {
-  return entries.reduce((total, entry) => {
-    const perBetCost = entry.isAdditional ? 3 : 2;
-    return total + Math.max(1, entry.multiple) * perBetCost;
-  }, 0);
-}
 
 function replaceRecommendation(items: Recommendation[], nextItem: Recommendation) {
   const nextItems = items.slice();
@@ -215,7 +209,6 @@ export default function App() {
   const [drawDate, setDrawDate] = useState("");
   const [purchasedAt, setPurchasedAt] = useState("");
   const [costAmount, setCostAmount] = useState("");
-  const [costAmountEdited, setCostAmountEdited] = useState(false);
   const [notes, setNotes] = useState("");
   const [entryDrafts, setEntryDrafts] = useState<TicketEntryDraft[]>([createEmptyEntryDraft()]);
   const webNavigationTabs = tabs.filter((item) => item.key !== "records");
@@ -264,7 +257,6 @@ export default function App() {
     setDrawDate("");
     setPurchasedAt("");
     setCostAmount("");
-    setCostAmountEdited(false);
     setNotes("");
     setEntryDrafts([createEmptyEntryDraft()]);
   }
@@ -444,10 +436,6 @@ export default function App() {
   }, [selectedImage]);
 
   useEffect(() => {
-    if (costAmountEdited || !lotteryCode) {
-      return;
-    }
-
     const entries = buildParsedEntriesFromDrafts(entryDrafts, lotteryCode);
     if (entries.length === 0) {
       setCostAmount("");
@@ -455,7 +443,7 @@ export default function App() {
     }
 
     setCostAmount(calculateEntriesCost(entries).toFixed(2));
-  }, [costAmountEdited, entryDrafts, lotteryCode]);
+  }, [entryDrafts, lotteryCode]);
 
   async function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -519,7 +507,6 @@ export default function App() {
     setIssue(recommendation.issue || "");
     setDrawDate(formatLotteryDrawDate(recommendation.drawDate));
     setEntryDrafts(buildDraftsFromRecommendationEntries(recommendation.entries));
-    setCostAmountEdited(false);
     setActiveTab("records");
     toast.success("已切换到记录页，可手动确认购买信息后保存");
   }
@@ -536,8 +523,6 @@ export default function App() {
     setIssue(ticket.issue || "");
     setDrawDate(formatLotteryDrawDate(ticket.drawDate || ticket.manualDrawDate));
     setPurchasedAt(formatDateTimeInput(ticket.purchasedAt));
-    setCostAmount(ticket.costAmount > 0 ? ticket.costAmount.toFixed(2) : "");
-    setCostAmountEdited(true);
     setNotes(ticket.notes || "");
     setEntryDrafts(buildDraftsFromTicketEntries(ticket.entries));
     setActiveTab("records");
@@ -593,8 +578,6 @@ export default function App() {
       setLotteryCode(draft.lotteryCode || lotteryCode);
       setIssue(draft.issue || "");
       setDrawDate(draft.drawDate || "");
-      setCostAmount(draft.costAmount > 0 ? draft.costAmount.toFixed(2) : "");
-      setCostAmountEdited(false);
       setEntryDrafts(buildDraftsFromParsedEntries(draft.entries));
       toast.success("识别完成");
     } catch (error) {
@@ -622,9 +605,9 @@ export default function App() {
       toast.error("请至少填写一注号码");
       return;
     }
-    const manualCostAmount = Number(costAmount);
-    if (!(Number.isFinite(manualCostAmount) && manualCostAmount > 0)) {
-      toast.error("请填写正确的金额");
+    const calculatedCostAmount = Number(costAmount);
+    if (!(Number.isFinite(calculatedCostAmount) && calculatedCostAmount > 0)) {
+      toast.error("请完善投注号码以计算金额");
       return;
     }
 
@@ -637,8 +620,7 @@ export default function App() {
         issue: issue || undefined,
         drawDate: drawDate || undefined,
         purchasedAt: toISODateTime(purchasedAt) || new Date().toISOString(),
-        costAmount:
-          Number.isFinite(manualCostAmount) && manualCostAmount > 0 ? manualCostAmount : undefined,
+        costAmount: calculatedCostAmount,
         notes: notes || undefined,
         entries: entries.map((entry) => ({
           ...formatParsedEntry(entry),
@@ -673,15 +655,6 @@ export default function App() {
   function handleChangeLotteryCode(value: string) {
     setLotteryCode(value);
     setEntryDrafts((current) => normalizeDraftsForLottery(current, value));
-    if (!costAmountEdited) {
-      const entries = buildParsedEntriesFromDrafts(entryDrafts, value);
-      setCostAmount(entries.length > 0 ? calculateEntriesCost(entries).toFixed(2) : "");
-    }
-  }
-
-  function handleChangeCostAmount(value: string) {
-    setCostAmount(value);
-    setCostAmountEdited(true);
   }
 
   function handleChangeEntryField(
@@ -711,7 +684,9 @@ export default function App() {
   function handleChangeEntryMultiple(index: number, nextMultiple: number) {
     setEntryDrafts((current) =>
       current.map((entry, entryIndex) =>
-        entryIndex === index ? { ...entry, multiple: Math.max(1, nextMultiple) } : entry
+        entryIndex === index
+          ? { ...entry, multiple: Math.max(1, Math.min(99, nextMultiple)) }
+          : entry
       )
     );
   }
@@ -1040,7 +1015,6 @@ export default function App() {
           onIssueChange={setIssue}
           onDrawDateChange={setDrawDate}
           onPurchasedAtChange={setPurchasedAt}
-          onCostAmountChange={handleChangeCostAmount}
           onNotesChange={setNotes}
           onEntryFieldChange={handleChangeEntryField}
           onToggleEntryAdditional={handleToggleEntryAdditional}

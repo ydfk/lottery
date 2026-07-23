@@ -130,8 +130,8 @@ struct DashboardView: View {
 
     @ViewBuilder
     private func latestDraw(_ draw: DrawResult?) -> some View {
-        NavigationLink {
-            DrawHistoryView()
+        Button {
+            session.selectedTab = .draws
         } label: {
             LotteryCard {
                 VStack(alignment: .leading, spacing: 14) {
@@ -206,4 +206,3 @@ private struct LotteryTrail: View {
         .accessibilityHidden(true)
     }
 }
-

@@ -9,9 +9,10 @@ struct LotteryApp: App {
             RootView()
                 .environment(session)
                 .onReceive(NotificationCenter.default.publisher(for: .sessionUnauthorized)) { _ in
-                    session.logout(message: "登录已失效，请重新登录。")
+                    if !session.isUITestSession {
+                        session.logout(message: "登录已失效，请重新登录。")
+                    }
                 }
         }
     }
 }
-

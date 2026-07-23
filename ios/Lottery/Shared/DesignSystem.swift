@@ -87,6 +87,33 @@ struct StatusPill: View {
     }
 }
 
+struct LotteryDateStrip: View {
+    let createdAt: String?
+    let drawDate: String?
+    var createdTitle = "生成"
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 14) {
+                dateLabel(createdTitle, value: LotteryFormatters.displayDateTime(createdAt), icon: "clock")
+                dateLabel("开奖", value: LotteryFormatters.displayDate(drawDate), icon: "calendar")
+            }
+            VStack(alignment: .leading, spacing: 5) {
+                dateLabel(createdTitle, value: LotteryFormatters.displayDateTime(createdAt), icon: "clock")
+                dateLabel("开奖", value: LotteryFormatters.displayDate(drawDate), icon: "calendar")
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func dateLabel(_ title: String, value: String, icon: String) -> some View {
+        Label("\(title) \(value)", systemImage: icon)
+            .lineLimit(1)
+    }
+}
+
 struct EmptyState: View {
     let icon: String
     let title: String
@@ -124,4 +151,3 @@ struct LoadingOverlay: View {
         .glassEffect(.regular, in: .capsule)
     }
 }
-

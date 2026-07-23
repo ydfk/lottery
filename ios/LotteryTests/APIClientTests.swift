@@ -63,6 +63,37 @@ struct APIClientTests {
         #expect(result.items.isEmpty)
     }
 
+    @Test("开奖查询传递完整筛选条件")
+    func drawQueryContract() async throws {
+        let api = makeClient()
+        MockURLProtocol.handler = { request in
+            guard let url = request.url,
+                  let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            else {
+                throw APIError.invalidResponse
+            }
+            let query = components.queryItems ?? []
+            #expect(request.url?.path == "/api/lotteries/draws/history")
+            #expect(query.contains(URLQueryItem(name: "page", value: "2")))
+            #expect(query.contains(URLQueryItem(name: "pageSize", value: "50")))
+            #expect(query.contains(URLQueryItem(name: "lotteryCode", value: "dlt")))
+            #expect(query.contains(URLQueryItem(name: "issue", value: "26088")))
+            #expect(query.contains(URLQueryItem(name: "drawDate", value: "2026-07-22")))
+            #expect(query.contains(URLQueryItem(name: "sort", value: "oldest")))
+            let json = #"{"flag":true,"code":200,"data":{"items":[],"page":2,"pageSize":50,"total":0,"hasMore":false}}"#
+            return Self.response(for: request, json: json)
+        }
+        let result = try await api.draws(DrawQuery(
+            page: 2,
+            pageSize: 50,
+            lotteryCode: "dlt",
+            issue: "26088",
+            drawDate: "2026-07-22",
+            sort: "oldest"
+        ))
+        #expect(result.page == 2)
+    }
+
     @Test("401 转换为未授权错误")
     func unauthorized() async {
         let api = makeClient()

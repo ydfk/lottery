@@ -53,7 +53,6 @@ interface RecordPanelProps {
   onIssueChange: (value: string) => void;
   onDrawDateChange: (value: string) => void;
   onPurchasedAtChange: (value: string) => void;
-  onCostAmountChange: (value: string) => void;
   onNotesChange: (value: string) => void;
   onEntryFieldChange: (index: number, field: "redNumbers" | "blueNumbers", value: string) => void;
   onToggleEntryAdditional: (index: number) => void;
@@ -75,7 +74,6 @@ function RecordBasicInfoTable(props: {
   onIssueChange: (value: string) => void;
   onDrawDateChange: (value: string) => void;
   onPurchasedAtChange: (value: string) => void;
-  onCostAmountChange: (value: string) => void;
 }) {
   const {
     lotteryCode,
@@ -87,7 +85,6 @@ function RecordBasicInfoTable(props: {
     onIssueChange,
     onDrawDateChange,
     onPurchasedAtChange,
-    onCostAmountChange,
   } = props;
 
   return (
@@ -144,18 +141,17 @@ function RecordBasicInfoTable(props: {
               </TableCell>
               <TableCell className="pr-4">
                 <Input
-                  className="h-9 min-w-[140px] bg-white"
-                  type="number"
-                  step="0.01"
+                  aria-label="规则计算金额"
+                  className="h-9 min-w-[140px] bg-slate-100 font-semibold tabular-nums"
                   value={costAmount}
-                  onChange={(event) => onCostAmountChange(event.target.value)}
+                  readOnly
                 />
               </TableCell>
             </TableRow>
           </TableBody>
         </Table>
         <div className="px-4 pb-4 text-[11px] leading-4 text-slate-400">
-          金额会按号码、倍数和追加自动计算，也可手动修改。
+          金额按号码、倍数和追加自动计算，保存后由服务端再次确认。
         </div>
       </CardContent>
     </Card>
@@ -332,7 +328,6 @@ export function RecordPanel(props: RecordPanelProps) {
     onIssueChange,
     onDrawDateChange,
     onPurchasedAtChange,
-    onCostAmountChange,
     onNotesChange,
     onEntryFieldChange,
     onToggleEntryAdditional,
@@ -350,6 +345,9 @@ export function RecordPanel(props: RecordPanelProps) {
   const isWebDisplay = displayMode === "web";
   const isEditing = mode === "edit";
   const imagePreviewUrl = previewUrl || existingImageUrl || "";
+  const recognitionCostMismatch =
+    Boolean(recognitionDraft && recognitionDraft.costAmount > 0 && costAmount) &&
+    Math.abs((recognitionDraft?.costAmount || 0) - Number(costAmount)) > 0.005;
 
   return (
     <div className="space-y-6">
@@ -475,6 +473,16 @@ export function RecordPanel(props: RecordPanelProps) {
         </Card>
       )}
 
+      {recognitionCostMismatch ? (
+        <div
+          role="status"
+          className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+        >
+          票面识别金额为 ¥{recognitionDraft?.costAmount.toFixed(2)}
+          ，与规则金额不一致，保存时以规则金额为准。
+        </div>
+      ) : null}
+
       <Card className="border-white/60 bg-white/85 shadow-[0_20px_50px_rgba(15,23,42,0.08)] backdrop-blur">
         <CardContent className="space-y-5">
           <div className="space-y-4">
@@ -489,7 +497,6 @@ export function RecordPanel(props: RecordPanelProps) {
                 onIssueChange={onIssueChange}
                 onDrawDateChange={onDrawDateChange}
                 onPurchasedAtChange={onPurchasedAtChange}
-                onCostAmountChange={onCostAmountChange}
               />
             ) : (
               <>
@@ -534,11 +541,10 @@ export function RecordPanel(props: RecordPanelProps) {
                   <div className="min-w-0 space-y-1.5">
                     <label className="text-sm font-medium text-slate-700">金额</label>
                     <Input
-                      className="h-9 min-w-0"
-                      type="number"
-                      step="0.01"
+                      aria-label="规则计算金额"
+                      className="h-9 min-w-0 bg-slate-100 font-semibold tabular-nums"
                       value={costAmount}
-                      onChange={(event) => onCostAmountChange(event.target.value)}
+                      readOnly
                     />
                   </div>
                 </div>
@@ -553,7 +559,7 @@ export function RecordPanel(props: RecordPanelProps) {
                   />
                 </div>
                 <p className="text-[11px] leading-4 text-slate-400">
-                  金额会按号码、倍数和追加自动计算，也可手动修改。
+                  金额按号码、倍数和追加自动计算，保存后由服务端再次确认。
                 </p>
               </>
             )}
@@ -759,7 +765,7 @@ export function RecordPanel(props: RecordPanelProps) {
                   </Button>
                   <p className="text-xs leading-5 text-slate-500">
                     {isEditing
-                      ? "编辑历史记录时沿用原图，可调整期号、号码、金额和时间。"
+                      ? "编辑历史记录时沿用原图，可调整期号、号码和时间；金额自动重算。"
                       : "先手动填写信息；如有图片，可用识别结果回填表单。"}
                   </p>
                 </div>
