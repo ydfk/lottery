@@ -151,6 +151,7 @@ flowchart LR
 | 层 | 技术 |
 | --- | --- |
 | Frontend | React, Vite, TypeScript |
+| iOS | Swift 6, SwiftUI, iOS 26 Liquid Glass |
 | Backend | Go, Fiber, GORM |
 | Database | SQLite |
 | OCR | PaddleOCR HTTP 服务 |
@@ -172,8 +173,9 @@ flowchart LR
 │  │  └─ service/lottery/  # 彩票领域核心逻辑
 │  └─ pkg/                 # 配置、数据库、日志等基础设施
 ├─ frontend/               # React 前端
+├─ ios/                    # 原生 SwiftUI iOS 客户端
 ├─ docs/                   # 架构与设计文档
-├─ scripts/                # Docker 构建与推送脚本
+├─ scripts/                # 跨平台开发、构建和 Docker 脚本
 ├─ Dockerfile              # 单镜像构建
 ├─ docker-compose.yml      # 部署编排
 └─ .env.example            # Compose 环境变量示例
@@ -189,6 +191,12 @@ flowchart LR
 
 复制本地配置：
 
+```bash
+cp backend/config/config.local.example.yaml backend/config/config.local.yaml
+```
+
+Windows PowerShell 使用：
+
 ```powershell
 Copy-Item backend/config/config.local.example.yaml backend/config/config.local.yaml
 ```
@@ -202,41 +210,72 @@ Copy-Item backend/config/config.local.example.yaml backend/config/config.local.y
 - `vision.baseURL`
 - `vision.apiKey`
 
-#### 2. 启动后端
+#### 2. 启动开发服务
 
-```powershell
-cd backend
-go run ./cmd
+macOS：
+
+```bash
+./scripts/dev-server.sh
 ```
 
-或直接使用热更新脚本：
+Windows PowerShell：
 
 ```powershell
-.\scripts\dev-backend.ps1
+.\scripts\dev-server.ps1
 ```
+
+脚本会同时启动后端和前端。只启动单个服务时，在命令末尾添加 `backend` 或 `frontend`。
 
 默认地址：
 
 - API: [http://127.0.0.1:25610](http://127.0.0.1:25610)
 - Swagger: [http://127.0.0.1:25610/swagger/index.html](http://127.0.0.1:25610/swagger/index.html)
-
-#### 3. 启动前端
-
-```powershell
-cd frontend
-pnpm install
-pnpm dev
-```
-
-或直接使用前端开发脚本：
-
-```powershell
-.\scripts\dev-frontend.ps1
-```
-
-默认地址：
-
 - Frontend: [http://127.0.0.1:3000](http://127.0.0.1:3000)
+
+#### 3. 启动 iOS 客户端
+
+iOS 客户端最低支持 iOS 26.0。Debug 环境默认连接运行在 Mac 上的
+`http://127.0.0.1:25610/api`，适合直接使用 Simulator 调试。
+
+```bash
+open ios/Lottery.xcodeproj
+```
+
+也可以通过命令行构建和测试：
+
+```bash
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
+  xcodebuild -project ios/Lottery.xcodeproj \
+  -scheme Lottery \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  test
+```
+
+正式构建使用 `https://lottery.ydfk.site/api`：
+
+```bash
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
+  xcodebuild -project ios/Lottery.xcodeproj \
+  -scheme Lottery \
+  -configuration Release \
+  build
+```
+
+### 本地构建
+
+macOS：
+
+```bash
+./scripts/build.sh
+```
+
+Windows PowerShell：
+
+```powershell
+.\scripts\build.ps1
+```
+
+构建产物位于 `frontend/dist` 和 `backend/bin`。
 
 ## Docker 部署
 
@@ -252,14 +291,27 @@ pnpm dev
 
 ### 1. 准备 Compose 环境变量
 
-```powershell
-Copy-Item .env.example .env
+```bash
+cp .env.example .env
 ```
+
+Windows PowerShell 使用 `Copy-Item .env.example .env`。
 
 ### 2. 启动
 
-```powershell
-docker compose up -d --build
+```bash
+./scripts/docker.sh up
+```
+
+Windows PowerShell 使用 `.\scripts\docker.ps1 up`。
+
+其他基础操作：
+
+```bash
+./scripts/docker.sh build
+./scripts/docker.sh logs
+./scripts/docker.sh down
+./scripts/docker.sh push
 ```
 
 默认访问：
@@ -371,10 +423,6 @@ pnpm test:run
 模板文件：
 
 - [ticket-import-template.xlsx](./docs/ticket-import-template.xlsx)
-
-模板生成脚本：
-
-- [generate_ticket_import_template.go](./backend/scripts/generate_ticket_import_template.go)
 
 当前导入规则：
 

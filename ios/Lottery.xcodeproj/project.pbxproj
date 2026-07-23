@@ -1,0 +1,457 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXContainerItemProxy section */
+		150000000000000000000003 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 180000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 140000000000000000000001;
+			remoteInfo = Lottery;
+		};
+		150000000000000000000004 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 180000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 140000000000000000000001;
+			remoteInfo = Lottery;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		100000000000000000000001 /* Lottery.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Lottery.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		100000000000000000000002 /* LotteryTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LotteryTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		100000000000000000000003 /* LotteryUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LotteryUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		100000000000000000000004 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
+		100000000000000000000005 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		110000000000000000000004 /* Exceptions for "Lottery" folder in "Lottery" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Resources/Info.plist,
+			);
+			target = 140000000000000000000001 /* Lottery */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		110000000000000000000001 /* Lottery */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				110000000000000000000004 /* Exceptions for "Lottery" folder in "Lottery" target */,
+			);
+			path = Lottery;
+			sourceTree = "<group>";
+		};
+		110000000000000000000002 /* LotteryTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = LotteryTests;
+			sourceTree = "<group>";
+		};
+		110000000000000000000003 /* LotteryUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = LotteryUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		120000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		120000000000000000000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		120000000000000000000003 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		130000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				110000000000000000000001 /* Lottery */,
+				110000000000000000000002 /* LotteryTests */,
+				110000000000000000000003 /* LotteryUITests */,
+				130000000000000000000003 /* Config */,
+				130000000000000000000002 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		130000000000000000000002 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				100000000000000000000001 /* Lottery.app */,
+				100000000000000000000002 /* LotteryTests.xctest */,
+				100000000000000000000003 /* LotteryUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		130000000000000000000003 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				100000000000000000000004 /* Debug.xcconfig */,
+				100000000000000000000005 /* Release.xcconfig */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		140000000000000000000001 /* Lottery */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 190000000000000000000002 /* Build configuration list for PBXNativeTarget "Lottery" */;
+			buildPhases = (
+				160000000000000000000001 /* Sources */,
+				120000000000000000000001 /* Frameworks */,
+				170000000000000000000001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				110000000000000000000001 /* Lottery */,
+			);
+			name = Lottery;
+			productName = Lottery;
+			productReference = 100000000000000000000001 /* Lottery.app */;
+			productType = "com.apple.product-type.application";
+		};
+		140000000000000000000002 /* LotteryTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 190000000000000000000003 /* Build configuration list for PBXNativeTarget "LotteryTests" */;
+			buildPhases = (
+				160000000000000000000002 /* Sources */,
+				120000000000000000000002 /* Frameworks */,
+				170000000000000000000002 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				150000000000000000000001 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				110000000000000000000002 /* LotteryTests */,
+			);
+			name = LotteryTests;
+			productName = LotteryTests;
+			productReference = 100000000000000000000002 /* LotteryTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		140000000000000000000003 /* LotteryUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 190000000000000000000004 /* Build configuration list for PBXNativeTarget "LotteryUITests" */;
+			buildPhases = (
+				160000000000000000000003 /* Sources */,
+				120000000000000000000003 /* Frameworks */,
+				170000000000000000000003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				150000000000000000000002 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				110000000000000000000003 /* LotteryUITests */,
+			);
+			name = LotteryUITests;
+			productName = LotteryUITests;
+			productReference = 100000000000000000000003 /* LotteryUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		180000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2660;
+				LastUpgradeCheck = 2660;
+				TargetAttributes = {
+					140000000000000000000001 = {
+						CreatedOnToolsVersion = 26.6;
+					};
+					140000000000000000000002 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = 140000000000000000000001;
+					};
+					140000000000000000000003 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = 140000000000000000000001;
+					};
+				};
+			};
+			buildConfigurationList = 190000000000000000000001 /* Build configuration list for PBXProject "Lottery" */;
+			developmentRegion = "zh-Hans";
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				"zh-Hans",
+				en,
+				Base,
+			);
+			mainGroup = 130000000000000000000001;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 130000000000000000000002 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				140000000000000000000001 /* Lottery */,
+				140000000000000000000002 /* LotteryTests */,
+				140000000000000000000003 /* LotteryUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		170000000000000000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		170000000000000000000002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		170000000000000000000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		160000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		160000000000000000000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		160000000000000000000003 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		150000000000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 140000000000000000000001 /* Lottery */;
+			targetProxy = 150000000000000000000003 /* PBXContainerItemProxy */;
+		};
+		150000000000000000000002 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 140000000000000000000001 /* Lottery */;
+			targetProxy = 150000000000000000000004 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		200000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		200000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		200000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 100000000000000000000004 /* Debug.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = B6AA23TY3H;
+				ENABLE_TESTABILITY = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Lottery/Resources/Info.plist;
+				INFOPLIST_KEY_APIBaseURL = "$(LOTTERY_API_BASE_URL)";
+				INFOPLIST_KEY_CFBundleDisplayName = "彩迹";
+				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "用于拍摄彩票并识别票面号码。";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "用于选择彩票照片并辅助识别。";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ydfk.lottery;
+				PRODUCT_NAME = Lottery;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		200000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 100000000000000000000005 /* Release.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = B6AA23TY3H;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Lottery/Resources/Info.plist;
+				INFOPLIST_KEY_APIBaseURL = "$(LOTTERY_API_BASE_URL)";
+				INFOPLIST_KEY_CFBundleDisplayName = "彩迹";
+				INFOPLIST_KEY_NSCameraUsageDescription = "用于拍摄彩票并识别票面号码。";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "用于选择彩票照片并辅助识别。";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ydfk.lottery;
+				PRODUCT_NAME = Lottery;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		200000000000000000000005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ydfk.lottery.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Lottery.app/Lottery";
+			};
+			name = Debug;
+		};
+		200000000000000000000006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ydfk.lottery.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Lottery.app/Lottery";
+			};
+			name = Release;
+		};
+		200000000000000000000007 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ydfk.lottery.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = Lottery;
+			};
+			name = Debug;
+		};
+		200000000000000000000008 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ydfk.lottery.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = Lottery;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		190000000000000000000001 /* Build configuration list for PBXProject "Lottery" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				200000000000000000000001 /* Debug */,
+				200000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		190000000000000000000002 /* Build configuration list for PBXNativeTarget "Lottery" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				200000000000000000000003 /* Debug */,
+				200000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		190000000000000000000003 /* Build configuration list for PBXNativeTarget "LotteryTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				200000000000000000000005 /* Debug */,
+				200000000000000000000006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		190000000000000000000004 /* Build configuration list for PBXNativeTarget "LotteryUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				200000000000000000000007 /* Debug */,
+				200000000000000000000008 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 180000000000000000000001 /* Project object */;
+}

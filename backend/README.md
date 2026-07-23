@@ -48,10 +48,6 @@ go-fiber-starter/
 │       └── user.go          # User service
 ├── log/                     # Log files
 │   └── log.json             # JSON format logs
-├── scripts/                 # Helper scripts (Windows)
-│   ├── build.bat            # Build binary
-│   ├── run.bat              # Run API server
-│   └── test.bat             # Run tests
 ├── pkg/                     # Public packages
 │   ├── config/              # Configuration processing
 │   │   └── config.go        # Configuration loading logic
@@ -103,15 +99,16 @@ The API service runs by default at `http://localhost:25610`
 
 Swagger documentation can be accessed via `http://localhost:25610/swagger/`
 
-### Windows Scripts
+### Project Scripts
 
-If you are on Windows, you can use the scripts under `scripts/`:
+Cross-platform scripts are centralized in the repository root `scripts/` directory:
 
-```bat
-scripts\build.bat
-scripts\run.bat
-scripts\test.bat
+```bash
+./scripts/dev-server.sh backend
+./scripts/build.sh
 ```
+
+On Windows PowerShell, use `.\scripts\dev-server.ps1 backend` and `.\scripts\build.ps1` from the repository root.
 
 ### Running Tests
 
@@ -126,7 +123,7 @@ The auth HTTP tests use an in-memory SQLite database and do not touch `data/db.s
 1. Build and start the container
 
 ```bash
-docker-compose up -d
+./scripts/docker.sh up
 ```
 
 2. Access the application

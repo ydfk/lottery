@@ -18,19 +18,17 @@
 
 ## 常用命令
 
-### 后端
+### 跨平台脚本
 
-在 `backend/` 目录执行：
+macOS：
 
-- `go mod tidy`
-- `go test ./...`
-- `go run ./cmd/main.go`
+- `./scripts/dev-server.sh [all|backend|frontend]`
+- `./scripts/build.sh`
+- `./scripts/docker.sh <build|up|down|logs|push>`
 
-Windows 脚本：
+Windows PowerShell 使用同名 `.ps1` 脚本和相同参数。
 
-- `scripts\test.bat`
-- `scripts\run.bat`
-- `scripts\build.bat`
+后端测试仍在 `backend/` 目录执行 `go test ./...`。
 
 ### 前端
 

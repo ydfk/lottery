@@ -112,7 +112,7 @@ Recommendation matching rules:
 │  └─ pkg/                 shared infrastructure modules
 ├─ frontend/               React frontend
 ├─ docs/                   design docs
-├─ scripts/                Docker build and push scripts
+├─ scripts/                cross-platform development, build, and Docker scripts
 ├─ Dockerfile              single-image build
 ├─ docker-compose.yml      deployment compose file
 └─ .env.example            compose environment example
@@ -129,11 +129,13 @@ The backend uses two YAML layers:
 1. [backend/config/config.yaml](backend/config/config.yaml)
 2. `backend/config/config.local.yaml`
 
-Create a local override:
+Create a local override on macOS:
 
-```powershell
-Copy-Item backend/config/config.local.example.yaml backend/config/config.local.yaml
+```bash
+cp backend/config/config.local.example.yaml backend/config/config.local.yaml
 ```
+
+On Windows PowerShell, use `Copy-Item backend/config/config.local.example.yaml backend/config/config.local.yaml`.
 
 At minimum, configure:
 
@@ -144,29 +146,35 @@ At minimum, configure:
 - `vision.baseURL`
 - `vision.apiKey`
 
-### 2. Start backend
+### 2. Start development services
+
+macOS:
+
+```bash
+./scripts/dev-server.sh
+```
+
+Windows PowerShell:
 
 ```powershell
-cd backend
-go run ./cmd
+.\scripts\dev-server.ps1
 ```
+
+Both the backend and frontend start by default. Append `backend` or `frontend` to start only one service.
 
 Default endpoints:
 
 - API: [http://127.0.0.1:25610](http://127.0.0.1:25610)
 - Swagger: [http://127.0.0.1:25610/swagger/index.html](http://127.0.0.1:25610/swagger/index.html)
+- Frontend: [http://127.0.0.1:3000](http://127.0.0.1:3000)
 
-### 3. Start frontend
+### 3. Build locally
 
-```powershell
-cd frontend
-pnpm install
-pnpm dev
+```bash
+./scripts/build.sh
 ```
 
-Default frontend URL:
-
-- [http://127.0.0.1:3000](http://127.0.0.1:3000)
+Windows PowerShell uses `.\scripts\build.ps1`. Outputs are written to `frontend/dist` and `backend/bin`.
 
 ## Configuration
 
@@ -215,15 +223,19 @@ Frontend assets are served directly by the backend. No extra Caddy container is 
 
 ### 1. Prepare compose environment
 
-```powershell
-Copy-Item .env.example .env
+```bash
+cp .env.example .env
 ```
+
+Windows PowerShell uses `Copy-Item .env.example .env`.
 
 ### 2. Start services
 
-```powershell
-docker compose up -d --build
+```bash
+./scripts/docker.sh up
 ```
+
+Windows PowerShell uses `.\scripts\docker.ps1 up`.
 
 Default URLs:
 
@@ -246,13 +258,12 @@ This allows overriding and persisting:
 - uploaded ticket images
 - application logs
 
-## Docker Build Scripts
+## Docker Scripts
 
-PowerShell scripts are included:
+Docker operations use one script with matching macOS and Windows entry points:
 
-- [scripts/docker-build.ps1](scripts/docker-build.ps1)
-- [scripts/docker-push.ps1](scripts/docker-push.ps1)
-- [scripts/build-and-push.ps1](scripts/build-and-push.ps1)
+- [scripts/docker.sh](scripts/docker.sh)
+- [scripts/docker.ps1](scripts/docker.ps1)
 
 Default image name:
 
@@ -260,36 +271,27 @@ Default image name:
 ydfk/lottery
 ```
 
-Build and push in one command:
-
-```powershell
-.\scripts\build-and-push.ps1
-```
-
 Build only:
 
-```powershell
-.\scripts\docker-build.ps1
+```bash
+./scripts/docker.sh build
 ```
 
 Push only:
 
-```powershell
-.\scripts\docker-push.ps1
+```bash
+./scripts/docker.sh push
 ```
+
+Use `.\scripts\docker.ps1 build` and `.\scripts\docker.ps1 push` on Windows PowerShell. The same scripts also support `up`, `down`, and `logs`.
 
 Override image name and tag:
 
-```powershell
-$env:DOCKER_IMAGE_NAME = "ydfk/lottery"
-$env:DOCKER_IMAGE_TAG = "latest"
-.\scripts\build-and-push.ps1
+```bash
+DOCKER_IMAGE_NAME=ydfk/lottery DOCKER_IMAGE_TAG=latest ./scripts/docker.sh build
 ```
 
-The scripts generate:
-
-- a primary tag such as `latest`
-- a short Git SHA tag such as `a1b2c3d`
+When a non-`latest` tag is selected, the build and push commands also handle the `latest` tag.
 
 ## Tag-based Releases
 
