@@ -57,7 +57,13 @@ final class LotteryUITests: XCTestCase {
         let newTicket = app.buttons["new-ticket"]
         XCTAssertTrue(newTicket.waitForExistence(timeout: 3))
         newTicket.tap()
-        XCTAssertTrue(app.buttons["增加倍数"].waitForExistence(timeout: 3))
+        let increaseMultiple = app.buttons["增加倍数"]
+        XCTAssertTrue(increaseMultiple.waitForExistence(timeout: 3))
+        increaseMultiple.tap()
+        increaseMultiple.tap()
+        increaseMultiple.tap()
+        XCTAssertTrue(app.staticTexts["ticket-multiple"].waitForExistence(timeout: 2))
+        XCTAssertEqual(app.staticTexts["ticket-multiple"].label, "4 倍")
         XCTAssertTrue(app.descendants(matching: .any)["ticket-cost"].exists)
 
         let issue = app.textFields["ticket-issue"]

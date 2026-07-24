@@ -326,32 +326,62 @@ private struct MultipleControl: View {
             Label("投注倍数", systemImage: "multiply.circle")
                 .font(.subheadline.weight(.semibold))
             Spacer()
-            ControlGroup {
-                Button("减少倍数", systemImage: "minus") {
-                    multiple = TicketEntryDraft.clampedMultiple(multiple - 1)
+            HStack(spacing: 0) {
+                multipleButton(
+                    title: "减少倍数",
+                    systemImage: "minus",
+                    disabled: multiple <= 1
+                ) {
+                    adjustMultiple(by: -1)
                 }
-                .disabled(multiple <= 1)
-
+                Divider().frame(height: 22)
                 Text("\(multiple) 倍")
                     .font(.body.monospacedDigit().weight(.semibold))
                     .frame(minWidth: 52)
-
-                Button("增加倍数", systemImage: "plus") {
-                    multiple = TicketEntryDraft.clampedMultiple(multiple + 1)
+                    .accessibilityIdentifier("ticket-multiple")
+                Divider().frame(height: 22)
+                multipleButton(
+                    title: "增加倍数",
+                    systemImage: "plus",
+                    disabled: multiple >= 99
+                ) {
+                    adjustMultiple(by: 1)
                 }
-                .disabled(multiple >= 99)
             }
+            .background(Color(.secondarySystemFill), in: .capsule)
+            .overlay { Capsule().stroke(Color(.separator).opacity(0.45), lineWidth: 0.5) }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("投注倍数")
         .accessibilityValue("\(multiple) 倍")
         .accessibilityAdjustableAction { direction in
             switch direction {
-            case .increment: multiple = TicketEntryDraft.clampedMultiple(multiple + 1)
-            case .decrement: multiple = TicketEntryDraft.clampedMultiple(multiple - 1)
+            case .increment: adjustMultiple(by: 1)
+            case .decrement: adjustMultiple(by: -1)
             @unknown default: break
             }
         }
+    }
+
+    private func adjustMultiple(by offset: Int) {
+        multiple = TicketEntryDraft.clampedMultiple(multiple + offset)
+    }
+
+    private func multipleButton(
+        title: String,
+        systemImage: String,
+        disabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.body.weight(.semibold))
+                .frame(width: 44, height: 40)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .accessibilityLabel(title)
     }
 }
 
