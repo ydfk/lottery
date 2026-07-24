@@ -14,7 +14,8 @@ struct TicketEditorView: View {
     @State private var errorMessage: String?
     @State private var successMessage: String?
     @State private var recognizedCost: Double?
-    private let draftStore = TicketDraftStore()
+    @State private var initialDraft: TicketDraft?
+    @State private var showsDiscardConfirmation = false
 
     var body: some View {
         @Bindable var session = session
@@ -29,6 +30,7 @@ struct TicketEditorView: View {
                 }
                 TextField("期号", text: $session.ticketDraft.issue)
                     .keyboardType(.numberPad)
+                    .accessibilityIdentifier("ticket-issue")
                 DatePicker("开奖日期", selection: $session.ticketDraft.drawDate, displayedComponents: .date)
                 DatePicker("购买时间", selection: $session.ticketDraft.purchasedAt)
                 LabeledContent("应付金额", value: LotteryFormatters.currency(session.ticketDraft.calculatedCost))
@@ -78,17 +80,31 @@ struct TicketEditorView: View {
                     .lineLimit(3...6)
             }
 
-            Section {
-                Button(session.editingTicket == nil ? "保存票据" : "保存修改", systemImage: "checkmark.circle.fill") {
-                    save()
-                }
-                .disabled(!session.ticketDraft.isValid || session.editorSaving)
-                if session.editingTicket != nil {
-                    Button("取消编辑", role: .cancel) { resetEditor() }
-                }
-            }
         }
         .navigationTitle(session.editingTicket == nil ? "记录票据" : "编辑票据")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button("关闭", systemImage: "xmark", action: requestClose)
+                    .accessibilityIdentifier("close-ticket-editor")
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            Button {
+                save()
+            } label: {
+                Label(
+                    session.editorSaving ? "保存中" : session.editingTicket == nil ? "保存票据" : "保存修改",
+                    systemImage: "checkmark.circle.fill"
+                )
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.glassProminent)
+            .disabled(!session.ticketDraft.isValid || session.editorSaving)
+            .padding(.horizontal)
+            .padding(.top, 8)
+            .accessibilityIdentifier("save-ticket")
+        }
         .scrollDismissesKeyboard(.interactively)
         .sheet(isPresented: $showsCamera) {
             CameraPicker { data in setImageData(data) }.ignoresSafeArea()
@@ -101,18 +117,14 @@ struct TicketEditorView: View {
         }
         .onChange(of: photoItem) { _, item in loadPhoto(item) }
         .onChange(of: session.ticketDraft.lottery) { _, _ in normalizeEntries() }
-        .onChange(of: session.ticketDraft) { _, draft in
-            session.editorCanSave = draft.isValid
-            if session.editingTicket == nil { draftStore.save(draft) }
-        }
-        .onChange(of: session.saveTicketTrigger) { _, _ in save() }
         .task {
-            if session.editingTicket == nil,
-               session.ticketDraft.issue.isEmpty,
-               let stored = draftStore.load() {
-                session.ticketDraft = stored
-            }
-            session.editorCanSave = session.ticketDraft.isValid
+            if initialDraft == nil { initialDraft = session.ticketDraft }
+        }
+        .confirmationDialog("丢弃未保存内容？", isPresented: $showsDiscardConfirmation, titleVisibility: .visible) {
+            Button("丢弃并关闭", role: .destructive) { session.closeEditor(saved: false) }
+            Button("继续编辑", role: .cancel) {}
+        } message: {
+            Text("关闭后本次填写的内容不会保留。")
         }
     }
 
@@ -284,9 +296,7 @@ struct TicketEditorView: View {
                 let saved: Ticket
                 if let editingID { saved = try await api.updateTicket(id: editingID, payload: payload) }
                 else { saved = try await api.createTicket(payload) }
-                draftStore.clear()
-                resetEditor()
-                session.selectedTab = .history
+                session.closeEditor(saved: true)
                 session.message = "已保存，服务端确认金额为 \(LotteryFormatters.currency(saved.costAmount))。"
             } catch {
                 errorMessage = error.localizedDescription
@@ -294,13 +304,17 @@ struct TicketEditorView: View {
         }
     }
 
-    private func resetEditor() {
-        draftStore.clear()
-        imageData = nil
-        upload = nil
-        confidence = nil
-        recognizedCost = nil
-        session.resetEditor()
+    private func requestClose() {
+        guard hasUnsavedChanges else {
+            session.closeEditor(saved: false)
+            return
+        }
+        showsDiscardConfirmation = true
+    }
+
+    private var hasUnsavedChanges: Bool {
+        guard let initialDraft else { return imageData != nil }
+        return session.ticketDraft != initialDraft || imageData != nil
     }
 }
 

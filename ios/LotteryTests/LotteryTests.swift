@@ -76,6 +76,126 @@ struct LotteryTests {
         #expect("01,09,12".lotteryNumbers == [1, 9, 12])
     }
 
+    @Test("号码命中区分红球和蓝球")
+    func numberMatch() {
+        let match = LotteryNumberMatch(
+            redNumbers: "01,02,03,04,05,06",
+            blueNumbers: "07",
+            drawRedNumbers: "01,03,08,09,10,11",
+            drawBlueNumbers: "07"
+        )
+        #expect(match.hasDrawNumbers)
+        #expect(match.redHitCount == 2)
+        #expect(match.blueHitCount == 1)
+        #expect(match.isRedHit(1))
+        #expect(!match.isRedHit(2))
+
+        let pending = LotteryNumberMatch(
+            redNumbers: "01,02,03,04,05,06",
+            blueNumbers: "07",
+            drawRedNumbers: "",
+            drawBlueNumbers: ""
+        )
+        #expect(!pending.hasDrawNumbers)
+    }
+
+    @Test("推荐和历史列表完整映射多注号码")
+    func listEntryDisplayMapping() {
+        let recommendations = LotteryEntryDisplay.recommendations([
+            recommendationEntry(id: "r1", sequence: 1),
+            recommendationEntry(id: "r2", sequence: 2),
+        ])
+        #expect(recommendations.map(\.sequence) == [1, 2])
+        #expect(recommendations.allSatisfy { $0.detail == nil })
+
+        let tickets = LotteryEntryDisplay.tickets([
+            ticketEntry(id: "t1", sequence: 1, multiple: 2, additional: false),
+            ticketEntry(id: "t2", sequence: 2, multiple: 3, additional: true),
+        ])
+        #expect(tickets.count == 2)
+        #expect(tickets[0].detail == "2 倍")
+        #expect(tickets[1].detail == "3 倍 · 追加")
+        #expect(LotteryEntryDisplay.tickets([]).isEmpty)
+    }
+
+    @Test("看板比率和趋势汇总处理零值")
+    func dashboardMetrics() {
+        let stats = DashboardStats(
+            totalTickets: 4,
+            wonTickets: 1,
+            totalCost: 100,
+            totalPrize: 25,
+            totalRecommendations: 5,
+            purchasedRecommendations: 2
+        )
+        #expect(stats.winningRate == 0.25)
+        #expect(stats.returnRate == 0.25)
+        #expect(stats.recommendationPurchaseRate == 0.4)
+
+        let empty = DashboardStats(
+            totalTickets: 0,
+            wonTickets: 0,
+            totalCost: 0,
+            totalPrize: 0,
+            totalRecommendations: 0,
+            purchasedRecommendations: 0
+        )
+        #expect(empty.winningRate == 0)
+        #expect(empty.returnRate == 0)
+        #expect(empty.recommendationPurchaseRate == 0)
+
+        let trend = DashboardTrend(
+            range: "30d",
+            bucket: "day",
+            items: [
+                DashboardTrendPoint(
+                    periodStart: "2026-07-23",
+                    totalCost: 10,
+                    totalPrize: 20,
+                    ticketCount: 2,
+                    wonTickets: 1,
+                    recommendationCount: 3
+                ),
+            ]
+        )
+        #expect(trend.totalCost == 10)
+        #expect(trend.totalPrize == 20)
+        #expect(trend.ticketCount == 2)
+        #expect(trend.recommendationCount == 3)
+    }
+
+    @Test("录票入口清空旧内容并保留业务预填")
+    @MainActor
+    func editorDraftLifecycle() throws {
+        let session = AppSession()
+        session.ticketDraft.issue = "旧草稿"
+        session.startNewTicket()
+        #expect(session.ticketDraft.issue.isEmpty)
+        #expect(session.isEditorPresented)
+
+        let recommendationJSON = #"""
+        {
+          "id":"recommendation-1","lotteryCode":"ssq","issue":"2026088","drawDate":"2026-07-25",
+          "provider":"test","model":"test","strategy":"test","promptVersion":"v1","summary":"测试",
+          "basis":"测试","checkedAt":null,"prizeAmount":0,"createdAt":"2026-07-23T08:00:00+08:00",
+          "entries":[{"id":"entry-1","sequence":1,"redNumbers":"01,02,03,04,05,06","blueNumbers":"07",
+            "confidence":0.8,"reason":"测试","isWinning":false,"prizeName":"","prizeAmount":0,"matchSummary":""}]
+        }
+        """#
+        let recommendation = try JSONDecoder().decode(
+            Recommendation.self,
+            from: Data(recommendationJSON.utf8)
+        )
+        session.recordPurchase(recommendation)
+        #expect(session.ticketDraft.issue == "2026088")
+        #expect(session.ticketDraft.recommendationId == "recommendation-1")
+        #expect(session.ticketDraft.entries.first?.red == [1, 2, 3, 4, 5, 6])
+
+        session.closeEditor(saved: false)
+        #expect(session.ticketDraft.issue.isEmpty)
+        #expect(!session.isEditorPresented)
+    }
+
     @Test("开奖走势统计红蓝号码出现次数")
     func drawTrendFrequency() {
         let first = makeDraw(id: "1", red: "01,02,03,04,05,06", blue: "07")
@@ -125,4 +245,40 @@ struct LotteryTests {
             prizeDetails: []
         )
     }
+
+    private func recommendationEntry(id: String, sequence: Int) -> RecommendationEntry {
+        RecommendationEntry(
+            id: id,
+            sequence: sequence,
+            redNumbers: "01,02,03,04,05,06",
+            blueNumbers: "07",
+            confidence: 0.8,
+            reason: "",
+            isWinning: false,
+            prizeName: "",
+            prizeAmount: 0,
+            matchSummary: ""
+        )
+    }
+
+    private func ticketEntry(
+        id: String,
+        sequence: Int,
+        multiple: Int,
+        additional: Bool
+    ) -> TicketEntry {
+        TicketEntry(
+            id: id,
+            sequence: sequence,
+            redNumbers: "01,02,03,04,05,06",
+            blueNumbers: "07",
+            multiple: multiple,
+            isAdditional: additional,
+            isWinning: false,
+            prizeName: "",
+            prizeAmount: 0,
+            matchSummary: ""
+        )
+    }
+
 }

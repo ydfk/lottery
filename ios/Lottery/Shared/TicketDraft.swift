@@ -67,24 +67,6 @@ struct TicketDraft: Codable, Equatable, Sendable {
     }
 }
 
-struct TicketDraftStore: Sendable {
-    private let key = "lottery.ticket-draft.v1"
-
-    func load() -> TicketDraft? {
-        guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
-        return try? JSONDecoder().decode(TicketDraft.self, from: data)
-    }
-
-    func save(_ draft: TicketDraft) {
-        guard let data = try? JSONEncoder().encode(draft) else { return }
-        UserDefaults.standard.set(data, forKey: key)
-    }
-
-    func clear() {
-        UserDefaults.standard.removeObject(forKey: key)
-    }
-}
-
 extension Array where Element == Int {
     var formattedNumbers: String {
         map { String(format: "%02d", $0) }.joined(separator: ",")
@@ -122,6 +104,10 @@ enum LotteryFormatters {
 
     static func currency(_ value: Double) -> String {
         currency.string(from: NSNumber(value: value)) ?? "¥0.00"
+    }
+
+    static func percent(_ value: Double) -> String {
+        String(format: "%.0f%%", value * 100)
     }
 
     static func displayDate(_ value: String?) -> String {

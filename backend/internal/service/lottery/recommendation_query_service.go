@@ -21,12 +21,13 @@ type RecommendationDetail struct {
 }
 
 type RecommendationQueryOptions struct {
-	UserID      string
-	Page        int
-	PageSize    int
-	LotteryCode string
-	Status      string
-	Sort        string
+	UserID       string
+	Page         int
+	PageSize     int
+	LotteryCode  string
+	Status       string
+	Sort         string
+	PendingFirst bool
 }
 
 type RecommendationPageResult struct {
@@ -97,7 +98,7 @@ func QueryRecommendations(options RecommendationQueryOptions) (*RecommendationPa
 	}
 
 	recommendations := make([]model.Recommendation, 0)
-	if err := applyRecommendationSort(query, options.Sort).
+	if err := applyRecommendationQuerySort(query, options).
 		Preload("Entries").
 		Offset((page - 1) * pageSize).
 		Limit(pageSize).
@@ -216,4 +217,11 @@ func applyRecommendationSort(query *gorm.DB, sort string) *gorm.DB {
 	default:
 		return query.Order("created_at desc").Order("id desc")
 	}
+}
+
+func applyRecommendationQuerySort(query *gorm.DB, options RecommendationQueryOptions) *gorm.DB {
+	if options.PendingFirst {
+		query = query.Order("CASE WHEN checked_at IS NULL THEN 0 ELSE 1 END")
+	}
+	return applyRecommendationSort(query, options.Sort)
 }

@@ -25,7 +25,8 @@ private final class RecommendationsModel {
                 page: targetPage,
                 lottery: lottery,
                 status: status,
-                sort: sort
+                sort: sort,
+                pendingFirst: status.isEmpty
             )
             items = reset ? result.items : items + result.items
             page = result.page
@@ -100,7 +101,6 @@ struct RecommendationsView: View {
     @State private var selected: Recommendation?
     @State private var stealth: Recommendation?
     @State private var deleteCandidate: Recommendation?
-    @State private var showsGenerate = false
 
     var body: some View {
         List {
@@ -114,13 +114,21 @@ struct RecommendationsView: View {
                     EmptyState(icon: "sparkles", title: "暂无推荐", message: "从右上角生成一组新的推荐号码。")
                         .listRowBackground(Color.clear)
                 }
-                ForEach(model.items) { item in
+                ForEach(Array(model.items.enumerated()), id: \.element.id) { index, item in
                     Button {
                         Task { selected = await model.detail(item, using: session.api) ?? item }
                     } label: {
-                        RecommendationRow(recommendation: item)
+                        VStack(spacing: 12) {
+                            RecommendationRow(recommendation: item)
+                            if index < model.items.count - 1 {
+                                Divider()
+                            }
+                        }
+                        .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
+                    .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 0, trailing: 16))
+                    .listRowSeparator(.hidden)
                     .onAppear {
                         if item.id == model.items.last?.id, model.hasMore {
                             Task { await model.load(using: session.api, reset: false) }
@@ -132,7 +140,9 @@ struct RecommendationsView: View {
         }
         .navigationTitle("推荐")
         .toolbar {
-            Button("生成", systemImage: "wand.and.sparkles") { showsGenerate = true }
+            ToolbarItem(placement: .topBarTrailing) {
+                generateMenu
+            }
         }
         .refreshable { await model.load(using: session.api, reset: true) }
         .task { await model.load(using: session.api, reset: true) }
@@ -141,17 +151,6 @@ struct RecommendationsView: View {
         .onChange(of: model.sort) { _, _ in reload() }
         .sheet(item: $selected) { detailSheet($0) }
         .fullScreenCover(item: $stealth) { StealthRecommendationView(recommendation: $0) }
-        .confirmationDialog("生成推荐", isPresented: $showsGenerate) {
-            ForEach(LotteryKind.allCases) { kind in
-                Button("生成\(kind.name)推荐") {
-                    Task {
-                        if let item = await model.generate(kind, using: session.api) {
-                            selected = await model.detail(item, using: session.api) ?? item
-                        }
-                    }
-                }
-            }
-        }
         .confirmationDialog(
             "删除这条推荐？",
             isPresented: Binding(get: { deleteCandidate != nil }, set: { if !$0 { deleteCandidate = nil } }),
@@ -167,6 +166,28 @@ struct RecommendationsView: View {
         } message: {
             Text("已录入的购买记录会保留，但不再关联这条推荐。")
         }
+    }
+
+    private var generateMenu: some View {
+        Menu {
+            ForEach(LotteryKind.allCases) { kind in
+                Button("生成\(kind.name)推荐") {
+                    generate(kind)
+                }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                if model.isMutating {
+                    ProgressView().controlSize(.mini)
+                } else {
+                    Image(systemName: "wand.and.sparkles")
+                }
+                Text(model.isMutating ? "生成中" : "生成推荐")
+            }
+            .font(.subheadline.weight(.semibold))
+        }
+        .disabled(model.isMutating)
+        .accessibilityIdentifier("generate-recommendation")
     }
 
     private var filters: some View {
@@ -210,10 +231,15 @@ struct RecommendationsView: View {
                         StatusPill(status: item.checkedAt == nil ? "pending" : item.prizeAmount > 0 ? "won" : "not_won")
                     }
                     if !item.summary.isEmpty { Text(item.summary).font(.subheadline) }
+                    LotteryDateStrip(createdAt: item.createdAt, drawDate: item.drawDate)
+                    if item.isPurchased == true {
+                        Label("已购买 \(item.purchasedCount ?? 1) 次", systemImage: "cart.fill")
+                            .font(.caption)
+                            .foregroundStyle(LotteryPalette.blue)
+                    }
                 }
-                Section("日期") {
-                    LabeledContent("生成时间", value: LotteryFormatters.displayDateTime(item.createdAt))
-                    LabeledContent("开奖日期", value: LotteryFormatters.displayDate(item.drawDate))
+                if let red = item.drawRedNumbers, let blue = item.drawBlueNumbers, !red.isEmpty {
+                    Section("开奖号码") { NumberBalls(redNumbers: red, blueNumbers: blue) }
                 }
                 Section("推荐号码") {
                     ForEach(item.entries) { entry in
@@ -221,16 +247,24 @@ struct RecommendationsView: View {
                             HStack {
                                 Text("推荐 \(entry.sequence)").font(.subheadline.weight(.semibold))
                                 Spacer()
-                                Text("\(Int(entry.confidence * 100))%").font(.caption).foregroundStyle(.secondary)
+                                Text(entry.prizeName.isEmpty ? "\(Int(entry.confidence * 100))%" : entry.prizeName)
+                                    .font(.caption)
+                                    .foregroundStyle(entry.isWinning ? LotteryPalette.jade : .secondary)
                             }
-                            NumberBalls(redNumbers: entry.redNumbers, blueNumbers: entry.blueNumbers, compact: true)
+                            HitNumberBalls(
+                                redNumbers: entry.redNumbers,
+                                blueNumbers: entry.blueNumbers,
+                                drawRedNumbers: item.drawRedNumbers ?? "",
+                                drawBlueNumbers: item.drawBlueNumbers ?? "",
+                                compact: true
+                            )
+                            if !entry.matchSummary.isEmpty {
+                                Text(entry.matchSummary).font(.caption).foregroundStyle(.secondary)
+                            }
                             if !entry.reason.isEmpty { Text(entry.reason).font(.caption).foregroundStyle(.secondary) }
                         }
-                        .padding(.vertical, 5)
+                        .padding(.vertical, 2)
                     }
-                }
-                if let red = item.drawRedNumbers, let blue = item.drawBlueNumbers, !red.isEmpty {
-                    Section("开奖号码") { NumberBalls(redNumbers: red, blueNumbers: blue) }
                 }
             }
             .navigationTitle("推荐详情")
@@ -254,33 +288,73 @@ struct RecommendationsView: View {
     private func reload() {
         Task { await model.load(using: session.api, reset: true) }
     }
+
+    private func generate(_ kind: LotteryKind) {
+        Task {
+            if let item = await model.generate(kind, using: session.api) {
+                selected = await model.detail(item, using: session.api) ?? item
+            }
+        }
+    }
 }
 
 private struct RecommendationRow: View {
     let recommendation: Recommendation
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(LotteryKind(rawValue: recommendation.lotteryCode)?.name ?? recommendation.lotteryCode)
-                    .font(.headline)
-                Text("第 \(recommendation.issue) 期").foregroundStyle(.secondary)
-                Spacer()
-                StatusPill(status: recommendation.checkedAt == nil ? "pending" : recommendation.prizeAmount > 0 ? "won" : "not_won")
-            }
+        VStack(alignment: .leading, spacing: 8) {
+            header
             LotteryDateStrip(createdAt: recommendation.createdAt, drawDate: recommendation.drawDate)
-            if let first = recommendation.entries.first {
-                NumberBalls(redNumbers: first.redNumbers, blueNumbers: first.blueNumbers, compact: true)
+            LotteryEntryNumbersList(
+                entries: LotteryEntryDisplay.recommendations(recommendation.entries),
+                drawRedNumbers: recommendation.drawRedNumbers ?? "",
+                drawBlueNumbers: recommendation.drawBlueNumbers ?? ""
+            )
+            if recommendation.prizeAmount > 0 {
+                Text("奖金 \(LotteryFormatters.currency(recommendation.prizeAmount))")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(LotteryPalette.jade)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
-            HStack {
-                Text(recommendation.isPurchased == true ? "已购买 \(recommendation.purchasedCount ?? 1) 次" : "未购买")
-                Spacer()
-                if recommendation.prizeAmount > 0 { Text(LotteryFormatters.currency(recommendation.prizeAmount)).foregroundStyle(LotteryPalette.jade) }
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
         }
-        .padding(.vertical, 5)
+        .padding(.vertical, 2)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var header: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                identity
+                Spacer(minLength: 8)
+                status
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                identity
+                status
+            }
+        }
+    }
+
+    private var identity: some View {
+        HStack(spacing: 7) {
+            Text(LotteryKind(rawValue: recommendation.lotteryCode)?.name ?? recommendation.lotteryCode)
+                .font(.headline)
+            Text("第 \(recommendation.issue) 期")
+                .foregroundStyle(.secondary)
+            if recommendation.isPurchased == true {
+                Text("已购")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(LotteryPalette.blue)
+            }
+        }
+    }
+
+    private var status: some View {
+        StatusPill(
+            status: recommendation.checkedAt == nil
+                ? "pending"
+                : recommendation.prizeAmount > 0 ? "won" : "not_won"
+        )
     }
 }
 

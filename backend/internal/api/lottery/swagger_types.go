@@ -26,6 +26,13 @@ type DashboardResponse struct {
 	Time string                       `json:"time" example:"2026-03-16T10:00:00Z"`
 }
 
+type DashboardTrendResponse struct {
+	Flag bool                          `json:"flag" example:"true"`
+	Code int                           `json:"code" example:"200"`
+	Data lotteryService.DashboardTrend `json:"data"`
+	Time string                        `json:"time" example:"2026-03-16T10:00:00Z"`
+}
+
 type RecommendationResponse struct {
 	Flag bool                 `json:"flag" example:"true"`
 	Code int                  `json:"code" example:"200"`

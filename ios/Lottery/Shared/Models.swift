@@ -69,6 +69,48 @@ struct DashboardStats: Codable, Sendable {
     let purchasedRecommendations: Int
 
     var balance: Double { totalPrize - totalCost }
+    var winningRate: Double { totalTickets > 0 ? Double(wonTickets) / Double(totalTickets) : 0 }
+    var returnRate: Double { totalCost > 0 ? totalPrize / totalCost : 0 }
+    var recommendationPurchaseRate: Double {
+        totalRecommendations > 0 ? Double(purchasedRecommendations) / Double(totalRecommendations) : 0
+    }
+}
+
+enum DashboardTrendRange: String, CaseIterable, Codable, Identifiable, Sendable {
+    case thirtyDays = "30d"
+    case ninetyDays = "90d"
+    case oneYear = "1y"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .thirtyDays: "30 天"
+        case .ninetyDays: "90 天"
+        case .oneYear: "1 年"
+        }
+    }
+}
+
+struct DashboardTrend: Codable, Sendable {
+    let range: String
+    let bucket: String
+    let items: [DashboardTrendPoint]
+
+    var totalCost: Double { items.reduce(0) { $0 + $1.totalCost } }
+    var totalPrize: Double { items.reduce(0) { $0 + $1.totalPrize } }
+    var ticketCount: Int { items.reduce(0) { $0 + $1.ticketCount } }
+    var recommendationCount: Int { items.reduce(0) { $0 + $1.recommendationCount } }
+}
+
+struct DashboardTrendPoint: Codable, Identifiable, Sendable {
+    var id: String { periodStart }
+    let periodStart: String
+    let totalCost: Double
+    let totalPrize: Double
+    let ticketCount: Int
+    let wonTickets: Int
+    let recommendationCount: Int
 }
 
 struct DrawResult: Codable, Identifiable, Sendable {

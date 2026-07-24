@@ -63,6 +63,51 @@ struct APIClientTests {
         #expect(result.items.isEmpty)
     }
 
+    @Test("看板趋势查询传递时间范围")
+    func dashboardTrendContract() async throws {
+        let api = makeClient()
+        MockURLProtocol.handler = { request in
+            guard let url = request.url,
+                  let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            else {
+                throw APIError.invalidResponse
+            }
+            #expect(url.path == "/api/lotteries/dashboard/trend")
+            #expect(components.queryItems?.contains(URLQueryItem(name: "range", value: "90d")) == true)
+            let json = #"{"flag":true,"code":200,"data":{"range":"90d","bucket":"week","items":[]}}"#
+            return Self.response(for: request, json: json)
+        }
+        let result = try await api.dashboardTrend(range: .ninetyDays)
+        #expect(result.range == "90d")
+        #expect(result.bucket == "week")
+    }
+
+    @Test("推荐查询可以启用待开奖优先")
+    func recommendationPendingFirstContract() async throws {
+        let api = makeClient()
+        MockURLProtocol.handler = { request in
+            guard let url = request.url,
+                  let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            else {
+                throw APIError.invalidResponse
+            }
+            let query = components.queryItems ?? []
+            #expect(url.path == "/api/lotteries/recommendations")
+            #expect(query.contains(URLQueryItem(name: "pendingFirst", value: "true")))
+            #expect(query.contains(URLQueryItem(name: "sort", value: "latest")))
+            let json = #"{"flag":true,"code":200,"data":{"items":[],"page":1,"pageSize":20,"total":0,"hasMore":false}}"#
+            return Self.response(for: request, json: json)
+        }
+        let result = try await api.recommendations(
+            page: 1,
+            lottery: "",
+            status: "",
+            sort: "latest",
+            pendingFirst: true
+        )
+        #expect(result.items.isEmpty)
+    }
+
     @Test("开奖查询传递完整筛选条件")
     func drawQueryContract() async throws {
         let api = makeClient()
@@ -101,6 +146,17 @@ struct APIClientTests {
             Self.response(for: request, status: 401, json: #"{"flag":false,"code":401,"msg":"未登录"}"#)
         }
         await #expect(throws: APIError.unauthorized) {
+            _ = try await api.profile()
+        }
+    }
+
+    @Test("成功响应无法解码时返回明确错误")
+    func invalidSuccessResponse() async {
+        let api = makeClient()
+        MockURLProtocol.handler = { request in
+            Self.response(for: request, json: #"{"flag":true,"code":200,"data":{"unexpected":true}}"#)
+        }
+        await #expect(throws: APIError.invalidResponse) {
             _ = try await api.profile()
         }
     }

@@ -11,7 +11,6 @@ enum SessionState: Equatable {
 enum AppTab: Hashable {
     case dashboard
     case recommendations
-    case record
     case history
     case draws
 }
@@ -27,9 +26,9 @@ final class AppSession {
     var selectedTab = AppTab.dashboard
     var ticketDraft = TicketDraft()
     var editingTicket: Ticket?
-    var editorCanSave = false
     var editorSaving = false
-    var saveTicketTrigger = 0
+    var isEditorPresented = false
+    var ticketHistoryRevision = 0
     var message: String?
 
     init(bundle: Bundle = .main) {
@@ -73,6 +72,7 @@ final class AppSession {
         user = nil
         state = .signedOut
         selectedTab = .dashboard
+        isEditorPresented = false
         resetEditor()
         self.message = message
     }
@@ -94,7 +94,7 @@ final class AppSession {
             recommendationId: recommendation.id
         )
         editingTicket = nil
-        selectedTab = .record
+        isEditorPresented = true
     }
 
     func edit(_ ticket: Ticket) {
@@ -116,13 +116,25 @@ final class AppSession {
             recommendationId: ticket.recommendationId
         )
         editingTicket = ticket
-        selectedTab = .record
+        isEditorPresented = true
+    }
+
+    func startNewTicket() {
+        resetEditor()
+        isEditorPresented = true
+    }
+
+    func closeEditor(saved: Bool) {
+        isEditorPresented = false
+        resetEditor()
+        guard saved else { return }
+        ticketHistoryRevision += 1
+        selectedTab = .history
     }
 
     func resetEditor() {
         ticketDraft = TicketDraft()
         editingTicket = nil
-        editorCanSave = false
         editorSaving = false
     }
 

@@ -108,6 +108,31 @@ func GetGlobalDashboard(c *fiber.Ctx) error {
 	return response.Success(c, data)
 }
 
+// @Summary 获取看板收支趋势
+// @Description 按中国标准时间返回当前账户最近 30 天、90 天或 1 年的收支和活动趋势
+// @Tags lottery
+// @Produce json
+// @Security BearerAuth
+// @Param range query string false "时间范围，可选 30d、90d、1y，默认 30d"
+// @Success 200 {object} DashboardTrendResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /lotteries/dashboard/trend [get]
+func GetDashboardTrend(c *fiber.Ctx) error {
+	userID, err := currentUserID(c)
+	if err != nil {
+		return err
+	}
+	data, err := lotteryService.GetDashboardTrend(userID, c.Query("range", "30d"))
+	if err != nil {
+		if errors.Is(err, lotteryService.ErrInvalidDashboardTrendRange) {
+			return response.Error(c, err.Error(), fiber.StatusBadRequest)
+		}
+		return err
+	}
+	return response.Success(c, data)
+}
+
 // @Summary 获取推荐列表
 // @Description 返回指定彩票最近生成的推荐记录列表，包含是否已记录购买票据
 // @Tags lottery
@@ -141,6 +166,7 @@ func ListRecommendations(c *fiber.Ctx) error {
 // @Param lotteryCode query string false "彩票编码，如 ssq、dlt"
 // @Param status query string false "状态，可选 pending、won、not_won"
 // @Param sort query string false "排序，可选 latest、oldest、draw_latest、draw_oldest、prize_high"
+// @Param pendingFirst query bool false "是否优先返回待开奖记录，默认 false"
 // @Success 200 {object} RecommendationPageResponse
 // @Failure 500 {object} ErrorResponse
 // @Router /lotteries/recommendations [get]
@@ -150,12 +176,13 @@ func ListAllRecommendations(c *fiber.Ctx) error {
 		return err
 	}
 	data, err := lotteryService.QueryRecommendations(lotteryService.RecommendationQueryOptions{
-		UserID:      userID,
-		Page:        parseIntValue(c.Query("page"), 1),
-		PageSize:    parseIntValue(c.Query("pageSize"), 10),
-		LotteryCode: c.Query("lotteryCode"),
-		Status:      c.Query("status"),
-		Sort:        c.Query("sort", "latest"),
+		UserID:       userID,
+		Page:         parseIntValue(c.Query("page"), 1),
+		PageSize:     parseIntValue(c.Query("pageSize"), 10),
+		LotteryCode:  c.Query("lotteryCode"),
+		Status:       c.Query("status"),
+		Sort:         c.Query("sort", "latest"),
+		PendingFirst: parseBoolValue(c.Query("pendingFirst"), false),
 	})
 	if err != nil {
 		return err
@@ -974,6 +1001,17 @@ func parseIntValue(value string, fallback int) int {
 		return fallback
 	}
 	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
+func parseBoolValue(value string, fallback bool) bool {
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseBool(value)
 	if err != nil {
 		return fallback
 	}

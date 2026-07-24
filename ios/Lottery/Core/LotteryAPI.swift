@@ -33,8 +33,16 @@ extension APIClient {
         try await request("auth/profile")
     }
 
-    func dashboard() async throws -> DashboardData {
-        try await request("lotteries/dashboard")
+    func dashboard(code: String? = nil) async throws -> DashboardData {
+        let path = code.map { "lotteries/\($0)/dashboard" } ?? "lotteries/dashboard"
+        return try await request(path)
+    }
+
+    func dashboardTrend(range: DashboardTrendRange) async throws -> DashboardTrend {
+        try await request(
+            "lotteries/dashboard/trend",
+            query: [URLQueryItem(name: "range", value: range.rawValue)]
+        )
     }
 
     func lotteryTypes() async throws -> [LotteryType] {
@@ -46,6 +54,7 @@ extension APIClient {
         lottery: String,
         status: String,
         sort: String,
+        pendingFirst: Bool = false,
         pageSize: Int = 20
     ) async throws -> RecommendationPage {
         var query = [
@@ -55,6 +64,7 @@ extension APIClient {
         ]
         if !lottery.isEmpty { query.append(URLQueryItem(name: "lotteryCode", value: lottery)) }
         if !status.isEmpty { query.append(URLQueryItem(name: "status", value: status)) }
+        if pendingFirst { query.append(URLQueryItem(name: "pendingFirst", value: "true")) }
         return try await request("lotteries/recommendations", query: query)
     }
 

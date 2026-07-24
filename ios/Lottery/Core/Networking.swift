@@ -118,7 +118,6 @@ actor APIClient {
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
         }
-        let envelope = try? JSONDecoder().decode(APIEnvelope<Value>.self, from: responseData)
         if httpResponse.statusCode == 401 {
             try? setToken(nil)
             await MainActor.run {
@@ -126,10 +125,18 @@ actor APIClient {
             }
             throw APIError.unauthorized
         }
-        guard httpResponse.statusCode < 400, envelope?.flag == true, let value = envelope?.data else {
-            let message = envelope?.msg ?? HTTPURLResponse.localizedString(forStatusCode: httpResponse.statusCode)
+        guard httpResponse.statusCode < 400 else {
+            let message = (try? JSONDecoder().decode(APIEnvelope<Value>.self, from: responseData))?.msg
+                ?? HTTPURLResponse.localizedString(forStatusCode: httpResponse.statusCode)
             throw APIError.server(message, httpResponse.statusCode)
         }
+        guard let envelope = try? JSONDecoder().decode(APIEnvelope<Value>.self, from: responseData) else {
+            throw APIError.invalidResponse
+        }
+        guard envelope.flag else {
+            throw APIError.server(envelope.msg ?? "服务器请求失败。", envelope.code)
+        }
+        guard let value = envelope.data else { throw APIError.invalidResponse }
         return value
     }
 
@@ -167,4 +174,3 @@ private extension Data {
         append(Data(string.utf8))
     }
 }
-

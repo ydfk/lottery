@@ -38,22 +38,13 @@ struct RootView: View {
 private struct MainTabView: View {
     @Environment(AppSession.self) private var session
 
-    @ViewBuilder
     var body: some View {
         @Bindable var session = session
-        if #available(iOS 26.1, *) {
-            mainTabs(selection: $session.selectedTab)
-                .tabViewBottomAccessory(isEnabled: session.selectedTab == .record) {
-                    saveTicketButton
-                }
-        } else if session.selectedTab == .record {
-            mainTabs(selection: $session.selectedTab)
-                .tabViewBottomAccessory {
-                    saveTicketButton
-                }
-        } else {
-            mainTabs(selection: $session.selectedTab)
-        }
+        mainTabs(selection: $session.selectedTab)
+            .fullScreenCover(isPresented: $session.isEditorPresented) {
+                NavigationStack { TicketEditorView() }
+                    .environment(session)
+            }
     }
 
     private func mainTabs(selection: Binding<AppTab>) -> some View {
@@ -64,9 +55,6 @@ private struct MainTabView: View {
             Tab("推荐", systemImage: "sparkles", value: AppTab.recommendations) {
                 NavigationStack { RecommendationsView() }
             }
-            Tab("记录", systemImage: "ticket.fill", value: AppTab.record) {
-                NavigationStack { TicketEditorView() }
-            }
             Tab("历史", systemImage: "clock.arrow.circlepath", value: AppTab.history) {
                 NavigationStack { HistoryView() }
             }
@@ -75,21 +63,5 @@ private struct MainTabView: View {
             }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
-    }
-
-    private var saveTicketButton: some View {
-        Button {
-            session.saveTicketTrigger += 1
-        } label: {
-            Label(
-                session.editorSaving ? "保存中" : session.editingTicket == nil ? "保存票据" : "保存修改",
-                systemImage: "checkmark.circle.fill"
-            )
-            .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.glassProminent)
-        .disabled(!session.editorCanSave || session.editorSaving)
-        .padding(.horizontal)
-        .accessibilityIdentifier("save-ticket")
     }
 }

@@ -81,7 +81,7 @@ private final class DrawResultsModel {
 struct DrawResultsView: View {
     @Environment(AppSession.self) private var session
     @State private var model = DrawResultsModel()
-    @State private var mode = DrawDisplayMode.trend
+    @State private var mode = DrawDisplayMode.list
     @State private var selectedDraw: DrawResult?
     @State private var showsFilters = false
     @State private var showsSync = false

@@ -188,6 +188,120 @@ const docTemplate = `{
                 }
             }
         },
+        "/lotteries/dashboard/trend": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "按中国标准时间返回当前账户最近 30 天、90 天或 1 年的收支和活动趋势",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "lottery"
+                ],
+                "summary": "获取看板收支趋势",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "时间范围，可选 30d、90d、1y，默认 30d",
+                        "name": "range",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api_lottery.DashboardTrendResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api_lottery.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api_lottery.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/lotteries/draws/history": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "返回系统已同步入库的历史开奖记录，支持按彩种、期号、开奖日期筛选，并按开奖时间排序",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "lottery"
+                ],
+                "summary": "分页获取历史开奖记录",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "页码，默认 1",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量，默认 20，最大 50",
+                        "name": "pageSize",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "彩票编码，如 ssq、dlt",
+                        "name": "lotteryCode",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "期号",
+                        "name": "issue",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "开奖日期，格式 2026-03-22",
+                        "name": "drawDate",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "排序，可选 latest、oldest",
+                        "name": "sort",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api_lottery.DrawPageResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api_lottery.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/lotteries/draws/sync-history": {
             "post": {
                 "security": [
@@ -277,6 +391,12 @@ const docTemplate = `{
                         "description": "排序，可选 latest、oldest、draw_latest、draw_oldest、prize_high",
                         "name": "sort",
                         "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "是否优先返回待开奖记录，默认 false",
+                        "name": "pendingFirst",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -339,7 +459,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "基于上传记录和识别结果确认票据入库，彩种由识别结果或推荐记录自动决定",
+                "description": "基于上传记录和识别结果确认票据入库，彩种自动决定，金额由服务端核算",
                 "consumes": [
                     "application/json"
                 ],
@@ -429,6 +549,61 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/internal_api_lottery.TicketPageResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api_lottery.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/lotteries/tickets/import": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "上传 Excel 批量导入票据，图片压缩包可选；一行一注，同彩种同一期号会自动合并为一次购买记录，并按号码自动关联推荐",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "lottery"
+                ],
+                "summary": "批量导入历史票据",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "Excel 文件，支持 xlsx",
+                        "name": "workbook",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "图片压缩包，Excel 中 imageName 列会按文件名匹配",
+                        "name": "imagesZip",
+                        "in": "formData"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api_lottery.TicketImportResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api_lottery.ErrorResponse"
                         }
                     },
                     "500": {
@@ -535,6 +710,56 @@ const docTemplate = `{
             }
         },
         "/lotteries/tickets/{ticketId}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "编辑已录入的购买记录，金额由服务端重新核算，保存后会重置并重新判奖",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "lottery"
+                ],
+                "summary": "通用票据更新",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "票据 ID",
+                        "name": "ticketId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "更新参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api_lottery.CreateTicketRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api_lottery.TicketDetailResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api_lottery.ErrorResponse"
+                        }
+                    }
+                }
+            },
             "delete": {
                 "security": [
                     {
@@ -977,6 +1202,56 @@ const docTemplate = `{
                 }
             }
         },
+        "/lotteries/{code}/recommendations/{recommendationId}/recheck": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "按推荐期号重新同步开奖并再次判奖，适合补录开奖后修正推荐状态",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "lottery"
+                ],
+                "summary": "重新判奖推荐",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "彩票编码，如 ssq、dlt",
+                        "name": "code",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "推荐记录 ID",
+                        "name": "recommendationId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api_lottery.RecommendationDetailResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api_lottery.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/lotteries/{code}/tickets": {
             "get": {
                 "security": [
@@ -1028,7 +1303,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "基于上传记录和识别结果确认票据入库，并在已开奖时自动判奖",
+                "description": "基于上传记录和识别结果确认票据入库，金额按号码、倍数和追加由服务端核算，并在已开奖时自动判奖",
                 "consumes": [
                     "application/json"
                 ],
@@ -1250,6 +1525,65 @@ const docTemplate = `{
                         "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/internal_api_lottery.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api_lottery.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/lotteries/{code}/tickets/{ticketId}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "编辑已录入的购买记录，金额由服务端重新核算，保存后会重置并重新判奖",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "lottery"
+                ],
+                "summary": "更新票据",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "彩票编码，如 ssq",
+                        "name": "code",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "票据 ID",
+                        "name": "ticketId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "更新参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api_lottery.CreateTicketRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api_lottery.TicketDetailResponse"
                         }
                     },
                     "500": {
@@ -1661,6 +1995,142 @@ const docTemplate = `{
                 }
             }
         },
+        "go-fiber-starter_internal_service_lottery.DashboardTrend": {
+            "type": "object",
+            "properties": {
+                "bucket": {
+                    "type": "string"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/go-fiber-starter_internal_service_lottery.DashboardTrendPoint"
+                    }
+                },
+                "range": {
+                    "type": "string"
+                }
+            }
+        },
+        "go-fiber-starter_internal_service_lottery.DashboardTrendPoint": {
+            "type": "object",
+            "properties": {
+                "periodStart": {
+                    "type": "string"
+                },
+                "recommendationCount": {
+                    "type": "integer"
+                },
+                "ticketCount": {
+                    "type": "integer"
+                },
+                "totalCost": {
+                    "type": "number"
+                },
+                "totalPrize": {
+                    "type": "number"
+                },
+                "wonTickets": {
+                    "type": "integer"
+                }
+            }
+        },
+        "go-fiber-starter_internal_service_lottery.DrawHistoryItem": {
+            "type": "object",
+            "properties": {
+                "blueNumbers": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "drawDate": {
+                    "type": "string"
+                },
+                "firstPrizeAmount": {
+                    "type": "number"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "issue": {
+                    "type": "string"
+                },
+                "lotteryCode": {
+                    "type": "string"
+                },
+                "prizeDetails": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/go-fiber-starter_internal_service_lottery.DrawPrizeItem"
+                    }
+                },
+                "prizePoolAmount": {
+                    "type": "number"
+                },
+                "rawPayload": {
+                    "type": "string"
+                },
+                "redNumbers": {
+                    "type": "string"
+                },
+                "saleAmount": {
+                    "type": "number"
+                },
+                "secondPrizeAmount": {
+                    "type": "number"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
+                }
+            }
+        },
+        "go-fiber-starter_internal_service_lottery.DrawPageResult": {
+            "type": "object",
+            "properties": {
+                "hasMore": {
+                    "type": "boolean"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/go-fiber-starter_internal_service_lottery.DrawHistoryItem"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "pageSize": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "go-fiber-starter_internal_service_lottery.DrawPrizeItem": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "prizeName": {
+                    "type": "string"
+                },
+                "prizeRule": {
+                    "type": "string"
+                },
+                "singleBonus": {
+                    "type": "number"
+                },
+                "winnerCount": {
+                    "type": "integer"
+                }
+            }
+        },
         "go-fiber-starter_internal_service_lottery.ParsedEntry": {
             "type": "object",
             "properties": {
@@ -1798,6 +2268,9 @@ const docTemplate = `{
                 "lotteryCode": {
                     "type": "string"
                 },
+                "requestedCount": {
+                    "type": "integer"
+                },
                 "syncedCount": {
                     "type": "integer"
                 }
@@ -1875,6 +2348,49 @@ const docTemplate = `{
                 },
                 "updatedAt": {
                     "description": "指定为自动更新时间",
+                    "type": "string"
+                }
+            }
+        },
+        "go-fiber-starter_internal_service_lottery.TicketImportResult": {
+            "type": "object",
+            "properties": {
+                "failedCount": {
+                    "type": "integer"
+                },
+                "rows": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/go-fiber-starter_internal_service_lottery.TicketImportRowResult"
+                    }
+                },
+                "successCount": {
+                    "type": "integer"
+                },
+                "totalCount": {
+                    "type": "integer"
+                }
+            }
+        },
+        "go-fiber-starter_internal_service_lottery.TicketImportRowResult": {
+            "type": "object",
+            "properties": {
+                "issue": {
+                    "type": "string"
+                },
+                "lotteryCode": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "row": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "ticketId": {
                     "type": "string"
                 }
             }
@@ -2217,6 +2733,26 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_api_lottery.DashboardTrendResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer",
+                    "example": 200
+                },
+                "data": {
+                    "$ref": "#/definitions/go-fiber-starter_internal_service_lottery.DashboardTrend"
+                },
+                "flag": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "time": {
+                    "type": "string",
+                    "example": "2026-03-16T10:00:00Z"
+                }
+            }
+        },
         "internal_api_lottery.DeleteResponse": {
             "type": "object",
             "properties": {
@@ -2227,6 +2763,26 @@ const docTemplate = `{
                 "data": {
                     "type": "object",
                     "additionalProperties": {}
+                },
+                "flag": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "time": {
+                    "type": "string",
+                    "example": "2026-03-16T10:00:00Z"
+                }
+            }
+        },
+        "internal_api_lottery.DrawPageResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer",
+                    "example": 200
+                },
+                "data": {
+                    "$ref": "#/definitions/go-fiber-starter_internal_service_lottery.DrawPageResult"
                 },
                 "flag": {
                     "type": "boolean",
@@ -2425,6 +2981,26 @@ const docTemplate = `{
                 },
                 "data": {
                     "$ref": "#/definitions/go-fiber-starter_internal_service_lottery.TicketDetail"
+                },
+                "flag": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "time": {
+                    "type": "string",
+                    "example": "2026-03-16T10:00:00Z"
+                }
+            }
+        },
+        "internal_api_lottery.TicketImportResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer",
+                    "example": 200
+                },
+                "data": {
+                    "$ref": "#/definitions/go-fiber-starter_internal_service_lottery.TicketImportResult"
                 },
                 "flag": {
                     "type": "boolean",
