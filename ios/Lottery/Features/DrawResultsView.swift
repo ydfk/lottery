@@ -129,17 +129,19 @@ struct DrawResultsView: View {
 
     private var drawList: some View {
         List {
-            Section {
-                HStack(spacing: 8) {
-                    if !model.query.lotteryCode.isEmpty {
-                        filterPill(LotteryKind(rawValue: model.query.lotteryCode)?.name ?? model.query.lotteryCode)
+            if hasActiveFilters {
+                Section {
+                    HStack(spacing: 8) {
+                        if !model.query.lotteryCode.isEmpty {
+                            filterPill(LotteryKind(rawValue: model.query.lotteryCode)?.name ?? model.query.lotteryCode)
+                        }
+                        if !model.query.issue.isEmpty { filterPill("第 \(model.query.issue) 期") }
+                        if !model.query.drawDate.isEmpty { filterPill(model.query.drawDate) }
+                        if model.query.sort == "oldest" { filterPill("最早优先") }
+                        Spacer(minLength: 0)
                     }
-                    if !model.query.issue.isEmpty { filterPill("第 \(model.query.issue) 期") }
-                    if !model.query.drawDate.isEmpty { filterPill(model.query.drawDate) }
-                    filterPill(model.query.sort == "oldest" ? "最早优先" : "最新优先")
-                    Spacer(minLength: 0)
+                    .font(.caption)
                 }
-                .font(.caption)
             }
 
             if let errorMessage = model.errorMessage {
@@ -176,6 +178,13 @@ struct DrawResultsView: View {
             }
         }
         .refreshable { await model.load(using: session.api, reset: true) }
+    }
+
+    private var hasActiveFilters: Bool {
+        !model.query.lotteryCode.isEmpty
+            || !model.query.issue.isEmpty
+            || !model.query.drawDate.isEmpty
+            || model.query.sort == "oldest"
     }
 
     private func filterPill(_ text: String) -> some View {

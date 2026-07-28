@@ -297,7 +297,9 @@ struct TicketEditorView: View {
                 if let editingID { saved = try await api.updateTicket(id: editingID, payload: payload) }
                 else { saved = try await api.createTicket(payload) }
                 session.closeEditor(saved: true)
-                session.message = "已保存，服务端确认金额为 \(LotteryFormatters.currency(saved.costAmount))。"
+                if draft.recognizedCostDiffers(from: saved.costAmount) {
+                    session.message = "已保存，但服务端金额为 \(LotteryFormatters.currency(saved.costAmount))，本地计算为 \(LotteryFormatters.currency(draft.calculatedCost))。"
+                }
             } catch {
                 errorMessage = error.localizedDescription
             }

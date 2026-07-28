@@ -101,10 +101,10 @@ struct RecommendationsView: View {
     @State private var selected: Recommendation?
     @State private var stealth: Recommendation?
     @State private var deleteCandidate: Recommendation?
+    @State private var showsFilters = false
 
     var body: some View {
         List {
-            Section { filters }
             if let errorMessage = model.errorMessage {
                 ErrorBanner(message: errorMessage)
                     .listRowBackground(Color.clear)
@@ -141,15 +141,23 @@ struct RecommendationsView: View {
         .navigationTitle("推荐")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
+                Button("筛选", systemImage: "line.3.horizontal.decrease") { showsFilters = true }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
                 generateMenu
             }
         }
         .refreshable { await model.load(using: session.api, reset: true) }
         .task { await model.load(using: session.api, reset: true) }
-        .onChange(of: model.lottery) { _, _ in reload() }
-        .onChange(of: model.status) { _, _ in reload() }
-        .onChange(of: model.sort) { _, _ in reload() }
         .sheet(item: $selected) { detailSheet($0) }
+        .sheet(isPresented: $showsFilters) {
+            RecommendationFilterSheet(lottery: model.lottery, status: model.status, sort: model.sort) { lottery, status, sort in
+                model.lottery = lottery
+                model.status = status
+                model.sort = sort
+                reload()
+            }
+        }
         .fullScreenCover(item: $stealth) { StealthRecommendationView(recommendation: $0) }
         .confirmationDialog(
             "删除这条推荐？",
@@ -188,36 +196,6 @@ struct RecommendationsView: View {
         }
         .disabled(model.isMutating)
         .accessibilityIdentifier("generate-recommendation")
-    }
-
-    private var filters: some View {
-        VStack(spacing: 10) {
-            Picker("彩种", selection: $model.lottery) {
-                Text("全部").tag("")
-                ForEach(LotteryKind.allCases) { kind in Text(kind.name).tag(kind.rawValue) }
-            }
-            .pickerStyle(.segmented)
-            HStack {
-                Menu {
-                    Picker("状态", selection: $model.status) {
-                        Text("全部状态").tag("")
-                        Text("待开奖").tag("pending")
-                        Text("已中奖").tag("won")
-                        Text("未中奖").tag("not_won")
-                    }
-                } label: { Label("状态筛选", systemImage: "line.3.horizontal.decrease") }
-                Spacer()
-                Menu {
-                    Picker("排序", selection: $model.sort) {
-                        Text("最新生成").tag("latest")
-                        Text("最早生成").tag("oldest")
-                        Text("奖金最高").tag("prize_high")
-                    }
-                } label: { Label("排序", systemImage: "arrow.up.arrow.down") }
-            }
-            .font(.subheadline)
-        }
-        .padding(.vertical, 4)
     }
 
     private func detailSheet(_ item: Recommendation) -> some View {
@@ -295,6 +273,59 @@ struct RecommendationsView: View {
                 selected = await model.detail(item, using: session.api) ?? item
             }
         }
+    }
+}
+
+private struct RecommendationFilterSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var lottery: String
+    @State private var status: String
+    @State private var sort: String
+    let onApply: (String, String, String) -> Void
+
+    init(
+        lottery: String,
+        status: String,
+        sort: String,
+        onApply: @escaping (String, String, String) -> Void
+    ) {
+        _lottery = State(initialValue: lottery)
+        _status = State(initialValue: status)
+        _sort = State(initialValue: sort)
+        self.onApply = onApply
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Picker("彩票类型", selection: $lottery) {
+                    Text("全部彩种").tag("")
+                    ForEach(LotteryKind.allCases) { kind in Text(kind.name).tag(kind.rawValue) }
+                }
+                Picker("状态", selection: $status) {
+                    Text("全部状态").tag("")
+                    Text("待开奖").tag("pending")
+                    Text("已中奖").tag("won")
+                    Text("未中奖").tag("not_won")
+                }
+                Picker("排序", selection: $sort) {
+                    Text("最新生成").tag("latest")
+                    Text("最早生成").tag("oldest")
+                    Text("奖金最高").tag("prize_high")
+                }
+            }
+            .navigationTitle("筛选推荐")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("应用") {
+                        onApply(lottery, status, sort)
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
 }
 
