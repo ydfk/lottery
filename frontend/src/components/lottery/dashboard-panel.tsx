@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { APP_VERSION_LABEL } from "@/lib/app-meta";
+import { PasskeyManagementDialog } from "@/components/lottery/passkey-management-dialog";
 import {
   LotteryDisplayModeToggle,
   type LotteryDisplayMode,
@@ -72,15 +73,18 @@ export function DashboardPanel({
                 <p className="mt-1 text-sm text-white/70">已登录</p>
               </div>
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-10 shrink-0 rounded-2xl border border-white/20 bg-white/10 px-4 text-white hover:bg-white/15"
-              onClick={onLogout}
-            >
-              <LogOut className="mr-2 size-4" />
-              退出登录
-            </Button>
+            <div className="flex shrink-0 flex-wrap justify-end gap-2">
+              <PasskeyManagementDialog />
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-10 shrink-0 rounded-2xl border border-white/20 bg-white/10 px-4 text-white hover:bg-white/15"
+                onClick={onLogout}
+              >
+                <LogOut className="mr-2 size-4" />
+                退出登录
+              </Button>
+            </div>
           </div>
           <div className="rounded-full border border-white/8 bg-black/8 px-3 py-2">
             <p className="overflow-x-auto font-mono text-[12px] leading-5 text-white/78 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">

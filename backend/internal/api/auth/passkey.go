@@ -13,10 +13,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-type passkeyLoginRequest struct {
-	Username string `json:"username"`
-}
-
 type passkeyFinishRequest struct {
 	CeremonyID string          `json:"ceremonyId"`
 	Credential json.RawMessage `json:"credential"`
@@ -53,17 +49,9 @@ func FinishPasskeyRegistration(c *fiber.Ctx) error {
 }
 
 func BeginPasskeyLogin(c *fiber.Ctx) error {
-	request := passkeyLoginRequest{}
-	if err := c.BodyParser(&request); err != nil {
-		return response.Error(c, "参数不正确", fiber.StatusBadRequest)
-	}
-	user, err := userWithPasskeysByUsername(request.Username)
+	options, ceremonyID, err := service.BeginPasskeyLogin()
 	if err != nil {
-		return response.Error(c, "用户名或 Passkey 不正确", fiber.StatusUnauthorized)
-	}
-	options, ceremonyID, err := service.BeginPasskeyLogin(*user)
-	if err != nil {
-		return response.Error(c, "用户名或 Passkey 不正确", fiber.StatusUnauthorized)
+		return passkeyError(c, err)
 	}
 	return response.Success(c, fiber.Map{
 		"ceremonyId": ceremonyID,
@@ -79,22 +67,50 @@ func FinishPasskeyLogin(c *fiber.Ctx) error {
 	if strings.TrimSpace(request.CeremonyID) == "" || len(request.Credential) == 0 {
 		return response.Error(c, "Passkey 响应不完整", fiber.StatusBadRequest)
 	}
-	ceremony := userModel.PasskeyCeremony{}
-	if err := db.DB.First(&ceremony, "id = ? AND kind = ?", request.CeremonyID, "login").Error; err != nil {
-		return response.Error(c, "Passkey 挑战已失效，请重试", fiber.StatusUnauthorized)
-	}
-	user := userModel.User{}
-	if err := db.DB.Preload("Passkeys").First(&user, "id = ?", ceremony.UserID).Error; err != nil {
-		return response.Error(c, "用户名或 Passkey 不正确", fiber.StatusUnauthorized)
-	}
-	if err := service.FinishPasskeyLogin(user, request.CeremonyID, request.Credential); err != nil {
+	user, err := service.FinishPasskeyLogin(request.CeremonyID, request.Credential)
+	if err != nil {
 		return response.Error(c, "Passkey 验证失败，请重试", fiber.StatusUnauthorized)
 	}
-	token, err := service.GenerateJWT(&user)
+	token, err := service.GenerateJWT(user)
 	if err != nil {
 		return response.Error(c, "token生成失败")
 	}
 	return response.Success(c, fiber.Map{"token": token})
+}
+
+func ListPasskeys(c *fiber.Ctx) error {
+	current, err := service.CurrentUser(c)
+	if err != nil {
+		return response.Error(c, "用户未找到", fiber.StatusUnauthorized)
+	}
+	passkeys := make([]userModel.PasskeyCredential, 0)
+	if err := db.DB.Where("user_id = ?", current.Id).Order("created_at desc").Find(&passkeys).Error; err != nil {
+		return response.Error(c, "读取 Passkey 失败")
+	}
+	items := make([]fiber.Map, 0, len(passkeys))
+	for _, passkey := range passkeys {
+		items = append(items, fiber.Map{
+			"id":        passkey.Id,
+			"createdAt": passkey.CreatedAt,
+		})
+	}
+	return response.Success(c, items)
+}
+
+func DeletePasskey(c *fiber.Ctx) error {
+	current, err := service.CurrentUser(c)
+	if err != nil {
+		return response.Error(c, "用户未找到", fiber.StatusUnauthorized)
+	}
+	result := db.DB.Where("id = ? AND user_id = ?", c.Params("id"), current.Id).
+		Delete(&userModel.PasskeyCredential{})
+	if result.Error != nil {
+		return response.Error(c, "删除 Passkey 失败")
+	}
+	if result.RowsAffected == 0 {
+		return response.Error(c, "Passkey 不存在", fiber.StatusNotFound)
+	}
+	return response.Success(c, fiber.Map{"deleted": true})
 }
 
 func AppleAppSiteAssociation(c *fiber.Ctx) error {
@@ -116,14 +132,6 @@ func currentUserWithPasskeys(c *fiber.Ctx) (*userModel.User, error) {
 	}
 	user := userModel.User{}
 	if err := db.DB.Preload("Passkeys").First(&user, "id = ?", current.Id).Error; err != nil {
-		return nil, err
-	}
-	return &user, nil
-}
-
-func userWithPasskeysByUsername(username string) (*userModel.User, error) {
-	user := userModel.User{}
-	if err := db.DB.Preload("Passkeys").First(&user, "username = ?", strings.TrimSpace(username)).Error; err != nil {
 		return nil, err
 	}
 	return &user, nil

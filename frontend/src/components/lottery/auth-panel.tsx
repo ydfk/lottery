@@ -16,11 +16,13 @@ interface AuthPanelProps {
   username: string;
   password: string;
   pending: boolean;
+  passkeyPending: boolean;
   displayMode: LotteryDisplayMode;
   onUsernameChange: (value: string) => void;
   onPasswordChange: (value: string) => void;
   onDisplayModeChange: (value: LotteryDisplayMode) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onPasskeyLogin: () => void;
 }
 
 export function AuthPanel(props: AuthPanelProps) {
@@ -28,11 +30,13 @@ export function AuthPanel(props: AuthPanelProps) {
     username,
     password,
     pending,
+    passkeyPending,
     displayMode,
     onUsernameChange,
     onPasswordChange,
     onDisplayModeChange,
     onSubmit,
+    onPasskeyLogin,
   } = props;
   const isWebMode = displayMode === "web";
 
@@ -137,6 +141,20 @@ export function AuthPanel(props: AuthPanelProps) {
                 </div>
               </CardHeader>
               <CardContent>
+                <Button
+                  type="button"
+                  className="h-11 w-full rounded-2xl"
+                  disabled={pending || passkeyPending}
+                  onClick={onPasskeyLogin}
+                >
+                  {passkeyPending ? "验证中..." : "使用 Passkey 登录"}
+                </Button>
+                <p className="mt-2 text-center text-xs text-slate-400">无需输入用户名</p>
+                <div className="my-4 flex items-center gap-3 text-xs text-slate-400">
+                  <span className="h-px flex-1 bg-slate-200" />
+                  或使用用户名和密码
+                  <span className="h-px flex-1 bg-slate-200" />
+                </div>
                 <form className="space-y-4" onSubmit={onSubmit}>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-slate-700">用户名</label>

@@ -45,6 +45,11 @@ struct PasskeyFinishPayload: Encodable, Sendable {
     let credential: PasskeyCredentialResponse
 }
 
+struct PasskeyItem: Decodable, Identifiable, Sendable {
+    let id: String
+    let createdAt: String
+}
+
 struct PasskeyCredentialResponse: Encodable, Sendable {
     let id: String
     let rawId: String

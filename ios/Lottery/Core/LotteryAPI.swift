@@ -1,7 +1,6 @@
 import Foundation
 
 struct LoginPayload: Encodable { let username: String; let password: String }
-struct PasskeyLoginPayload: Encodable { let username: String }
 struct RecognizePayload: Encodable { let uploadId: String; let ocrText: String? }
 struct SyncPayload: Encodable { let issue: String }
 
@@ -44,14 +43,8 @@ extension APIClient {
         )
     }
 
-    func passkeyLoginOptions(username: String) async throws -> PasskeyLoginOptions {
-        let body = try jsonBody(PasskeyLoginPayload(username: username))
-        return try await request(
-            "auth/passkeys/login/options",
-            method: "POST",
-            body: body,
-            contentType: "application/json"
-        )
+    func passkeyLoginOptions() async throws -> PasskeyLoginOptions {
+        try await request("auth/passkeys/login/options", method: "POST")
     }
 
     func finishPasskeyLogin(_ payload: PasskeyFinishPayload) async throws -> AuthToken {
@@ -62,6 +55,14 @@ extension APIClient {
             body: body,
             contentType: "application/json"
         )
+    }
+
+    func passkeys() async throws -> [PasskeyItem] {
+        try await request("auth/passkeys")
+    }
+
+    func deletePasskey(id: String) async throws {
+        let _: PasskeyDeleteResult = try await request("auth/passkeys/\(id)", method: "DELETE")
     }
 
     func profile() async throws -> UserProfile {
@@ -200,4 +201,8 @@ extension APIClient {
 
 private struct PasskeyRegistrationResult: Decodable {
     let registered: Bool
+}
+
+private struct PasskeyDeleteResult: Decodable {
+    let deleted: Bool
 }

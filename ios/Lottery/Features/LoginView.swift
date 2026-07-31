@@ -84,6 +84,31 @@ struct LoginView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Button(action: signInWithPasskey) {
+                HStack(spacing: 10) {
+                    if isPasskeyLoading { ProgressView() }
+                    Label(isPasskeyLoading ? "验证中" : "使用 Passkey 登录", systemImage: "person.badge.key")
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .buttonStyle(.glassProminent)
+            .controlSize(.extraLarge)
+            .disabled(!canSignInWithPasskey)
+            .accessibilityIdentifier("passkey-login")
+
+            HStack(spacing: 10) {
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.2))
+                    .frame(height: 1)
+                Text("或使用用户名和密码")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize()
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.2))
+                    .frame(height: 1)
+            }
+
             VStack(alignment: .leading, spacing: 8) {
                 Text("用户名").font(.subheadline.weight(.semibold))
                 HStack(spacing: 12) {
@@ -146,18 +171,6 @@ struct LoginView: View {
             .controlSize(.extraLarge)
             .disabled(!canSignIn)
             .accessibilityIdentifier("login")
-
-            Button(action: signInWithPasskey) {
-                HStack(spacing: 10) {
-                    if isPasskeyLoading { ProgressView() }
-                    Label(isPasskeyLoading ? "验证中" : "使用 Passkey 登录", systemImage: "person.badge.key")
-                        .frame(maxWidth: .infinity)
-                }
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.large)
-            .disabled(!canSignInWithPasskey)
-            .accessibilityIdentifier("passkey-login")
         }
         .padding(24)
         .background(
@@ -173,8 +186,7 @@ struct LoginView: View {
     }
 
     private var canSignInWithPasskey: Bool {
-        !username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && !isLoading
+        !isLoading
             && !isPasskeyLoading
     }
 
@@ -204,9 +216,7 @@ struct LoginView: View {
         Task {
             defer { isPasskeyLoading = false }
             do {
-                try await session.loginWithPasskey(
-                    username: username.trimmingCharacters(in: .whitespacesAndNewlines)
-                )
+                try await session.loginWithPasskey()
             } catch {
                 errorMessage = error.localizedDescription
             }

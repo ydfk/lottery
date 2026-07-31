@@ -60,7 +60,7 @@ private final class DashboardModel {
 struct DashboardView: View {
     @Environment(AppSession.self) private var session
     @State private var model = DashboardModel()
-    @State private var isRegisteringPasskey = false
+    @State private var showsPasskeyManagement = false
 
     var body: some View {
         ScrollView {
@@ -90,6 +90,9 @@ struct DashboardView: View {
         .toolbar { accountMenu }
         .refreshable { await model.load(using: session.api) }
         .task { await model.load(using: session.api) }
+        .sheet(isPresented: $showsPasskeyManagement) {
+            PasskeyManagementView()
+        }
     }
 
     private var trendRangeBinding: Binding<DashboardTrendRange> {
@@ -111,10 +114,9 @@ struct DashboardView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Divider()
-                Button(isRegisteringPasskey ? "添加 Passkey 中" : "添加 Passkey", systemImage: "person.badge.key") {
-                    registerPasskey()
+                Button("管理 Passkey", systemImage: "person.badge.key") {
+                    showsPasskeyManagement = true
                 }
-                .disabled(isRegisteringPasskey)
                 Button("退出登录", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
                     session.logout()
                 }
@@ -130,19 +132,6 @@ struct DashboardView: View {
         let version = info?["CFBundleShortVersionString"] as? String ?? "开发版"
         let build = info?["CFBundleVersion"] as? String ?? "0"
         return "版本 \(version) (\(build))"
-    }
-
-    private func registerPasskey() {
-        isRegisteringPasskey = true
-        Task {
-            defer { isRegisteringPasskey = false }
-            do {
-                try await session.registerPasskey()
-                session.message = "Passkey 已添加，可在登录页使用 Face ID 或设备密码登录。"
-            } catch {
-                session.message = "添加 Passkey 失败：\(error.localizedDescription)"
-            }
-        }
     }
 
 }

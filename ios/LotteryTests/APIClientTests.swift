@@ -44,6 +44,44 @@ struct APIClientTests {
         #expect(result.token == "jwt")
     }
 
+    @Test("Passkey 登录挑战不携带用户名")
+    func passkeyLoginOptionsContract() async throws {
+        let api = makeClient()
+        MockURLProtocol.handler = { request in
+            #expect(request.url?.path == "/api/auth/passkeys/login/options")
+            #expect(request.httpMethod == "POST")
+            #expect(Self.bodyData(from: request) == nil)
+            let json = #"{"flag":true,"code":200,"data":{"ceremonyId":"ceremony","publicKey":{"challenge":"Y2hhbGxlbmdl","rpId":"example.test"}}}"#
+            return Self.response(for: request, json: json)
+        }
+        let result = try await api.passkeyLoginOptions()
+        #expect(result.ceremonyId == "ceremony")
+    }
+
+    @Test("Passkey 管理使用列表和删除接口")
+    func passkeyManagementContract() async throws {
+        let api = makeClient()
+        var requestIndex = 0
+        MockURLProtocol.handler = { request in
+            requestIndex += 1
+            if requestIndex == 1 {
+                #expect(request.url?.path == "/api/auth/passkeys")
+                #expect(request.httpMethod == "GET")
+                let json = #"{"flag":true,"code":200,"data":[{"id":"passkey-id","createdAt":"2026-07-31T12:00:00Z"}]}"#
+                return Self.response(for: request, json: json)
+            }
+            #expect(request.url?.path == "/api/auth/passkeys/passkey-id")
+            #expect(request.httpMethod == "DELETE")
+            return Self.response(
+                for: request,
+                json: #"{"flag":true,"code":200,"data":{"deleted":true}}"#
+            )
+        }
+        let items = try await api.passkeys()
+        #expect(items.first?.id == "passkey-id")
+        try await api.deletePasskey(id: "passkey-id")
+    }
+
     @Test("历史分页查询传递筛选条件")
     func historyContract() async throws {
         let api = makeClient()

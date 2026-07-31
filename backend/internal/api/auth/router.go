@@ -24,6 +24,8 @@ func RegisterRoutes(router fiber.Router) {
 	grp.Get("/profile", Profile)
 	grp.Post("/passkeys/registration/options", BeginPasskeyRegistration)
 	grp.Post("/passkeys/registration/verify", FinishPasskeyRegistration)
+	grp.Get("/passkeys", ListPasskeys)
+	grp.Delete("/passkeys/:id", DeletePasskey)
 }
 
 func RegisterAssociatedDomainRoutes(router *fiber.App) {

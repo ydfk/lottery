@@ -65,9 +65,9 @@ final class AppSession {
         state = .signedIn
     }
 
-    func loginWithPasskey(username: String) async throws {
+    func loginWithPasskey() async throws {
         guard let api else { throw APIError.invalidConfiguration }
-        let options = try await api.passkeyLoginOptions(username: username)
+        let options = try await api.passkeyLoginOptions()
         let credential = try await PasskeyAuthorizationCoordinator().authenticate(with: options)
         let result = try await api.finishPasskeyLogin(
             PasskeyFinishPayload(ceremonyId: options.ceremonyId, credential: credential)
@@ -84,6 +84,16 @@ final class AppSession {
         try await api.finishPasskeyRegistration(
             PasskeyFinishPayload(ceremonyId: options.ceremonyId, credential: credential)
         )
+    }
+
+    func passkeys() async throws -> [PasskeyItem] {
+        guard let api else { throw APIError.invalidConfiguration }
+        return try await api.passkeys()
+    }
+
+    func deletePasskey(id: String) async throws {
+        guard let api else { throw APIError.invalidConfiguration }
+        try await api.deletePasskey(id: id)
     }
 
     func logout(message: String? = nil) {

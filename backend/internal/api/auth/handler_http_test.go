@@ -48,7 +48,7 @@ func setupTestApp(t *testing.T) *fiber.App {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	if err := gormDB.AutoMigrate(&model.User{}); err != nil {
+	if err := gormDB.AutoMigrate(&model.User{}, &model.PasskeyCredential{}, &model.PasskeyCeremony{}); err != nil {
 		t.Fatalf("auto migrate: %v", err)
 	}
 	closeSQLDB(t, gormDB)
@@ -198,6 +198,94 @@ func TestProfileRequiresAuth(t *testing.T) {
 	resp := doJSONRequest(t, app, http.MethodGet, "/api/auth/profile", nil, nil)
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("expected unauthorized, got %d", resp.StatusCode)
+	}
+}
+
+func TestPasskeyListAndDelete(t *testing.T) {
+	app := setupTestApp(t)
+
+	doJSONRequest(t, app, http.MethodPost, "/api/auth/register", fiber.Map{
+		"username": "passkey-owner",
+		"password": "pass123",
+	}, nil).Body.Close()
+	loginResp := doJSONRequest(t, app, http.MethodPost, "/api/auth/login", fiber.Map{
+		"username": "passkey-owner",
+		"password": "pass123",
+	}, nil)
+	loginEnvelope := decodeEnvelope(t, loginResp)
+	var token tokenResponse
+	if err := json.Unmarshal(loginEnvelope.Data, &token); err != nil {
+		t.Fatalf("decode token: %v", err)
+	}
+
+	owner := model.User{}
+	if err := db.DB.First(&owner, "username = ?", "passkey-owner").Error; err != nil {
+		t.Fatalf("find owner: %v", err)
+	}
+	passkey := model.PasskeyCredential{
+		UserID:         owner.Id,
+		CredentialID:   []byte("credential-id"),
+		CredentialJSON: []byte(`{"id":"credential-id"}`),
+	}
+	if err := db.DB.Create(&passkey).Error; err != nil {
+		t.Fatalf("create passkey: %v", err)
+	}
+	headers := map[string]string{"Authorization": "Bearer " + token.Token}
+
+	listResp := doJSONRequest(t, app, http.MethodGet, "/api/auth/passkeys", nil, headers)
+	if listResp.StatusCode != http.StatusOK {
+		t.Fatalf("list passkeys status: %d", listResp.StatusCode)
+	}
+	listEnvelope := decodeEnvelope(t, listResp)
+	var items []struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(listEnvelope.Data, &items); err != nil {
+		t.Fatalf("decode passkeys: %v", err)
+	}
+	if len(items) != 1 || items[0].ID != passkey.Id.String() {
+		t.Fatalf("unexpected passkeys: %#v", items)
+	}
+
+	deleteResp := doJSONRequest(t, app, http.MethodDelete, "/api/auth/passkeys/"+passkey.Id.String(), nil, headers)
+	if deleteResp.StatusCode != http.StatusOK {
+		t.Fatalf("delete passkey status: %d", deleteResp.StatusCode)
+	}
+	decodeEnvelope(t, deleteResp)
+	var count int64
+	if err := db.DB.Model(&model.PasskeyCredential{}).Where("id = ?", passkey.Id).Count(&count).Error; err != nil {
+		t.Fatalf("count passkeys: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("passkey was not deleted")
+	}
+}
+
+func TestPasskeyLoginOptionsDoNotRequireUsername(t *testing.T) {
+	app := setupTestApp(t)
+	config.Current.Passkey.RPID = "localhost"
+	config.Current.Passkey.RPName = "彩迹测试"
+	config.Current.Passkey.Origins = []string{"https://localhost"}
+
+	resp := doJSONRequest(t, app, http.MethodPost, "/api/auth/passkeys/login/options", nil, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("passkey options status: %d", resp.StatusCode)
+	}
+	envelope := decodeEnvelope(t, resp)
+	if !envelope.Flag {
+		t.Fatalf("passkey options failed: %s", envelope.Msg)
+	}
+	var options struct {
+		CeremonyID string `json:"ceremonyId"`
+		PublicKey  struct {
+			Challenge string `json:"challenge"`
+		} `json:"publicKey"`
+	}
+	if err := json.Unmarshal(envelope.Data, &options); err != nil {
+		t.Fatalf("decode passkey options: %v", err)
+	}
+	if options.CeremonyID == "" || options.PublicKey.Challenge == "" {
+		t.Fatalf("incomplete passkey options: %#v", options)
 	}
 }
 

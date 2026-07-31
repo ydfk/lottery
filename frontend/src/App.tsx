@@ -14,7 +14,12 @@ import { RecommendationPanel } from "@/components/lottery/recommendation-panel";
 import { RecordPanel } from "@/components/lottery/record-panel";
 import { isTrendLotteryCode, useLotteryNumberTrends } from "@/hooks/use-lottery-number-trends";
 import { getStoredToken } from "@/lib/api/client";
-import { getProfile, loginAndStoreToken, logout } from "@/lib/api/methods/auth";
+import {
+  getProfile,
+  loginAndStoreToken,
+  loginWithPasskeyAndStoreToken,
+  logout,
+} from "@/lib/api/methods/auth";
 import {
   createTicket,
   deleteRecommendation,
@@ -162,6 +167,7 @@ export default function App() {
   const [authUsername, setAuthUsername] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authPending, setAuthPending] = useState(false);
+  const [passkeyAuthPending, setPasskeyAuthPending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [detailPending, setDetailPending] = useState(false);
   const [uploadPending, setUploadPending] = useState(false);
@@ -463,6 +469,21 @@ export default function App() {
       handleRequestError(error, "登录失败");
     } finally {
       setAuthPending(false);
+    }
+  }
+
+  async function handlePasskeyLogin() {
+    setPasskeyAuthPending(true);
+    try {
+      await loginWithPasskeyAndStoreToken();
+      const profile = await getProfile();
+      setCurrentUser(profile);
+      toast.success("登录成功");
+      await loadData();
+    } catch (error) {
+      handleRequestError(error, "Passkey 登录失败");
+    } finally {
+      setPasskeyAuthPending(false);
     }
   }
 
@@ -1118,9 +1139,11 @@ export default function App() {
         username={authUsername}
         password={authPassword}
         pending={authPending}
+        passkeyPending={passkeyAuthPending}
         onDisplayModeChange={setDisplayMode}
         onUsernameChange={setAuthUsername}
         onPasswordChange={setAuthPassword}
+        onPasskeyLogin={handlePasskeyLogin}
         onSubmit={handleAuthSubmit}
       />
     );

@@ -29,7 +29,7 @@ func BeginPasskeyRegistration(user userModel.User) (*protocol.CredentialCreation
 		return nil, "", err
 	}
 	selection := protocol.AuthenticatorSelection{
-		ResidentKey:      protocol.ResidentKeyRequirementPreferred,
+		ResidentKey:      protocol.ResidentKeyRequirementRequired,
 		UserVerification: protocol.VerificationRequired,
 	}
 	creation, session, err := server.BeginRegistration(user, webauthn.WithAuthenticatorSelection(selection))
@@ -68,45 +68,67 @@ func FinishPasskeyRegistration(user userModel.User, ceremonyID string, credentia
 	return nil
 }
 
-func BeginPasskeyLogin(user userModel.User) (*protocol.CredentialAssertion, string, error) {
-	if len(user.Passkeys) == 0 {
-		return nil, "", fmt.Errorf("该账户尚未绑定 Passkey")
-	}
+func BeginPasskeyLogin() (*protocol.CredentialAssertion, string, error) {
 	server, err := passkeyServer()
 	if err != nil {
 		return nil, "", err
 	}
-	assertion, session, err := server.BeginLogin(user, webauthn.WithUserVerification(protocol.VerificationRequired))
+	assertion, session, err := server.BeginDiscoverableLogin(
+		webauthn.WithUserVerification(protocol.VerificationRequired),
+	)
 	if err != nil {
 		return nil, "", err
 	}
-	ceremonyID, err := savePasskeyCeremony(user.Id, passkeyLoginCeremony, *session)
+	ceremonyID, err := savePasskeyCeremony(uuid.Nil, passkeyLoginCeremony, *session)
 	return assertion, ceremonyID, err
 }
 
-func FinishPasskeyLogin(user userModel.User, ceremonyID string, credentialResponse []byte) error {
+func FinishPasskeyLogin(ceremonyID string, credentialResponse []byte) (*userModel.User, error) {
 	server, err := passkeyServer()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	session, err := takePasskeyCeremony(user.Id, ceremonyID, passkeyLoginCeremony)
+	session, err := takePasskeyCeremony(uuid.Nil, ceremonyID, passkeyLoginCeremony)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	credential, err := server.FinishLogin(user, session, passkeyHTTPRequest(credentialResponse))
+	var authenticatedUser *userModel.User
+	credential, err := server.FinishDiscoverableLogin(
+		func(rawID, userHandle []byte) (webauthn.User, error) {
+			userID, parseErr := uuid.Parse(string(userHandle))
+			if parseErr != nil {
+				return nil, fmt.Errorf("Passkey 账户标识无效")
+			}
+			passkey := userModel.PasskeyCredential{}
+			if queryErr := db.DB.Where("credential_id = ? AND user_id = ?", rawID, userID).First(&passkey).Error; queryErr != nil {
+				return nil, fmt.Errorf("Passkey 凭据未找到")
+			}
+			user := userModel.User{}
+			if queryErr := db.DB.Preload("Passkeys").First(&user, "id = ?", userID).Error; queryErr != nil {
+				return nil, fmt.Errorf("Passkey 账户未找到")
+			}
+			authenticatedUser = &user
+			return user, nil
+		},
+		session,
+		passkeyHTTPRequest(credentialResponse),
+	)
 	if err != nil {
-		return err
+		return nil, err
+	}
+	if authenticatedUser == nil {
+		return nil, fmt.Errorf("Passkey 账户未找到")
 	}
 	encodedCredential, err := json.Marshal(credential)
 	if err != nil {
-		return fmt.Errorf("更新 Passkey 凭据失败: %w", err)
+		return nil, fmt.Errorf("更新 Passkey 凭据失败: %w", err)
 	}
 	if err := db.DB.Model(&userModel.PasskeyCredential{}).
-		Where("user_id = ? AND credential_id = ?", user.Id, credential.ID).
+		Where("user_id = ? AND credential_id = ?", authenticatedUser.Id, credential.ID).
 		Update("credential_json", encodedCredential).Error; err != nil {
-		return fmt.Errorf("更新 Passkey 凭据失败: %w", err)
+		return nil, fmt.Errorf("更新 Passkey 凭据失败: %w", err)
 	}
-	return nil
+	return authenticatedUser, nil
 }
 
 func passkeyServer() (*webauthn.WebAuthn, error) {
