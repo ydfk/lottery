@@ -94,6 +94,14 @@ vision:
   # 是否启用图表识别。
   useChartRecognition: false
 
+# Passkey 依赖 HTTPS 域名和 iOS Associated Domains 配置。
+passkey:
+  rpID: "lottery.ydfk.site"
+  rpName: "彩迹"
+  origins:
+    - "https://lottery.ydfk.site"
+  appID: "B6AA23TY3H.com.ydfk.lottery"
+
 # 彩票类型配置。
 # 每个彩种的规则、开奖同步和推荐生成都从这里读取。
 lotteries:

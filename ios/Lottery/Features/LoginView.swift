@@ -12,6 +12,7 @@ struct LoginView: View {
     @State private var password = ""
     @State private var showsPassword = false
     @State private var isLoading = false
+    @State private var isPasskeyLoading = false
     @State private var errorMessage: String?
     @FocusState private var focusedField: Field?
 
@@ -145,6 +146,18 @@ struct LoginView: View {
             .controlSize(.extraLarge)
             .disabled(!canSignIn)
             .accessibilityIdentifier("login")
+
+            Button(action: signInWithPasskey) {
+                HStack(spacing: 10) {
+                    if isPasskeyLoading { ProgressView() }
+                    Label(isPasskeyLoading ? "验证中" : "使用 Passkey 登录", systemImage: "person.badge.key")
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+            .disabled(!canSignInWithPasskey)
+            .accessibilityIdentifier("passkey-login")
         }
         .padding(24)
         .background(
@@ -159,6 +172,12 @@ struct LoginView: View {
             && !isLoading
     }
 
+    private var canSignInWithPasskey: Bool {
+        !username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !isLoading
+            && !isPasskeyLoading
+    }
+
     private func signIn() {
         guard canSignIn else { return }
         focusedField = nil
@@ -170,6 +189,23 @@ struct LoginView: View {
                 try await session.login(
                     username: username.trimmingCharacters(in: .whitespacesAndNewlines),
                     password: password
+                )
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func signInWithPasskey() {
+        guard canSignInWithPasskey else { return }
+        focusedField = nil
+        isPasskeyLoading = true
+        errorMessage = nil
+        Task {
+            defer { isPasskeyLoading = false }
+            do {
+                try await session.loginWithPasskey(
+                    username: username.trimmingCharacters(in: .whitespacesAndNewlines)
                 )
             } catch {
                 errorMessage = error.localizedDescription

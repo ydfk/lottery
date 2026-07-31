@@ -52,6 +52,14 @@ vision:
   # 是否启用图表识别。
   useChartRecognition: false
 
+# Passkey 仅能使用已配置 HTTPS 关联域，不能使用 localhost 或 IP 地址。
+passkey:
+  rpID: "lottery.ydfk.site"
+  rpName: "彩迹"
+  origins:
+    - "https://lottery.ydfk.site"
+  appID: "B6AA23TY3H.com.ydfk.lottery"
+
 # 仅覆盖需要调整的彩种字段即可。
 lotteries:
   - code: "ssq"

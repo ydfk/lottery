@@ -9,6 +9,57 @@ struct AuthToken: Codable, Sendable {
     let token: String
 }
 
+struct PasskeyRegistrationOptions: Decodable, Sendable {
+    let ceremonyId: String
+    let publicKey: PublicKey
+
+    struct PublicKey: Decodable, Sendable {
+        let challenge: String
+        let rp: RelyingParty
+        let user: User
+    }
+
+    struct RelyingParty: Decodable, Sendable {
+        let id: String
+    }
+
+    struct User: Decodable, Sendable {
+        let id: String
+        let name: String
+        let displayName: String
+    }
+}
+
+struct PasskeyLoginOptions: Decodable, Sendable {
+    let ceremonyId: String
+    let publicKey: PublicKey
+
+    struct PublicKey: Decodable, Sendable {
+        let challenge: String
+        let rpId: String
+    }
+}
+
+struct PasskeyFinishPayload: Encodable, Sendable {
+    let ceremonyId: String
+    let credential: PasskeyCredentialResponse
+}
+
+struct PasskeyCredentialResponse: Encodable, Sendable {
+    let id: String
+    let rawId: String
+    let type = "public-key"
+    let response: Response
+
+    struct Response: Encodable, Sendable {
+        let clientDataJSON: String
+        let attestationObject: String?
+        let authenticatorData: String?
+        let signature: String?
+        let userHandle: String?
+    }
+}
+
 struct LotteryType: Codable, Identifiable, Sendable {
     let id: String
     let code: String

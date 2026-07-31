@@ -15,6 +15,7 @@ type Config struct {
 	Compensation CompensationConfig `mapstructure:"compensation"`
 	AI           AIConnectionConfig
 	Vision       VisionConnectionConfig
+	Passkey      PasskeyConfig
 	Lotteries    []LotteryConfig `mapstructure:"lotteries"`
 }
 
@@ -82,6 +83,13 @@ type VisionConnectionConfig struct {
 	UseDocOrientationClassify bool   `mapstructure:"useDocOrientationClassify"`
 	UseDocUnwarping           bool   `mapstructure:"useDocUnwarping"`
 	UseChartRecognition       bool   `mapstructure:"useChartRecognition"`
+}
+
+type PasskeyConfig struct {
+	RPID    string   `mapstructure:"rpID"`
+	RPName  string   `mapstructure:"rpName"`
+	Origins []string `mapstructure:"origins"`
+	AppID   string   `mapstructure:"appID"`
 }
 
 type LotteryConfig struct {

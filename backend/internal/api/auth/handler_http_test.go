@@ -200,3 +200,27 @@ func TestProfileRequiresAuth(t *testing.T) {
 		t.Fatalf("expected unauthorized, got %d", resp.StatusCode)
 	}
 }
+
+func TestAppleAppSiteAssociation(t *testing.T) {
+	previousConfig := config.Current
+	config.Current.Passkey.AppID = "B6AA23TY3H.com.ydfk.lottery"
+	t.Cleanup(func() { config.Current = previousConfig })
+
+	app := fiber.New()
+	RegisterAssociatedDomainRoutes(app)
+	resp := doJSONRequest(t, app, http.MethodGet, "/.well-known/apple-app-site-association", nil, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("association status: %d", resp.StatusCode)
+	}
+	var document struct {
+		WebCredentials struct {
+			Apps []string `json:"apps"`
+		} `json:"webcredentials"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&document); err != nil {
+		t.Fatalf("decode association document: %v", err)
+	}
+	if len(document.WebCredentials.Apps) != 1 || document.WebCredentials.Apps[0] != config.Current.Passkey.AppID {
+		t.Fatalf("unexpected app IDs: %#v", document.WebCredentials.Apps)
+	}
+}

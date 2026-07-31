@@ -26,6 +26,7 @@ func api() {
 	})
 
 	app.Get("/swagger/*", swagger.HandlerDefault)
+	auth.RegisterAssociatedDomainRoutes(app)
 	app.Static("/uploads", config.Current.Storage.UploadDir)
 
 	app.Use(recover.New())

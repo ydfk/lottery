@@ -13,6 +13,8 @@ import (
 func autoMigrate() error {
 	if err := DB.AutoMigrate(
 		&userModel.User{},
+		&userModel.PasskeyCredential{},
+		&userModel.PasskeyCeremony{},
 		&lotteryModel.LotteryType{},
 		&lotteryModel.DrawResult{},
 		&lotteryModel.DrawPrize{},

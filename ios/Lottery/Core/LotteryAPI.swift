@@ -1,6 +1,7 @@
 import Foundation
 
 struct LoginPayload: Encodable { let username: String; let password: String }
+struct PasskeyLoginPayload: Encodable { let username: String }
 struct RecognizePayload: Encodable { let uploadId: String; let ocrText: String? }
 struct SyncPayload: Encodable { let issue: String }
 
@@ -27,6 +28,40 @@ extension APIClient {
     func login(username: String, password: String) async throws -> AuthToken {
         let body = try jsonBody(LoginPayload(username: username, password: password))
         return try await request("auth/login", method: "POST", body: body, contentType: "application/json")
+    }
+
+    func passkeyRegistrationOptions() async throws -> PasskeyRegistrationOptions {
+        try await request("auth/passkeys/registration/options", method: "POST")
+    }
+
+    func finishPasskeyRegistration(_ payload: PasskeyFinishPayload) async throws {
+        let body = try jsonBody(payload)
+        let _: PasskeyRegistrationResult = try await request(
+            "auth/passkeys/registration/verify",
+            method: "POST",
+            body: body,
+            contentType: "application/json"
+        )
+    }
+
+    func passkeyLoginOptions(username: String) async throws -> PasskeyLoginOptions {
+        let body = try jsonBody(PasskeyLoginPayload(username: username))
+        return try await request(
+            "auth/passkeys/login/options",
+            method: "POST",
+            body: body,
+            contentType: "application/json"
+        )
+    }
+
+    func finishPasskeyLogin(_ payload: PasskeyFinishPayload) async throws -> AuthToken {
+        let body = try jsonBody(payload)
+        return try await request(
+            "auth/passkeys/login/verify",
+            method: "POST",
+            body: body,
+            contentType: "application/json"
+        )
     }
 
     func profile() async throws -> UserProfile {
@@ -161,4 +196,8 @@ extension APIClient {
         )
     }
 
+}
+
+private struct PasskeyRegistrationResult: Decodable {
+    let registered: Bool
 }
