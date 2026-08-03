@@ -2,6 +2,7 @@ import {
   useDeferredValue,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useTransition,
   type MouseEvent,
@@ -46,13 +47,13 @@ interface DrawResultsPanelProps {
   numberTrends: LotteryNumberTrendMap;
   filters: DrawResultFilters;
   loading: boolean;
-  page: number;
-  pageSize: number;
+  loadingMore: boolean;
+  hasMore: boolean;
   total: number;
   completePendingId: string;
   syncPending: boolean;
   onFiltersChange: (filters: DrawResultFilters) => void;
-  onPageChange: (page: number) => void;
+  onLoadMore: () => void;
   onRetryTrend: (lotteryCode: TrendLotteryCode) => void;
   onSyncIssue: (lotteryCode: string, issue: string) => void;
   onCompleteDraw: (draw: DrawResult) => void;
@@ -118,11 +119,9 @@ function DrawInfoItem(props: { label: string; value: string | number }) {
 
 function DrawHistoryTable(props: {
   items: DrawResult[];
-  completePendingId: string;
-  onCompleteDraw: (draw: DrawResult) => void;
   onSelectDraw: (draw: DrawResult) => void;
 }) {
-  const { items, completePendingId, onCompleteDraw, onSelectDraw } = props;
+  const { items, onSelectDraw } = props;
 
   return (
     <Card className="border-white/60 bg-white/85 shadow-[0_16px_40px_rgba(15,23,42,0.08)] backdrop-blur">
@@ -137,7 +136,7 @@ function DrawHistoryTable(props: {
               <TableHead>一等奖</TableHead>
               <TableHead>二等奖</TableHead>
               <TableHead>来源</TableHead>
-              <TableHead className="pr-4 text-right">操作</TableHead>
+              <TableHead className="pr-4 text-right">详情</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -168,17 +167,6 @@ function DrawHistoryTable(props: {
                 <TableCell className="text-slate-600">{getSourceLabel(item.source)}</TableCell>
                 <TableCell className="pr-4 text-right">
                   <div className="flex justify-end gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 rounded-full border-slate-200 bg-white px-3 text-slate-700 hover:bg-slate-50"
-                      disabled={completePendingId === item.id}
-                      onClick={() => onCompleteDraw(item)}
-                    >
-                      <RefreshCw className="size-3.5" />
-                      {completePendingId === item.id ? "补全中" : "补全"}
-                    </Button>
                     <Button
                       type="button"
                       variant="outline"
@@ -328,13 +316,13 @@ export function DrawResultsPanel(props: DrawResultsPanelProps) {
     numberTrends,
     filters,
     loading,
-    page,
-    pageSize,
+    loadingMore,
+    hasMore,
     total,
     completePendingId,
     syncPending,
     onFiltersChange,
-    onPageChange,
+    onLoadMore,
     onRetryTrend,
     onSyncIssue,
     onCompleteDraw,
@@ -344,6 +332,7 @@ export function DrawResultsPanel(props: DrawResultsPanelProps) {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [syncLotteryCode, setSyncLotteryCode] = useState("");
   const [syncIssue, setSyncIssue] = useState("");
+  const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
   const [, startTransition] = useTransition();
   const deferredFilters = useDeferredValue(filters);
   const showTrend = displayMode === "web" && viewMode === "trend";
@@ -353,7 +342,6 @@ export function DrawResultsPanel(props: DrawResultsPanelProps) {
     deferredFilters.drawDate ||
     deferredFilters.sort !== "latest"
   );
-  const pageCount = Math.max(1, Math.ceil(total / pageSize));
   const activeFilterLabels = useMemo(() => {
     const labels: string[] = [];
     if (deferredFilters.lotteryCode) {
@@ -373,6 +361,25 @@ export function DrawResultsPanel(props: DrawResultsPanelProps) {
     }
     return labels;
   }, [deferredFilters]);
+
+  useEffect(() => {
+    const target = loadMoreTriggerRef.current;
+    if (showTrend || !target || !hasMore || loading || loadingMore) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          onLoadMore();
+        }
+      },
+      { rootMargin: "160px 0px" }
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [hasMore, loading, loadingMore, onLoadMore, showTrend]);
 
   useEffect(() => {
     if (hasActiveFilters) {
@@ -589,37 +596,25 @@ export function DrawResultsPanel(props: DrawResultsPanelProps) {
         </Card>
       ) : items.length > 0 ? (
         <>
-          <DrawHistoryTable
-            items={items}
-            completePendingId={completePendingId}
-            onCompleteDraw={onCompleteDraw}
-            onSelectDraw={setSelectedDraw}
-          />
+          <DrawHistoryTable items={items} onSelectDraw={setSelectedDraw} />
 
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.4rem] border border-white/60 bg-white/80 px-4 py-3 shadow-[0_12px_30px_rgba(15,23,42,0.06)] backdrop-blur">
-            <p className="text-sm text-slate-500">
-              第 {page} / {pageCount} 页，每页 {pageSize} 条
+          <div ref={loadMoreTriggerRef} className="space-y-3">
+            <p className="text-center text-sm text-slate-500">
+              已加载 {items.length} / {total} 期
             </p>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                className="h-10 rounded-full px-4"
-                disabled={loading || page <= 1}
-                onClick={() => onPageChange(page - 1)}
-              >
-                上一页
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                className="h-10 rounded-full px-4"
-                disabled={loading || page >= pageCount}
-                onClick={() => onPageChange(page + 1)}
-              >
-                下一页
-              </Button>
-            </div>
+            {hasMore ? (
+              <div className="flex justify-center">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-11 rounded-2xl px-6"
+                  disabled={loadingMore}
+                  onClick={onLoadMore}
+                >
+                  {loadingMore ? "加载中..." : "加载更多"}
+                </Button>
+              </div>
+            ) : null}
           </div>
         </>
       ) : (

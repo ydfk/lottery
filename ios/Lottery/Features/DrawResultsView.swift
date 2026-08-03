@@ -154,20 +154,11 @@ struct DrawResultsView: View {
                         .listRowBackground(Color.clear)
                 }
                 ForEach(model.items) { draw in
-                    HStack(spacing: 10) {
-                        Button { selectedDraw = draw } label: {
-                            DrawRow(draw: draw)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .buttonStyle(.plain)
-
-                        Button("补全", systemImage: "arrow.clockwise") {
-                            complete(draw)
-                        }
-                        .labelStyle(.iconOnly)
-                        .disabled(model.syncingIDs.contains(draw.id))
-                        .accessibilityHint("从数据源重新同步这一期")
+                    Button { selectedDraw = draw } label: {
+                        DrawRow(draw: draw)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    .buttonStyle(.plain)
                     .onAppear {
                         if draw.id == model.items.last?.id, model.hasMore {
                             Task { await model.load(using: session.api, reset: false) }
@@ -192,16 +183,6 @@ struct DrawResultsView: View {
             .padding(.horizontal, 9)
             .padding(.vertical, 5)
             .background(Color(.secondarySystemGroupedBackground), in: .capsule)
-    }
-
-    private func complete(_ draw: DrawResult) {
-        Task {
-            if let updated = await model.complete(draw, using: session.api) {
-                if selectedDraw?.id == draw.id { selectedDraw = updated }
-                trendRefreshID = UUID()
-                session.message = "第 \(draw.issue) 期开奖信息已补全。"
-            }
-        }
     }
 
     private var syncSheet: some View {

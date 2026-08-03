@@ -182,6 +182,7 @@ export default function App() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyLoadingMore, setHistoryLoadingMore] = useState(false);
   const [drawLoading, setDrawLoading] = useState(false);
+  const [drawLoadingMore, setDrawLoadingMore] = useState(false);
   const [drawCompletePendingId, setDrawCompletePendingId] = useState("");
   const [drawSyncPending, setDrawSyncPending] = useState(false);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
@@ -201,6 +202,7 @@ export default function App() {
   const [historyTotal, setHistoryTotal] = useState(0);
   const [drawFilters, setDrawFilters] = useState<DrawResultFilters>(DEFAULT_DRAW_FILTERS);
   const [drawPage, setDrawPage] = useState(1);
+  const [drawHasMore, setDrawHasMore] = useState(false);
   const [drawTotal, setDrawTotal] = useState(0);
   const [selectedRecommendation, setSelectedRecommendation] = useState<Recommendation | null>(null);
   const [selectedHistoryTicket, setSelectedHistoryTicket] = useState<TicketRecord | null>(null);
@@ -235,6 +237,7 @@ export default function App() {
     setDrawResults([]);
     setDrawFilters(DEFAULT_DRAW_FILTERS);
     setDrawPage(1);
+    setDrawHasMore(false);
     setDrawTotal(0);
     setRecommendations([]);
     setRecommendationFilters(DEFAULT_RECOMMENDATION_FILTERS);
@@ -296,6 +299,7 @@ export default function App() {
       if (drawResult.status === "fulfilled") {
         setDrawResults(drawResult.value.items);
         setDrawPage(drawResult.value.page);
+        setDrawHasMore(drawResult.value.hasMore);
         setDrawTotal(drawResult.value.total);
       }
       if (recommendationResult.status === "fulfilled") {
@@ -326,18 +330,33 @@ export default function App() {
     }
   }
 
-  async function loadDrawResults(page: number, filters: DrawResultFilters) {
-    setDrawLoading(true);
+  async function loadDrawResults(page: number, append: boolean, filters: DrawResultFilters) {
+    if (append) {
+      setDrawLoadingMore(true);
+    } else {
+      setDrawLoading(true);
+    }
 
     try {
       const drawData = await getDrawResults(page, DRAW_PAGE_SIZE, filters);
-      setDrawResults(drawData.items);
+      setDrawResults((current) => {
+        if (!append) {
+          return drawData.items;
+        }
+        const currentIDs = new Set(current.map((item) => item.id));
+        return [...current, ...drawData.items.filter((item) => !currentIDs.has(item.id))];
+      });
       setDrawPage(drawData.page);
+      setDrawHasMore(drawData.hasMore);
       setDrawTotal(drawData.total);
     } catch (error) {
       handleRequestError(error, "加载开奖记录失败");
     } finally {
-      setDrawLoading(false);
+      if (append) {
+        setDrawLoadingMore(false);
+      } else {
+        setDrawLoading(false);
+      }
     }
   }
 
@@ -818,7 +837,7 @@ export default function App() {
         throw new Error("第三方接口暂未返回当前期完整开奖信息");
       }
       await Promise.all([
-        loadDrawResults(drawPage, drawFilters),
+        loadDrawResults(1, false, drawFilters),
         isTrendLotteryCode(draw.lotteryCode) ? reloadTrend(draw.lotteryCode) : Promise.resolve(),
       ]);
       toast.success("开奖信息已补全");
@@ -841,7 +860,7 @@ export default function App() {
       };
       setDrawFilters(nextFilters);
       await Promise.all([
-        loadDrawResults(1, nextFilters),
+        loadDrawResults(1, false, nextFilters),
         isTrendLotteryCode(lotteryCode) ? reloadTrend(lotteryCode) : Promise.resolve(),
       ]);
       if (result.syncedCount > 0) {
@@ -945,14 +964,14 @@ export default function App() {
 
   function handleDrawFilterChange(nextFilters: DrawResultFilters) {
     setDrawFilters(nextFilters);
-    void loadDrawResults(1, nextFilters);
+    void loadDrawResults(1, false, nextFilters);
   }
 
-  function handleDrawPageChange(nextPage: number) {
-    if (nextPage === drawPage || drawLoading) {
+  function handleLoadMoreDrawResults() {
+    if (!drawHasMore || drawLoadingMore) {
       return;
     }
-    void loadDrawResults(nextPage, drawFilters);
+    void loadDrawResults(drawPage + 1, true, drawFilters);
   }
 
   function handleOpenRecordPanel() {
@@ -1057,13 +1076,13 @@ export default function App() {
           numberTrends={numberTrends}
           filters={drawFilters}
           loading={drawLoading}
-          page={drawPage}
-          pageSize={DRAW_PAGE_SIZE}
+          loadingMore={drawLoadingMore}
+          hasMore={drawHasMore}
           total={drawTotal}
           completePendingId={drawCompletePendingId}
           syncPending={drawSyncPending}
           onFiltersChange={handleDrawFilterChange}
-          onPageChange={handleDrawPageChange}
+          onLoadMore={handleLoadMoreDrawResults}
           onRetryTrend={(lotteryCode) => void reloadTrend(lotteryCode)}
           onSyncIssue={(lotteryCode, issue) => void handleSyncDrawIssue(lotteryCode, issue)}
           onCompleteDraw={(draw) => void handleCompleteDrawInfo(draw)}
