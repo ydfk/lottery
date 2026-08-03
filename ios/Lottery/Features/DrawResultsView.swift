@@ -153,12 +153,22 @@ struct DrawResultsView: View {
                     EmptyState(icon: "list.number", title: "暂无开奖记录", message: "调整筛选条件或同步指定期号。")
                         .listRowBackground(Color.clear)
                 }
-                ForEach(model.items) { draw in
-                    Button { selectedDraw = draw } label: {
-                        DrawRow(draw: draw)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                ForEach(Array(model.items.enumerated()), id: \.element.id) { index, draw in
+                    Button {
+                        selectedDraw = draw
+                    } label: {
+                        VStack(spacing: 12) {
+                            DrawRow(draw: draw)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            if index < model.items.count - 1 {
+                                Divider()
+                            }
+                        }
+                        .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
+                    .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 0, trailing: 16))
+                    .listRowSeparator(.hidden)
                     .onAppear {
                         if draw.id == model.items.last?.id, model.hasMore {
                             Task { await model.load(using: session.api, reset: false) }
@@ -291,7 +301,6 @@ private struct DrawFilterSheet: View {
 }
 
 private struct DrawDetailView: View {
-    @Environment(\.dismiss) private var dismiss
     @State private var draw: DrawResult
     @State private var isCompleting = false
     @State private var errorMessage: String?
@@ -353,10 +362,9 @@ private struct DrawDetailView: View {
                     }
                 }
             }
-            .navigationTitle("第 \(draw.issue) 期")
+            .navigationTitle("开奖详情")
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
+                ToolbarItemGroup(placement: .bottomBar) {
                     Button(isCompleting ? "补全中" : "补全", systemImage: "arrow.clockwise") {
                         Task {
                             isCompleting = true
@@ -369,6 +377,7 @@ private struct DrawDetailView: View {
                 }
             }
         }
+        .presentationDetents([.medium, .large])
     }
 
     private func displayTime(_ value: String) -> String {

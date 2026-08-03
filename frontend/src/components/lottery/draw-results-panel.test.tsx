@@ -95,7 +95,7 @@ test("does not expose trend view in app display mode", () => {
   expect(screen.getByText("当前筛选条件下没有历史开奖记录。")).toBeInTheDocument();
 });
 
-test("keeps draw completion in the detail dialog only", async () => {
+test("opens the shared detail sheet from the whole draw row", async () => {
   const user = userEvent.setup();
 
   render(
@@ -119,6 +119,13 @@ test("keeps draw completion in the detail dialog only", async () => {
   );
 
   expect(screen.queryByRole("button", { name: "补全" })).not.toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "详情" }));
+  expect(screen.queryByRole("button", { name: "详情" })).not.toBeInTheDocument();
+
+  await user.click(
+    screen.getByRole("button", { name: /查看.*双色球第2026080期开奖详情/ })
+  );
+
+  expect(screen.getByText("开奖详情")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "返回" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "补全" })).toBeInTheDocument();
 });

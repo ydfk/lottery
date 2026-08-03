@@ -12,14 +12,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import {
   Table,
   TableBody,
   TableCell,
@@ -27,6 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { DetailSheet } from "@/components/lottery/detail-sheet";
 import { LotteryNumberTrend } from "@/components/lottery/lottery-number-trend";
 import { NumberBalls } from "@/components/lottery/number-balls";
 import type { LotteryDisplayMode } from "@/components/lottery/display-mode-toggle";
@@ -136,12 +129,27 @@ function DrawHistoryTable(props: {
               <TableHead>一等奖</TableHead>
               <TableHead>二等奖</TableHead>
               <TableHead>来源</TableHead>
-              <TableHead className="pr-4 text-right">详情</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {items.map((item) => (
-              <TableRow key={item.id}>
+              <TableRow
+                key={item.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`查看${getLotteryDisplayName(item.lotteryCode)}第${formatLotteryIssue(
+                  item.lotteryCode,
+                  item.issue
+                )}期开奖详情`}
+                className="cursor-pointer focus-visible:bg-slate-100 focus-visible:outline-none"
+                onClick={() => onSelectDraw(item)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onSelectDraw(item);
+                  }
+                }}
+              >
                 <TableCell className="pl-4">
                   <Badge variant="secondary">{getLotteryDisplayName(item.lotteryCode)}</Badge>
                 </TableCell>
@@ -165,19 +173,6 @@ function DrawHistoryTable(props: {
                   {formatDrawPrizeAmount(item, "二等奖", item.secondPrizeAmount)}
                 </TableCell>
                 <TableCell className="text-slate-600">{getSourceLabel(item.source)}</TableCell>
-                <TableCell className="pr-4 text-right">
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 rounded-full border-slate-200 bg-white px-3 text-slate-700 hover:bg-slate-50"
-                      onClick={() => onSelectDraw(item)}
-                    >
-                      详情
-                    </Button>
-                  </div>
-                </TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -187,7 +182,7 @@ function DrawHistoryTable(props: {
   );
 }
 
-function DrawDetailDialog(props: {
+function DrawDetailSheet(props: {
   draw: DrawResult | null;
   completePendingId: string;
   onCompleteDraw: (draw: DrawResult) => void;
@@ -196,116 +191,110 @@ function DrawDetailDialog(props: {
   const { draw, completePendingId, onCompleteDraw, onOpenChange } = props;
 
   return (
-    <Dialog open={Boolean(draw)} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl rounded-[1.8rem] border-slate-200 bg-white p-0 shadow-[0_24px_60px_rgba(15,23,42,0.18)]">
-        <DialogHeader className="border-b border-slate-100 px-6 pb-4 pt-6">
-          <DialogTitle className="text-xl text-slate-950">
-            {draw
-              ? `${getLotteryDisplayName(draw.lotteryCode)} 第 ${formatLotteryIssue(
-                  draw.lotteryCode,
-                  draw.issue
-                )} 期`
-              : "开奖详情"}
-          </DialogTitle>
-          <DialogDescription className="mt-2 text-sm text-slate-500">
-            {draw ? `${formatLotteryDrawDate(draw.drawDate)} 开奖` : ""}
-          </DialogDescription>
-        </DialogHeader>
-
-        {draw ? (
-          <ScrollArea className="max-h-[72vh]">
-            <div className="space-y-5 px-6 py-5">
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.4rem] border border-slate-200 bg-slate-50 px-4 py-3">
-                <p className="text-sm font-medium text-slate-700">
-                  可从第三方接口重新补全当前期完整信息
-                </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-10 rounded-full border-slate-200 bg-white px-4 text-slate-700 hover:bg-slate-50"
-                  disabled={completePendingId === draw.id}
-                  onClick={() => onCompleteDraw(draw)}
-                >
-                  <RefreshCw className="size-4" />
-                  {completePendingId === draw.id ? "补全中..." : "补全"}
-                </Button>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3 rounded-[1.4rem] bg-slate-50 px-4 py-4">
-                <span className="text-sm font-medium text-slate-700">开奖号码</span>
-                <NumberBalls redNumbers={draw.redNumbers} blueNumbers={draw.blueNumbers} compact />
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <DrawInfoItem
-                  label="一等奖金额"
-                  value={formatDrawPrizeAmount(draw, "一等奖", draw.firstPrizeAmount)}
-                />
-                <DrawInfoItem
-                  label="二等奖金额"
-                  value={formatDrawPrizeAmount(draw, "二等奖", draw.secondPrizeAmount)}
-                />
-                <DrawInfoItem label="销量" value={draw.saleAmount} />
-                <DrawInfoItem label="奖池" value={draw.prizePoolAmount} />
-                <DrawInfoItem label="来源" value={getSourceLabel(draw.source)} />
-                <DrawInfoItem label="同步时间" value={formatLotteryDateTime(draw.createdAt)} />
-                <DrawInfoItem label="更新时间" value={formatLotteryDateTime(draw.updatedAt)} />
-                <DrawInfoItem label="记录 ID" value={draw.id} />
-              </div>
-
-              <div className="rounded-[1.4rem] border border-slate-200 bg-white">
-                <div className="border-b border-slate-100 px-4 py-3">
-                  <p className="text-sm font-semibold text-slate-900">奖级明细</p>
-                </div>
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-slate-50/80">
-                      <TableHead className="pl-4">奖级</TableHead>
-                      <TableHead>中奖条件</TableHead>
-                      <TableHead>中奖注数</TableHead>
-                      <TableHead className="pr-4">单注奖金</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {draw.prizeDetails.length > 0 ? (
-                      draw.prizeDetails.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell className="pl-4 font-medium text-slate-900">
-                            {item.prizeName || "-"}
-                          </TableCell>
-                          <TableCell className="text-slate-600">{item.prizeRule || "-"}</TableCell>
-                          <TableCell className="text-slate-600">
-                            {formatCount(item.winnerCount)}
-                          </TableCell>
-                          <TableCell className="pr-4 font-medium text-slate-900">
-                            {formatAmount(item.singleBonus)}
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={4} className="py-8 text-center text-sm text-slate-500">
-                          暂无奖级明细
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-
-              {draw.rawPayload ? (
-                <div className="rounded-[1.4rem] border border-slate-200 bg-slate-950 p-4">
-                  <p className="text-sm font-semibold text-white">原始数据</p>
-                  <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-words text-xs leading-5 text-slate-200">
-                    {draw.rawPayload}
-                  </pre>
-                </div>
-              ) : null}
+    <DetailSheet
+      open={Boolean(draw)}
+      title="开奖详情"
+      rightAction={
+        draw ? (
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-11 rounded-full px-3 text-sm text-slate-700"
+            disabled={completePendingId === draw.id}
+            onClick={() => onCompleteDraw(draw)}
+          >
+            <RefreshCw className="mr-1.5 size-4" />
+            {completePendingId === draw.id ? "补全中" : "补全"}
+          </Button>
+        ) : undefined
+      }
+      onOpenChange={onOpenChange}
+    >
+      {draw ? (
+        <div className="space-y-6">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary">{getLotteryDisplayName(draw.lotteryCode)}</Badge>
+              <Badge variant="secondary">
+                第 {formatLotteryIssue(draw.lotteryCode, draw.issue)} 期
+              </Badge>
             </div>
-          </ScrollArea>
-        ) : null}
-      </DialogContent>
-    </Dialog>
+            <p className="text-sm text-slate-500">{formatLotteryDrawDate(draw.drawDate)} 开奖</p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 rounded-[1.4rem] bg-slate-50 px-4 py-4">
+            <span className="text-sm font-medium text-slate-700">开奖号码</span>
+            <NumberBalls redNumbers={draw.redNumbers} blueNumbers={draw.blueNumbers} compact />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <DrawInfoItem
+              label="一等奖金额"
+              value={formatDrawPrizeAmount(draw, "一等奖", draw.firstPrizeAmount)}
+            />
+            <DrawInfoItem
+              label="二等奖金额"
+              value={formatDrawPrizeAmount(draw, "二等奖", draw.secondPrizeAmount)}
+            />
+            <DrawInfoItem label="销量" value={draw.saleAmount} />
+            <DrawInfoItem label="奖池" value={draw.prizePoolAmount} />
+            <DrawInfoItem label="来源" value={getSourceLabel(draw.source)} />
+            <DrawInfoItem label="同步时间" value={formatLotteryDateTime(draw.createdAt)} />
+            <DrawInfoItem label="更新时间" value={formatLotteryDateTime(draw.updatedAt)} />
+            <DrawInfoItem label="记录 ID" value={draw.id} />
+          </div>
+
+          <div className="rounded-[1.4rem] border border-slate-200 bg-white">
+            <div className="border-b border-slate-100 px-4 py-3">
+              <p className="text-sm font-semibold text-slate-900">奖级明细</p>
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-slate-50/80">
+                  <TableHead className="pl-4">奖级</TableHead>
+                  <TableHead>中奖条件</TableHead>
+                  <TableHead>中奖注数</TableHead>
+                  <TableHead className="pr-4">单注奖金</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {draw.prizeDetails.length > 0 ? (
+                  draw.prizeDetails.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="pl-4 font-medium text-slate-900">
+                        {item.prizeName || "-"}
+                      </TableCell>
+                      <TableCell className="text-slate-600">{item.prizeRule || "-"}</TableCell>
+                      <TableCell className="text-slate-600">
+                        {formatCount(item.winnerCount)}
+                      </TableCell>
+                      <TableCell className="pr-4 font-medium text-slate-900">
+                        {formatAmount(item.singleBonus)}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={4} className="py-8 text-center text-sm text-slate-500">
+                      暂无奖级明细
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          {draw.rawPayload ? (
+            <div className="rounded-[1.4rem] border border-slate-200 bg-slate-950 p-4">
+              <p className="text-sm font-semibold text-white">原始数据</p>
+              <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-words text-xs leading-5 text-slate-200">
+                {draw.rawPayload}
+              </pre>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </DetailSheet>
   );
 }
 
@@ -335,6 +324,7 @@ export function DrawResultsPanel(props: DrawResultsPanelProps) {
   const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
   const [, startTransition] = useTransition();
   const deferredFilters = useDeferredValue(filters);
+  const selectedDrawID = selectedDraw?.id;
   const showTrend = displayMode === "web" && viewMode === "trend";
   const hasActiveFilters = Boolean(
     deferredFilters.lotteryCode ||
@@ -361,6 +351,16 @@ export function DrawResultsPanel(props: DrawResultsPanelProps) {
     }
     return labels;
   }, [deferredFilters]);
+
+  useEffect(() => {
+    if (!selectedDrawID) {
+      return;
+    }
+    const updatedDraw = items.find((item) => item.id === selectedDrawID);
+    if (updatedDraw) {
+      setSelectedDraw(updatedDraw);
+    }
+  }, [items, selectedDrawID]);
 
   useEffect(() => {
     const target = loadMoreTriggerRef.current;
@@ -625,13 +625,10 @@ export function DrawResultsPanel(props: DrawResultsPanelProps) {
         </Card>
       )}
 
-      <DrawDetailDialog
+      <DrawDetailSheet
         draw={selectedDraw}
         completePendingId={completePendingId}
-        onCompleteDraw={(draw) => {
-          onCompleteDraw(draw);
-          setSelectedDraw(null);
-        }}
+        onCompleteDraw={onCompleteDraw}
         onOpenChange={(open) => setSelectedDraw(open ? selectedDraw : null)}
       />
     </div>
