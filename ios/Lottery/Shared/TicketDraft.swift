@@ -37,6 +37,24 @@ struct TicketDraft: Codable, Equatable, Sendable {
     var recommendationId: String?
     var uploadId: String?
 
+    static func purchase(_ recommendation: Recommendation, multiple: Int = 1, additional: Bool = false) -> TicketDraft {
+        let kind = LotteryKind(rawValue: recommendation.lotteryCode) ?? .ssq
+        return TicketDraft(
+            lottery: kind,
+            issue: recommendation.issue,
+            drawDate: recommendation.drawDate.flatMap(DateParser.date) ?? Date(),
+            entries: recommendation.entries.map { entry in
+                TicketEntryDraft(
+                    red: Set(entry.redNumbers.lotteryNumbers),
+                    blue: Set(entry.blueNumbers.lotteryNumbers),
+                    multiple: TicketEntryDraft.clampedMultiple(multiple),
+                    isAdditional: kind == .dlt && additional
+                )
+            },
+            recommendationId: recommendation.id
+        )
+    }
+
     var calculatedCost: Double {
         entries.reduce(0) { sum, entry in
             guard entry.isValid(for: lottery) else { return sum }

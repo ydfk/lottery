@@ -129,6 +129,25 @@ struct RecommendationsView: View {
                     .buttonStyle(.plain)
                     .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 0, trailing: 16))
                     .listRowSeparator(.hidden)
+                    .swipeActions(edge: .trailing) {
+                        Button("删除", systemImage: "trash", role: .destructive) {
+                            deleteCandidate = item
+                        }
+                        Button(item.isPurchased == true ? "续购" : "购买", systemImage: "cart") {
+                            session.recordPurchase(item)
+                        }
+                        .tint(LotteryPalette.blue)
+                    }
+                    .swipeActions(edge: .leading) {
+                        Button("重判", systemImage: "arrow.clockwise") {
+                            Task { _ = await model.recheck(item, using: session.api) }
+                        }
+                        .tint(LotteryPalette.amber)
+                        Button("隐览", systemImage: "eye.slash") {
+                            stealth = item
+                        }
+                        .tint(.gray)
+                    }
                     .onAppear {
                         if item.id == model.items.last?.id, model.hasMore {
                             Task { await model.load(using: session.api, reset: false) }
@@ -158,6 +177,7 @@ struct RecommendationsView: View {
                 reload()
             }
         }
+        .onChange(of: session.ticketHistoryRevision) { _, _ in reload() }
         .fullScreenCover(item: $stealth) { StealthRecommendationView(recommendation: $0) }
         .confirmationDialog(
             "删除这条推荐？",
@@ -386,55 +406,5 @@ private struct RecommendationRow: View {
                 ? "pending"
                 : recommendation.prizeAmount > 0 ? "won" : "not_won"
         )
-    }
-}
-
-private struct StealthRecommendationView: View {
-    @Environment(\.dismiss) private var dismiss
-    let recommendation: Recommendation
-    @State private var exitCount = 0
-
-    var body: some View {
-        VStack(spacing: 18) {
-            Button(action: registerExitTap) {
-                HStack(spacing: 7) {
-                    ForEach(0..<5, id: \.self) { index in
-                        Circle().fill(index < exitCount ? Color.secondary : Color(.systemGray5)).frame(width: 7, height: 7)
-                    }
-                }
-                .frame(height: 44)
-            }
-            .accessibilityLabel("退出隐览")
-            .accessibilityHint("连续点按五次退出")
-            .accessibilityAction(.escape) { dismiss() }
-
-            ScrollView {
-                VStack(spacing: 0) {
-                    ForEach(recommendation.entries) { entry in
-                        NumberBalls(redNumbers: entry.redNumbers, blueNumbers: entry.blueNumbers)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 20)
-                            .background(Color(.systemBackground))
-                        Divider()
-                    }
-                }
-                .overlay(RoundedRectangle(cornerRadius: 2).stroke(Color(.separator)))
-                .padding(.horizontal, 12)
-            }
-        }
-        .background(Color(.systemBackground).ignoresSafeArea())
-        .statusBarHidden()
-    }
-
-    private func registerExitTap() {
-        exitCount += 1
-        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-        if exitCount >= 5 { dismiss() }
-        else {
-            Task {
-                try? await Task.sleep(for: .seconds(1.8))
-                if exitCount < 5 { exitCount = 0 }
-            }
-        }
     }
 }

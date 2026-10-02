@@ -109,21 +109,7 @@ final class AppSession {
     }
 
     func recordPurchase(_ recommendation: Recommendation) {
-        let kind = LotteryKind(rawValue: recommendation.lotteryCode) ?? .ssq
-        ticketDraft = TicketDraft(
-            lottery: kind,
-            issue: recommendation.issue,
-            drawDate: recommendation.drawDate.flatMap(DateParser.date) ?? Date(),
-            purchasedAt: Date(),
-            notes: "",
-            entries: recommendation.entries.map { entry in
-                TicketEntryDraft(
-                    red: Set(entry.redNumbers.lotteryNumbers),
-                    blue: Set(entry.blueNumbers.lotteryNumbers)
-                )
-            },
-            recommendationId: recommendation.id
-        )
+        ticketDraft = .purchase(recommendation)
         editingTicket = nil
         isEditorPresented = true
     }

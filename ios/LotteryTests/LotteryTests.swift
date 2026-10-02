@@ -186,6 +186,26 @@ struct LotteryTests {
             Recommendation.self,
             from: Data(recommendationJSON.utf8)
         )
+        let quickSSQ = TicketDraft.purchase(recommendation, multiple: 3, additional: true)
+        #expect(quickSSQ.calculatedCost == 6)
+        #expect(quickSSQ.entries.first?.isAdditional == false)
+        #expect(quickSSQ.entries.first?.payload().redNumbers == "01,02,03,04,05,06")
+        #expect(quickSSQ.recommendationId == recommendation.id)
+        #expect(quickSSQ.issue == recommendation.issue)
+
+        let dltJSON = recommendationJSON
+            .replacingOccurrences(of: "ssq", with: "dlt")
+            .replacingOccurrences(of: "01,02,03,04,05,06", with: "01,02,03,04,05")
+            .replacingOccurrences(of: "\"blueNumbers\":\"07\"", with: "\"blueNumbers\":\"07,08\"")
+        let dlt = try JSONDecoder().decode(Recommendation.self, from: Data(dltJSON.utf8))
+        let quickDLT = TicketDraft.purchase(dlt, multiple: 4, additional: true)
+        #expect(quickDLT.isValid)
+        #expect(quickDLT.calculatedCost == 12)
+        #expect(quickDLT.entries.first?.payload().blueNumbers == "07,08")
+        #expect(TicketDraft.purchase(dlt, multiple: 4).calculatedCost == 8)
+        #expect(TicketDraft.purchase(dlt, multiple: 100).entries.first?.multiple == 99)
+        #expect(TicketDraft.purchase(dlt, multiple: 0).entries.first?.multiple == 1)
+
         session.recordPurchase(recommendation)
         #expect(session.ticketDraft.issue == "2026088")
         #expect(session.ticketDraft.recommendationId == "recommendation-1")
