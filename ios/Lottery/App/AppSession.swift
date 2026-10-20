@@ -28,6 +28,8 @@ final class AppSession {
     var editingTicket: Ticket?
     var editorSaving = false
     var isEditorPresented = false
+    var quickPurchaseRecommendation: Recommendation?
+    private var pendingFullPurchase: TicketDraft?
     var ticketHistoryRevision = 0
     var message: String?
 
@@ -105,13 +107,31 @@ final class AppSession {
         selectedTab = .dashboard
         isEditorPresented = false
         resetEditor()
+        quickPurchaseRecommendation = nil
+        pendingFullPurchase = nil
         self.message = message
     }
 
     func recordPurchase(_ recommendation: Recommendation) {
-        ticketDraft = .purchase(recommendation)
+        pendingFullPurchase = nil
+        quickPurchaseRecommendation = recommendation
+    }
+
+    func prepareFullPurchase(_ draft: TicketDraft) {
+        pendingFullPurchase = draft
+    }
+
+    func finishQuickPurchase() {
+        quickPurchaseRecommendation = nil
+        guard let draft = pendingFullPurchase else { return }
+        pendingFullPurchase = nil
+        ticketDraft = draft
         editingTicket = nil
         isEditorPresented = true
+    }
+
+    func purchaseDidSave() {
+        ticketHistoryRevision += 1
     }
 
     func edit(_ ticket: Ticket) {
@@ -145,8 +165,7 @@ final class AppSession {
         isEditorPresented = false
         resetEditor()
         guard saved else { return }
-        ticketHistoryRevision += 1
-        selectedTab = .history
+        purchaseDidSave()
     }
 
     func resetEditor() {

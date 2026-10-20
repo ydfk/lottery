@@ -45,8 +45,10 @@ struct StealthRecommendationView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { purchaseDeadline = nil }
         }
-        .sheet(isPresented: $showsPurchase) {
-            StealthPurchaseSheet(recommendation: recommendation) {
+        .sheet(isPresented: $showsPurchase, onDismiss: {
+            if purchaseSaved { dismiss() }
+        }) {
+            QuickPurchaseSheet(recommendation: recommendation) {
                 purchaseSaved = true
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
             }

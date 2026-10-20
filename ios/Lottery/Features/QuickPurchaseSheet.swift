@@ -1,9 +1,10 @@
 import SwiftUI
 
-struct StealthPurchaseSheet: View {
+struct QuickPurchaseSheet: View {
     @Environment(AppSession.self) private var session
     @Environment(\.dismiss) private var dismiss
     let recommendation: Recommendation
+    var onFullEntry: ((TicketDraft) -> Void)? = nil
     let onSaved: () -> Void
     @State private var multiple = 1
     @State private var additional = false
@@ -29,6 +30,16 @@ struct StealthPurchaseSheet: View {
                     LabeledContent("合计 \(draft.entries.count) 注", value: LotteryFormatters.currency(draft.calculatedCost))
                 } footer: {
                     Text("使用当前推荐的全部号码，仅记录购买信息。")
+                }
+                if let onFullEntry {
+                    Section {
+                        Button("完整录入", systemImage: "square.and.pencil") {
+                            onFullEntry(draft)
+                            dismiss()
+                        }
+                    } footer: {
+                        Text("可修改号码、日期、备注及照片。")
+                    }
                 }
                 if recommendation.isPurchased == true {
                     Section { Text("这条推荐已有购买记录，本次确认将新增一条。").foregroundStyle(.secondary) }
@@ -75,7 +86,7 @@ struct StealthPurchaseSheet: View {
                     notes: "",
                     entries: purchase.entries.map { $0.payload() }
                 ))
-                session.ticketHistoryRevision += 1
+                session.purchaseDidSave()
                 onSaved()
                 dismiss()
             } catch {

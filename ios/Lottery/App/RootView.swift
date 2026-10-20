@@ -41,6 +41,14 @@ private struct MainTabView: View {
     var body: some View {
         @Bindable var session = session
         mainTabs(selection: $session.selectedTab)
+            .sheet(item: $session.quickPurchaseRecommendation, onDismiss: session.finishQuickPurchase) { recommendation in
+                QuickPurchaseSheet(
+                    recommendation: recommendation,
+                    onFullEntry: session.prepareFullPurchase,
+                    onSaved: {}
+                )
+                .environment(session)
+            }
             .fullScreenCover(isPresented: $session.isEditorPresented) {
                 NavigationStack { TicketEditorView() }
                     .environment(session)

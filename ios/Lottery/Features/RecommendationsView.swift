@@ -99,6 +99,7 @@ struct RecommendationsView: View {
     @Environment(AppSession.self) private var session
     @State private var model = RecommendationsModel()
     @State private var selected: Recommendation?
+    @State private var purchaseAfterDetail: Recommendation?
     @State private var stealth: Recommendation?
     @State private var deleteCandidate: Recommendation?
     @State private var showsFilters = false
@@ -168,7 +169,11 @@ struct RecommendationsView: View {
         }
         .refreshable { await model.load(using: session.api, reset: true) }
         .task { await model.load(using: session.api, reset: true) }
-        .sheet(item: $selected) { detailSheet($0) }
+        .sheet(item: $selected, onDismiss: {
+            guard let recommendation = purchaseAfterDetail else { return }
+            purchaseAfterDetail = nil
+            session.recordPurchase(recommendation)
+        }) { detailSheet($0) }
         .sheet(isPresented: $showsFilters) {
             RecommendationFilterSheet(lottery: model.lottery, status: model.status, sort: model.sort) { lottery, status, sort in
                 model.lottery = lottery
@@ -270,8 +275,8 @@ struct RecommendationsView: View {
                 ToolbarItemGroup(placement: .bottomBar) {
                     Button("隐览", systemImage: "eye.slash") { selected = nil; stealth = item }
                     Button(item.isPurchased == true ? "续购" : "购买", systemImage: "cart") {
+                        purchaseAfterDetail = item
                         selected = nil
-                        session.recordPurchase(item)
                     }
                     Button("重判", systemImage: "arrow.clockwise") {
                         Task { if let updated = await model.recheck(item, using: session.api) { selected = updated } }
