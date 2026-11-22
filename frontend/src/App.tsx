@@ -1,5 +1,5 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { History, LayoutDashboard, List, ReceiptText, Sparkles } from "lucide-react";
+import { lazy, Suspense, useEffect, useState, type FormEvent } from "react";
+import { History, LayoutDashboard, List, ReceiptText, ScrollText, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { AuthPanel } from "@/components/lottery/auth-panel";
 import { DashboardPanel } from "@/components/lottery/dashboard-panel";
@@ -63,7 +63,13 @@ import type {
   TicketUpload,
 } from "@/types/lottery";
 
-type TabKey = "dashboard" | "recommendation" | "records" | "history" | "draws";
+type TabKey = "dashboard" | "recommendation" | "records" | "history" | "draws" | "ai-logs";
+
+const AIRequestLogPanel = lazy(() =>
+  import("@/components/lottery/ai-request-log-panel").then((module) => ({
+    default: module.AIRequestLogPanel,
+  }))
+);
 
 const DISPLAY_MODE_STORAGE_KEY = "lottery:display-mode";
 const DRAW_PAGE_SIZE = 20;
@@ -100,6 +106,12 @@ const tabs: LotteryShellTab<TabKey>[] = [
     label: "开奖",
     description: "查看历史爬取到的开奖记录",
     icon: List,
+  },
+  {
+    key: "ai-logs",
+    label: "AI 请求日志",
+    description: "查看推荐和 OCR 调用详情",
+    icon: ScrollText,
   },
 ];
 
@@ -220,12 +232,13 @@ export default function App() {
   const [notes, setNotes] = useState("");
   const [entryDrafts, setEntryDrafts] = useState<TicketEntryDraft[]>([createEmptyEntryDraft()]);
   const webNavigationTabs = tabs.filter((item) => item.key !== "records");
-  const appNavigationTabs = tabs.filter((item) => item.key !== "draws");
+  const appNavigationTabs = tabs.filter((item) => item.key !== "draws" && item.key !== "ai-logs");
+  const webOnlyTab = activeTab === "draws" || activeTab === "ai-logs";
   const navigationTabs = displayMode === "web" ? webNavigationTabs : appNavigationTabs;
   const navigationActiveTab =
     displayMode === "web" && activeTab === "records"
       ? "history"
-      : displayMode === "app" && activeTab === "draws"
+      : displayMode === "app" && webOnlyTab
         ? "dashboard"
         : activeTab;
   const { trends: numberTrends, reloadTrend } = useLotteryNumberTrends(
@@ -444,10 +457,10 @@ export default function App() {
   }, [displayMode]);
 
   useEffect(() => {
-    if (displayMode === "app" && activeTab === "draws") {
+    if (displayMode === "app" && webOnlyTab) {
       setActiveTab("dashboard");
     }
-  }, [activeTab, displayMode]);
+  }, [displayMode, webOnlyTab]);
 
   useEffect(() => {
     if (!selectedImage) {
@@ -981,6 +994,14 @@ export default function App() {
   }
 
   function renderActivePanel(user: AuthUser) {
+    if (activeTab === "ai-logs") {
+      return (
+        <Suspense fallback={<p role="status">正在打开 AI 请求日志…</p>}>
+          <AIRequestLogPanel key={user.id} />
+        </Suspense>
+      );
+    }
+
     if (activeTab === "dashboard") {
       return (
         <DashboardPanel

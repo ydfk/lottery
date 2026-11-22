@@ -7,6 +7,9 @@ import (
 	"testing"
 
 	model "go-fiber-starter/internal/model/lottery"
+	"go-fiber-starter/pkg/config"
+
+	"github.com/spf13/viper"
 )
 
 func TestBuildRecommendationPromptUsesDefinitionSchema(t *testing.T) {
@@ -39,6 +42,69 @@ func TestBuildRecommendationPromptUsesDefinitionSchema(t *testing.T) {
 	}
 	if !strings.Contains(prompt, "近期已推荐") {
 		t.Fatalf("prompt should include recent recommendation blocklist: %s", prompt)
+	}
+}
+
+func TestConfiguredPromptsKeepBlueBallDiversityOnRetry(t *testing.T) {
+	settings := viper.New()
+	settings.SetConfigFile("../../../config/config.yaml")
+	if err := settings.ReadInConfig(); err != nil {
+		t.Fatal(err)
+	}
+	var lotteries []config.LotteryConfig
+	if err := settings.UnmarshalKey("lotteries", &lotteries); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		code         string
+		recent       string
+		instructions []string
+	}{
+		{
+			code:   "ssq",
+			recent: "红球[03,10,15,22,28,33] 蓝球[12]",
+			instructions: []string{
+				"出现次数最少的蓝球", "把首选组合放在 numbers 数组最前面", "前 16 组内蓝球不能重复",
+			},
+		},
+		{
+			code:   "dlt",
+			recent: "红球[03,10,15,22,28] 蓝球[04,09]",
+			instructions: []string{
+				"把首选组合放在 numbers 数组最前面", "统计“近期已推荐”中各后区号码及完整对子的出现次数",
+				"前 6 组之间的后区号码互不重叠", "优先避开近期已用的对子",
+			},
+		},
+	} {
+		t.Run(tc.code, func(t *testing.T) {
+			for _, item := range lotteries {
+				if item.Code != tc.code {
+					continue
+				}
+				if item.Recommendation.PromptVersion != "v3" {
+					t.Fatalf("unexpected prompt version: %s", item.Recommendation.PromptVersion)
+				}
+				definition := Definition{
+					Code: item.Code, Name: item.Name,
+					RedCount: item.RedCount, RedMin: item.RedMin, RedMax: item.RedMax,
+					BlueCount: item.BlueCount, BlueMin: item.BlueMin, BlueMax: item.BlueMax,
+					Recommendation: RecommendationSettings{Prompt: item.Recommendation.Prompt},
+				}
+				count := item.Recommendation.Count
+				blocklist := RecommendationBlocklist{RecentRecommendations: []string{tc.recent}}
+				initial := buildRecommendationPrompt(definition, nil, blocklist, count)
+				retry := buildRecommendationCompensationPrompt(definition, nil, blocklist, count, 1, fmt.Errorf("候选不足"), "")
+				for _, prompt := range []string{initial, retry} {
+					for _, required := range append(tc.instructions, tc.recent) {
+						if !strings.Contains(prompt, required) {
+							t.Fatalf("prompt missing %q", required)
+						}
+					}
+				}
+				return
+			}
+			t.Fatalf("configuration not found: %s", tc.code)
+		})
 	}
 }
 

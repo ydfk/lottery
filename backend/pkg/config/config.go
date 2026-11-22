@@ -68,9 +68,10 @@ type CompensationJobConfig struct {
 }
 
 type AIConnectionConfig struct {
-	BaseURL        string `mapstructure:"baseURL"`
-	APIKey         string `mapstructure:"apiKey"`
-	TimeoutSeconds int    `mapstructure:"timeoutSeconds"`
+	BaseURL         string `mapstructure:"baseURL"`
+	APIKey          string `mapstructure:"apiKey"`
+	TimeoutSeconds  int    `mapstructure:"timeoutSeconds"`
+	RequestLogLimit int    `mapstructure:"requestLogLimit"`
 }
 
 type VisionConnectionConfig struct {

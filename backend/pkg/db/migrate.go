@@ -23,6 +23,7 @@ func autoMigrate() error {
 		&lotteryModel.TicketEntry{},
 		&lotteryModel.Recommendation{},
 		&lotteryModel.RecommendationEntry{},
+		&lotteryModel.AIRequestLog{},
 	); err != nil {
 		return err
 	}

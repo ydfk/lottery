@@ -61,6 +61,20 @@ type RecommendationDetailResponse struct {
 	Time string                              `json:"time" example:"2026-03-16T10:00:00Z"`
 }
 
+type AIRequestLogPageResponse struct {
+	Flag bool                            `json:"flag"`
+	Code int                             `json:"code"`
+	Data lotteryService.AIRequestLogPage `json:"data"`
+	Time string                          `json:"time"`
+}
+
+type AIRequestLogDetailResponse struct {
+	Flag bool               `json:"flag"`
+	Code int                `json:"code"`
+	Data model.AIRequestLog `json:"data"`
+	Time string             `json:"time"`
+}
+
 type SyncResultResponse struct {
 	Flag bool                      `json:"flag" example:"true"`
 	Code int                       `json:"code" example:"200"`

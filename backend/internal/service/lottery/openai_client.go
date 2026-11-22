@@ -89,12 +89,11 @@ func callVisionModel(ctx context.Context, model string, prompt string, imagePath
 	)
 }
 
-func callOpenAICompatible(ctx context.Context, baseURL string, apiKey string, model string, timeout time.Duration, messages []openAIMessage) (string, error) {
+func callOpenAICompatible(ctx context.Context, baseURL string, apiKey string, model string, timeout time.Duration, messages []openAIMessage) (_ string, requestErr error) {
 	if baseURL == "" || apiKey == "" || model == "" {
 		return "", fmt.Errorf("未配置 OpenAI 兼容模型")
 	}
 
-	startedAt := time.Now()
 	endpoint := strings.TrimRight(baseURL, "/")
 	if !strings.HasSuffix(endpoint, "/chat/completions") {
 		endpoint += "/chat/completions"
@@ -104,15 +103,22 @@ func callOpenAICompatible(ctx context.Context, baseURL string, apiKey string, mo
 		Model:    model,
 		Messages: messages,
 	}
+	trace := aiRequestTrace{
+		startedAt: time.Now(), provider: ProviderOpenAICompatible, model: model,
+		method: http.MethodPost, endpoint: endpoint, credential: apiKey,
+		request: buildOpenAIRequestLog(requestBody),
+	}
+	defer func() {
+		trace.finish(ctx, requestErr)
+	}()
+
 	rawRequest, err := json.Marshal(requestBody)
 	if err != nil {
-		logThirdPartyFailure("openai-compatible", http.MethodPost, endpoint, buildOpenAIRequestLog(requestBody), nil, 0, startedAt, err)
 		return "", err
 	}
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(rawRequest))
 	if err != nil {
-		logThirdPartyFailure("openai-compatible", http.MethodPost, endpoint, buildOpenAIRequestLog(requestBody), nil, 0, startedAt, err)
 		return "", err
 	}
 	request.Header.Set("Content-Type", "application/json")
@@ -121,35 +127,29 @@ func callOpenAICompatible(ctx context.Context, baseURL string, apiKey string, mo
 	client := &http.Client{Timeout: timeout}
 	response, err := client.Do(request)
 	if err != nil {
-		logThirdPartyFailure("openai-compatible", http.MethodPost, endpoint, buildOpenAIRequestLog(requestBody), nil, 0, startedAt, err)
 		return "", err
 	}
 	defer response.Body.Close()
+	trace.statusCode = response.StatusCode
+	trace.contentType = response.Header.Get("Content-Type")
 
 	body, err := io.ReadAll(response.Body)
+	trace.response = string(body)
 	if err != nil {
-		logThirdPartyFailure("openai-compatible", http.MethodPost, endpoint, buildOpenAIRequestLog(requestBody), nil, response.StatusCode, startedAt, err)
 		return "", err
 	}
 	if response.StatusCode >= http.StatusBadRequest {
-		requestErr := buildOpenAIHTTPError(response.StatusCode, response.Header.Get("Content-Type"), body)
-		logThirdPartyFailure("openai-compatible", http.MethodPost, endpoint, buildOpenAIRequestLog(requestBody), body, response.StatusCode, startedAt, requestErr)
-		return "", requestErr
+		return "", buildOpenAIHTTPError(response.StatusCode, trace.contentType, body)
 	}
 
 	parsed := openAIResponse{}
 	if err := json.Unmarshal(body, &parsed); err != nil {
-		requestErr := buildOpenAIJSONError(response.StatusCode, response.Header.Get("Content-Type"), body, err)
-		logThirdPartyFailure("openai-compatible", http.MethodPost, endpoint, buildOpenAIRequestLog(requestBody), body, response.StatusCode, startedAt, requestErr)
-		return "", requestErr
+		return "", buildOpenAIJSONError(response.StatusCode, trace.contentType, body, err)
 	}
 	if len(parsed.Choices) == 0 {
-		requestErr := fmt.Errorf("模型未返回内容")
-		logThirdPartyFailure("openai-compatible", http.MethodPost, endpoint, buildOpenAIRequestLog(requestBody), body, response.StatusCode, startedAt, requestErr)
-		return "", requestErr
+		return "", fmt.Errorf("模型未返回内容")
 	}
 
-	logThirdPartySuccess("openai-compatible", http.MethodPost, endpoint, buildOpenAIRequestLog(requestBody), body, response.StatusCode, startedAt)
 	return stripJSONFence(parsed.Choices[0].Message.Content), nil
 }
 
@@ -196,7 +196,7 @@ func sanitizeOpenAIMessages(messages []openAIMessage) []map[string]any {
 
 		switch content := message.Content.(type) {
 		case string:
-			item["content"] = truncateLogValue(content)
+			item["content"] = content
 		case []map[string]any:
 			item["content"] = sanitizeOpenAIContentItems(content)
 		default:
@@ -218,11 +218,6 @@ func sanitizeOpenAIContentItems(items []map[string]any) []map[string]any {
 		itemType, _ := cloned["type"].(string)
 		if itemType == "image_url" {
 			cloned["image_url"] = map[string]string{"url": "<base64 omitted>"}
-		}
-		if itemType == "text" {
-			if text, ok := cloned["text"].(string); ok {
-				cloned["text"] = truncateLogValue(text)
-			}
 		}
 		result = append(result, cloned)
 	}

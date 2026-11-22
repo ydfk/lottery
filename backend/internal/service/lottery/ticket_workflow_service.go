@@ -112,7 +112,13 @@ func RecognizeUploadedTicket(ctx context.Context, input RecognizeUploadedTicketI
 		return nil, fmt.Errorf("这张图片已经入库，请重新上传新图片")
 	}
 
-	recognized, err := recognizeTicket(ctx, resolveTicketCode(input.Code, upload.LotteryCode), upload.ImagePath, input.OCRText)
+	code := resolveTicketCode(input.Code, upload.LotteryCode)
+	if upload.UserID != nil {
+		ctx = withAIRequestScope(ctx, aiRequestScope{
+			userID: *upload.UserID, purpose: aiRequestPurposeOCR, lotteryCode: code, issue: upload.RecognitionIssue,
+		})
+	}
+	recognized, err := recognizeTicket(ctx, code, upload.ImagePath, input.OCRText)
 	if err != nil {
 		upload.Status = TicketUploadStatusFailed
 		upload.ErrorMessage = err.Error()

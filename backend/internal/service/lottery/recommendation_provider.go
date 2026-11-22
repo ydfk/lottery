@@ -59,7 +59,9 @@ func (provider *openAIRecommendationProvider) Generate(ctx context.Context, defi
 	attempted := 0
 	for attempt := 1; attempt <= recommendationGenerateMaxAttempts; attempt++ {
 		attempted = attempt
-		result, content, err := provider.generateOnce(ctx, definition, prompt, blocklist, count)
+		scope, _ := ctx.Value(aiRequestContextKey{}).(aiRequestScope)
+		scope.attempt = attempt
+		result, content, err := provider.generateOnce(withAIRequestScope(ctx, scope), definition, prompt, blocklist, count)
 		if err == nil {
 			if attempt > 1 {
 				logger.Info("AI 推荐生成第 %d 次补偿成功", attempt)
@@ -448,6 +450,9 @@ func GenerateRecommendation(ctx context.Context, code string, count int, userID 
 	if err != nil {
 		return nil, err
 	}
+	ctx = withAIRequestScope(ctx, aiRequestScope{
+		userID: userUUID, purpose: aiRequestPurposeReco, lotteryCode: code, issue: targetIssue,
+	})
 	result, err := provider.Generate(ctx, definition, lotteryType, history, blocklist, count)
 	if err != nil {
 		return nil, err

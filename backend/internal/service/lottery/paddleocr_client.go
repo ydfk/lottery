@@ -129,14 +129,24 @@ func callPaddleOCR(ctx context.Context, imagePath string) ([]byte, error) {
 		}
 
 		body, statusCode, err := doPaddleOCRRequest(ctx, baseURL, requestPayload, perAttemptTimeout)
-		requestLog := buildPaddleOCRRequestLog(imagePath, requestPayload, imageMeta)
+		requestLog := buildPaddleOCRRequestLog(requestPayload, imageMeta)
+		scope, _ := ctx.Value(aiRequestContextKey{}).(aiRequestScope)
+		scope.attempt = index + 1
+		trace := aiRequestTrace{
+			startedAt: attemptStartedAt, provider: ProviderPaddleOCR, model: config.Current.Vision.Model,
+			method: http.MethodPost, endpoint: baseURL, credential: config.Current.Vision.APIKey,
+			request: requestLog, response: paddleOCRResponseLog(body), statusCode: statusCode,
+		}
+		logErr := err
+		if err != nil && statusCode != 0 && len(body) > 0 {
+			logErr = fmt.Errorf("PaddleOCR 服务返回 HTTP %d", statusCode)
+		}
+		trace.finish(withAIRequestScope(ctx, scope), logErr)
 		if err == nil {
-			logThirdPartySuccess("paddleocr", http.MethodPost, baseURL, requestLog, body, statusCode, attemptStartedAt)
 			return body, nil
 		}
 
 		lastErr = err
-		logThirdPartyFailure("paddleocr", http.MethodPost, baseURL, requestLog, body, statusCode, attemptStartedAt, err)
 		if !shouldRetryPaddleOCR(statusCode, err) {
 			break
 		}
@@ -146,6 +156,18 @@ func callPaddleOCR(ctx context.Context, imagePath string) ([]byte, error) {
 		lastErr = fmt.Errorf("PaddleOCR 服务未返回结果")
 	}
 	return nil, lastErr
+}
+
+func paddleOCRResponseLog(body []byte) string {
+	if len(body) == 0 {
+		return ""
+	}
+	// OCR 响应可能带有原图和布局图片，仅保留已知的文本字段。
+	var response paddleOCRResponse
+	if err := json.Unmarshal(body, &response); err != nil {
+		return fmt.Sprintf("[未能解析 OCR 响应，原始大小 %d 字节]", len(body))
+	}
+	return mustJSON(response)
 }
 
 func parsePaddleOCRPayload(output []byte) (*paddleOCRPayload, error) {
@@ -211,9 +233,8 @@ func detectPaddleOCRFileType(filePath string) int {
 	}
 }
 
-func buildPaddleOCRRequestLog(imagePath string, payload paddleOCRRequest, imageMeta paddleOCRImageMeta) map[string]any {
+func buildPaddleOCRRequestLog(payload paddleOCRRequest, imageMeta paddleOCRImageMeta) map[string]any {
 	return map[string]any{
-		"imagePath":                 imagePath,
 		"attempt":                   imageMeta.Attempt,
 		"attemptLabel":              imageMeta.AttemptLabel,
 		"fileType":                  payload.FileType,

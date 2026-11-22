@@ -25,10 +25,11 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return payload.data;
 }
 
-export async function apiGet<T>(url: string): Promise<T> {
+export async function apiGet<T>(url: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(url, {
     cache: "no-store",
     headers: getRequestHeaders(),
+    signal,
   });
   return parseResponse<T>(response);
 }

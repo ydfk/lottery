@@ -9,6 +9,8 @@ func RegisterRoutes(router fiber.Router) {
 	group.Get("/dashboard/trend", GetDashboardTrend)
 	group.Get("/draws/history", ListDrawHistory)
 	group.Get("/recommendations", ListAllRecommendations)
+	group.Get("/ai-request-logs", ListAIRequestLogs)
+	group.Get("/ai-request-logs/:id", GetAIRequestLog)
 	group.Post("/draws/sync-history", SyncMultipleDraws)
 	group.Get("/tickets/history", ListTicketHistory)
 	group.Get("/tickets", ListAllTickets)
